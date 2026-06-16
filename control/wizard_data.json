@@ -1,0 +1,556 @@
+{
+  "note_presets": {
+    "cut_shorten": [
+      "配合現場環境，縮短管線",
+      "配合現場尺寸，裁切重焊",
+      "現場配管調整，縮短安裝",
+      "依現場實際尺寸修改"
+    ],
+    "extend": [
+      "配合現場環境，加長管線",
+      "現場配管調整，加長安裝",
+      "配合設備位置，延伸管線"
+    ],
+    "rework": [
+      "焊道修補重焊",
+      "焊接品質不良，重新施焊",
+      "滲漏修補"
+    ],
+    "other": [
+      "配合現場施工需求調整",
+      "依業主要求修改"
+    ]
+  },
+  "note_history": [
+    "配合現場尺寸，裁切重焊",
+    "配合現場環境，縮短管線",
+    "依業主要求修改 配合現場施工需求調整",
+    "配合現場環境，加長管線\n焊接品質不良，重新施焊",
+    "配合現場施工需求調整",
+    "依業主要求修改",
+    "焊接品質不良，重新施焊",
+    "因三點組合太長 故換管修短",
+    "因控制閥 控制器太高 故換管加長",
+    "MH-17104軟管與R-171S2設備無法銜接 修改管線",
+    "配合現場施工需求調整長度",
+    "配合現場施工需求調整管線",
+    "配合現場環境，加長管線",
+    "配合現場施工需求調整 縮短管線",
+    "配合設備位置，新增管線"
+  ],
+  "materials": {
+    "pipe_types": [
+      {
+        "id": "ss",
+        "name": "白鐵 (Stainless Steel)",
+        "abbr": "SS"
+      },
+      {
+        "id": "cs",
+        "name": "黑鐵 (Carbon Steel)",
+        "abbr": "CS"
+      }
+    ],
+    "components": [
+      {
+        "id": "pipe",
+        "name": "Pipe (管)",
+        "icon": "🔧",
+        "image": "Pipe.png",
+        "mfg": [
+          "SMLS",
+          "ERW"
+        ],
+        "ends": [
+          "PE",
+          "BE",
+          "TE"
+        ]
+      },
+      {
+        "id": "elbow",
+        "name": "Elbow (彎頭)",
+        "icon": "↪️",
+        "image": "Elbow.png",
+        "angles": [
+          "90°",
+          "45°",
+          "180°"
+        ],
+        "radius": [
+          "LR",
+          "SR"
+        ]
+      },
+      {
+        "id": "tee",
+        "name": "Tee (三通)",
+        "icon": "⊥",
+        "image": "Tee.png",
+        "types": [
+          "Equal",
+          "Reducing"
+        ]
+      },
+      {
+        "id": "reducer",
+        "name": "Reducer (大小頭)",
+        "icon": "◇",
+        "image": "Reducer.png",
+        "types": [
+          "CON",
+          "ECC"
+        ]
+      },
+      {
+        "id": "flange",
+        "name": "Flange (法蘭)",
+        "icon": "⭕",
+        "image": "Flange.png",
+        "types": [
+          "WN",
+          "SO",
+          "BL",
+          "SW",
+          "LJ"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#",
+          "900#"
+        ],
+        "faces": [
+          "RF",
+          "FF",
+          "RTJ"
+        ]
+      },
+      {
+        "id": "gasket",
+        "name": "Gasket (墊片)",
+        "icon": "◯",
+        "image": "Gasket.png",
+        "types": [
+          "Spiral Wound",
+          "Ring Joint",
+          "Non-Metallic"
+        ]
+      },
+      {
+        "id": "cap",
+        "name": "Cap (封蓋)",
+        "icon": "⬤",
+        "image": "Cap.png",
+        "ends": [
+          "BW",
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "coupling",
+        "name": "Coupling (接頭)",
+        "icon": "═",
+        "image": "Coupling.png",
+        "types": [
+          "Full",
+          "Half"
+        ],
+        "ends": [
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "union",
+        "name": "Union (活接)",
+        "icon": "⊜",
+        "image": "Union.png",
+        "ends": [
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "valve",
+        "name": "Valve (閥)",
+        "icon": "🔶",
+        "image": "Valve.png",
+        "types": [
+          "Gate",
+          "Globe",
+          "Ball",
+          "Check",
+          "Butterfly",
+          "Needle",
+          "Plug",
+          "Diaphragm",
+          "Safety/Relief"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#",
+          "900#"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "SW",
+          "BW"
+        ]
+      },
+      {
+        "id": "bolt_nut",
+        "name": "Bolt & Nut (螺栓螺帽)",
+        "icon": "🔩",
+        "image": "BoltNut.png",
+        "types": [
+          "Stud Bolt",
+          "Machine Bolt",
+          "U-Bolt"
+        ]
+      },
+      {
+        "id": "nipple",
+        "name": "Nipple (短管)",
+        "icon": "▬",
+        "image": "Nipple.png",
+        "types": [
+          "Barrel",
+          "Close",
+          "Swage"
+        ],
+        "ends": [
+          "THD",
+          "PE",
+          "BE"
+        ]
+      },
+      {
+        "id": "plug",
+        "name": "Plug (管塞)",
+        "icon": "⊘",
+        "image": "plug.png",
+        "types": [
+          "Hex Head",
+          "Square Head",
+          "Round Head",
+          "Bull"
+        ],
+        "ends": [
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "bushing",
+        "name": "Bushing (異徑接頭)",
+        "icon": "⊖",
+        "image": "Bushing.png",
+        "types": [
+          "Hex",
+          "Flush"
+        ],
+        "ends": [
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "cross",
+        "name": "Cross (四通)",
+        "icon": "✚",
+        "image": "Cross.png",
+        "types": [
+          "Equal",
+          "Reducing"
+        ]
+      },
+      {
+        "id": "olet",
+        "name": "Olet (支管座)",
+        "icon": "⑂",
+        "image": "Olet.png",
+        "types": [
+          "Weldolet",
+          "Sockolet",
+          "Thredolet",
+          "Elbolet",
+          "Latrolet",
+          "Nipolet"
+        ]
+      },
+      {
+        "id": "strainer",
+        "name": "Strainer (過濾器)",
+        "icon": "🔽",
+        "image": "Strainer.png",
+        "types": [
+          "Y-Type",
+          "T-Type",
+          "Basket",
+          "Temporary"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "SW",
+          "BW"
+        ]
+      },
+      {
+        "id": "trap",
+        "name": "Steam Trap (疏水器)",
+        "icon": "♨️",
+        "image": "SteamTrap.png",
+        "types": [
+          "Thermodynamic",
+          "Mechanical",
+          "Thermostatic"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "SW"
+        ]
+      },
+      {
+        "id": "sight_glass",
+        "name": "Sight Glass (視鏡)",
+        "icon": "👁️",
+        "image": "SightGlass.png",
+        "types": [
+          "Full View",
+          "Double Window"
+        ],
+        "ratings": [
+          "150#",
+          "300#"
+        ],
+        "ends": [
+          "Flanged",
+          "THD"
+        ]
+      },
+      {
+        "id": "expansion_joint",
+        "name": "Expansion Joint (伸縮接頭)",
+        "icon": "↕️",
+        "image": "ExpansionJoint.png",
+        "types": [
+          "Bellows",
+          "Slip",
+          "Loop"
+        ],
+        "ends": [
+          "Flanged",
+          "BW"
+        ]
+      },
+      {
+        "id": "flex_hose",
+        "name": "Flexible Hose (軟管)",
+        "icon": "〰️",
+        "image": "FlexHose.png",
+        "types": [
+          "Metallic",
+          "Non-Metallic"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "Quick Connect"
+        ]
+      },
+      {
+        "id": "pipe_support",
+        "name": "Pipe Support (管架)",
+        "icon": "🏗️",
+        "image": "PipeSupport.png",
+        "types": [
+          "Clamp",
+          "Hanger",
+          "Shoe",
+          "Guide",
+          "Anchor",
+          "Spring",
+          "Saddle"
+        ]
+      },
+      {
+        "id": "control_valve",
+        "name": "Control Valve (控制閥)",
+        "icon": "🎛️",
+        "image": "ControlValve.png",
+        "types": [
+          "Control Valve",
+          "Pressure Reducing Valve",
+          "Solenoid Valve",
+          "Pneumatic Butterfly Valve",
+          "Pneumatic Ball Valve",
+          "Motorized Valve"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "SW",
+          "BW"
+        ]
+      },
+      {
+        "id": "spectacle_blind",
+        "name": "Spectacle Blind (8字盲板)",
+        "icon": "👓",
+        "image": "SpectacleBlind.png",
+        "types": [
+          "Open",
+          "Closed",
+          "Full"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#"
+        ]
+      },
+      {
+        "id": "thermowell",
+        "name": "Thermowell (溫度套管)",
+        "icon": "🌡️",
+        "image": "Thermowell.png",
+        "types": [
+          "Threaded",
+          "Flanged",
+          "Weld-in"
+        ]
+      },
+      {
+        "id": "pressure_gauge",
+        "name": "Pressure Gauge (壓力表)",
+        "icon": "🔘",
+        "image": "PressureGauge.png",
+        "types": [
+          "Bourdon Tube",
+          "Diaphragm"
+        ],
+        "ends": [
+          "THD",
+          "Flanged"
+        ]
+      },
+      {
+        "id": "weld_pad",
+        "name": "Weld Pad (焊墊)",
+        "icon": "⊡",
+        "image": "WeldPad.png",
+        "types": [
+          "Reinforcing Pad",
+          "Saddle Pad"
+        ]
+      },
+      {
+        "id": "electrode",
+        "name": "Welding Electrode (焊條)",
+        "icon": "⚡",
+        "image": "Electrode.png",
+        "types": [
+          "E308L",
+          "E316L",
+          "E7018",
+          "E6010",
+          "E6013"
+        ]
+      },
+      {
+        "id": "filler_wire",
+        "name": "Filler Wire (焊線)",
+        "icon": "〜",
+        "image": "FillerWire.png",
+        "types": [
+          "ER308L",
+          "ER316L",
+          "ER70S-6",
+          "ER309L"
+        ]
+      },
+      {
+        "id": "seal_tape",
+        "name": "Thread Seal Tape (止洩帶)",
+        "icon": "🔸",
+        "image": "SealTape.png"
+      },
+      {
+        "id": "flowmeter",
+        "name": "Flowmeter (流量計)",
+        "icon": "🌊",
+        "image": "Flowmeter.png",
+        "types": [
+          "Vortex",
+          "Coriolis Mass",
+          "Magnetic",
+          "Venturi / Orifice (DP)",
+          "Ultrasonic",
+          "Rotameter"
+        ],
+        "ratings": [
+          "150#",
+          "300#",
+          "600#"
+        ],
+        "ends": [
+          "Flanged",
+          "THD",
+          "BW"
+        ]
+      },
+      {
+        "id": "other",
+        "name": "Other (其他)",
+        "icon": "📦",
+        "image": "Other.png"
+      }
+    ],
+    "sizes_inch": [
+      "1/2\"",
+      "3/4\"",
+      "1\"",
+      "1-1/4\"",
+      "1-1/2\"",
+      "2\"",
+      "2-1/2\"",
+      "3\"",
+      "4\"",
+      "6\"",
+      "8\"",
+      "10\"",
+      "12\"",
+      "14\"",
+      "16\"",
+      "18\"",
+      "20\"",
+      "24\""
+    ],
+    "schedules": [
+      "SCH 5",
+      "SCH 10",
+      "SCH 20",
+      "SCH 40",
+      "SCH 80",
+      "SCH 160",
+      "XXS"
+    ]
+  },
+  "materials_history": []
+}

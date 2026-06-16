@@ -1,0 +1,88 @@
+{
+  "paths": {
+    "drawing_list": "",
+    "attachments_root": "",
+    "output_root": "",
+    "pdf_output": "",
+    "last_browse_dir": "",
+    "weld_control_table": "",
+    "prefab_drawing_dir": ""
+  },
+  "weld_control": {
+    "sheet_name": "焊口編號明細",
+    "col_serial": "流水號",
+    "col_weld_no": "焊口編號",
+    "serial_format": "raw",
+    "auto_sync": true,
+    "check_duplicate": true,
+    "dynamic_columns": [
+      {
+        "name": "LINE NO",
+        "source": "line_no",
+        "required": false
+      },
+      {
+        "name": "SIZE",
+        "source": "size",
+        "required": false
+      },
+      {
+        "name": "SCH",
+        "source": "sch",
+        "required": false
+      },
+      {
+        "name": "DWG NO",
+        "source": "dwg_no",
+        "required": false
+      },
+      {
+        "name": "登錄日期",
+        "source": "auto_date",
+        "required": false
+      },
+      {
+        "name": "修改單編號",
+        "source": "report_id",
+        "required": false
+      },
+      {
+        "name": "備註",
+        "source": "remark",
+        "required": false
+      }
+    ]
+  },
+  "dwg_list": {
+    "sheet_name": "DRAWING LIST",
+    "col_serial": "NO",
+    "serial_format": "raw",
+    "enabled": true,
+    "dynamic_columns": [
+      {
+        "name": "DWG NO",
+        "target": "dwg_no"
+      },
+      {
+        "name": "DWG名稱",
+        "target": "dwg_name"
+      },
+      {
+        "name": "REV",
+        "target": "rev"
+      }
+    ]
+  },
+  "runtime": {
+    "export_pdf": true,
+    "skip_unchanged": true,
+    "debug_mode": false,
+    "auto_preprocess_images": true,
+    "preprocess_max_edge": 1280,
+    "preprocess_quality": 85
+  },
+  "meta": {
+    "last_modified": "2026-06-16T00:00:00",
+    "version": "1.2"
+  }
+}
