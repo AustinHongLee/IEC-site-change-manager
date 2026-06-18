@@ -55,9 +55,11 @@ from config import (
     BASE_DIR, ATTACHMENTS_ROOT, OUTPUT_ROOT, PDF_OUTPUT_DIR,
     RUNTIME, use_dual_images
 )
+from renderer_registry import format_renderer_unavailable, get_renderer_descriptor
 from parsers import (
-    parse_folder, weld_code_list, build_auto_description, WeldToken
+    parse_folder, parse_materials_txt, weld_code_list, build_auto_description, WeldToken
 )
+from material_pricebook import apply_material_pricing, load_material_pricebook
 from utils import (
     scan_date_folders, scan_subfolders, compute_fingerprint,
     find_attachment_pdf, copy_prefab_pdf, ProcessingSummary,
@@ -65,10 +67,7 @@ from utils import (
 )
 from record_manager import (
     load_drawing_map, preload_record_index,
-    upsert_record, upsert_detail_rows
-)
-from excel_handler import (
-    get_excel_manager, generate_report, check_images_exist
+    upsert_record, upsert_detail_rows, upsert_materials_rows
 )
 from image_processor import (
     check_pillow, auto_preprocess_if_needed
@@ -79,7 +78,7 @@ from settings_manager import (
 )
 
 # 拆分模組
-from gui_panels import RecordManagerPanel, BillingPanel
+from gui_panels import RecordManagerPanel, MaterialPricebookPanel, BillingPanel, HealthCheckPanel
 from gui_settings import SettingsPanel
 from gui_dialogs import SupplementInfoDialog, WeldDuplicateCheckDialog
 
@@ -92,6 +91,26 @@ class _UiBridge(QObject):
     finished_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
     summary_signal = pyqtSignal(object)
+
+
+def _renderer_status_text(renderer: dict) -> str:
+    status = str(renderer.get("status", "") or "")
+    if status == "legacy_available":
+        return "舊版輸出：COM 可用"
+    if status == "unprobed":
+        return "舊版輸出：需要時檢查"
+    if status == "unavailable":
+        return "舊版輸出：不可用"
+    return f"舊版輸出：{status or '未知'}"
+
+
+def _renderer_tooltip(renderer: dict) -> str:
+    status = str(renderer.get("status", "") or "")
+    if status == "unprobed":
+        return "舊版 Excel COM 產出會在開始執行或重試前檢查可用性"
+    if status == "legacy_available":
+        return "使用舊版 Excel COM 模板產出修改單"
+    return format_renderer_unavailable(renderer)
 
 
 # ========= 主視窗 =========
@@ -121,6 +140,7 @@ class MainWindow(QMainWindow):
         self._bridge.summary_signal.connect(self._show_summary)
 
         self._create_ui()
+        self._update_excel_com_controls(log_result=False)
         self._load_initial_data()
 
     # ─── UI 建立 ──────────────────────────────────────────
@@ -148,7 +168,15 @@ class MainWindow(QMainWindow):
         record_layout.addWidget(self.record_panel)
         self.notebook.addTab(record_tab, "📊 紀錄管理")
 
-        # === 頁籤3：請款追蹤 ===
+        # === 頁籤3：材料價目 ===
+        pricebook_tab = QWidget()
+        pricebook_layout = QVBoxLayout(pricebook_tab)
+        pricebook_layout.setContentsMargins(8, 8, 8, 8)
+        self.pricebook_panel = MaterialPricebookPanel(pricebook_tab)
+        pricebook_layout.addWidget(self.pricebook_panel)
+        self.notebook.addTab(pricebook_tab, "📦 材料價目")
+
+        # === 頁籤4：請款追蹤 ===
         billing_tab = QWidget()
         billing_layout = QVBoxLayout(billing_tab)
         billing_layout.setContentsMargins(8, 8, 8, 8)
@@ -156,13 +184,21 @@ class MainWindow(QMainWindow):
         billing_layout.addWidget(self.billing_panel)
         self.notebook.addTab(billing_tab, "💰 請款追蹤")
 
-        # === 頁簽4：系統設定 ===
+        # === 頁簽5：系統設定 ===
         settings_tab = QWidget()
         settings_layout = QVBoxLayout(settings_tab)
         settings_layout.setContentsMargins(8, 8, 8, 8)
         self.settings_panel = SettingsPanel(settings_tab)
         settings_layout.addWidget(self.settings_panel)
         self.notebook.addTab(settings_tab, "⚙️ 設定")
+
+        # === 頁簽6：健康檢查 ===
+        health_tab = QWidget()
+        health_layout = QVBoxLayout(health_tab)
+        health_layout.setContentsMargins(8, 8, 8, 8)
+        self.health_panel = HealthCheckPanel(health_tab)
+        health_layout.addWidget(self.health_panel)
+        self.notebook.addTab(health_tab, "🩺 健康")
 
         # 狀態列
         self.status_label = QLabel("就緒")
@@ -273,6 +309,10 @@ class MainWindow(QMainWindow):
         self.chk_debug = QCheckBox("Debug")
         self.chk_debug.setChecked(RUNTIME.debug_mode)
         opt_row.addWidget(self.chk_debug)
+        self.renderer_status_label = QLabel("")
+        self.renderer_status_label.setFont(Fonts.small())
+        self.renderer_status_label.setStyleSheet(f"color: {Colors.TEXT_MUTED};")
+        opt_row.addWidget(self.renderer_status_label)
         opt_row.addStretch()
         right_vbox.addLayout(opt_row)
 
@@ -354,7 +394,11 @@ class MainWindow(QMainWindow):
         if index == 1:
             self.record_panel.load_records()
         elif index == 2:
+            self.pricebook_panel.load_data()
+        elif index == 3:
             self.billing_panel.load_data()
+        elif index == 5:
+            self.health_panel.run_check()
 
     # ─── 日期列表右鍵選單 ─────────────────────────────────
     def _show_date_context_menu(self, pos):
@@ -389,6 +433,9 @@ class MainWindow(QMainWindow):
         self._refresh_folders()
         self.log("✅ 系統啟動完成")
         self.log(f"📁 基準目錄: {BASE_DIR}")
+        renderer = getattr(self, "_xlsx_com_renderer", None)
+        if renderer and renderer.get("status") == "unavailable":
+            self.log(f"⚠️ 舊版 COM 產出停用：{renderer.get('reason', '')}")
 
     def _refresh_folders(self):
         self.date_listbox.clear()
@@ -440,6 +487,17 @@ class MainWindow(QMainWindow):
 
     # ─── 處理 ─────────────────────────────────────────────
     def _start_processing(self):
+        if self.is_running:
+            QMessageBox.information(self, "提示", "目前正在處理中，請稍候。")
+            return
+
+        renderer = get_renderer_descriptor("xlsx_com", probe_com_application=True)
+        if not renderer.get("available"):
+            self._update_excel_com_controls(renderer, log_result=True)
+            QMessageBox.warning(self, "舊版產出不可用", format_renderer_unavailable(renderer))
+            return
+        self._update_excel_com_controls(renderer, log_result=False)
+
         selected_dates = self._get_selected_dates()
         if not selected_dates:
             QMessageBox.warning(self, "警告", "請先選擇要處理的日期資料夾")
@@ -471,24 +529,38 @@ class MainWindow(QMainWindow):
 
     def _process_folders(self, date_list: List[str]):
         """背景處理資料夾（在工作執行緒中執行）"""
-        import pythoncom
-        pythoncom.CoInitialize()
-
-        em = get_excel_manager()
-        em.restart()
-
         bridge = self._bridge
+        pythoncom = None
+        com_initialized = False
+        get_excel_manager = None
 
         try:
+            renderer = get_renderer_descriptor("xlsx_com", probe_com_application=True)
+            if not renderer.get("available"):
+                raise RuntimeError(format_renderer_unavailable(renderer))
+
+            import pythoncom as pythoncom_module
+            pythoncom = pythoncom_module
+            pythoncom.CoInitialize()
+            com_initialized = True
+
+            from excel_handler import get_excel_manager as load_excel_manager
+            from excel_handler import generate_report, check_images_exist
+            get_excel_manager = load_excel_manager
+            em = get_excel_manager()
+            em.restart()
+
             bridge.log_signal.emit("📖 載入 DWG LIST...")
             self.drawing_map = load_drawing_map()
 
             bridge.log_signal.emit("📖 載入紀錄索引...")
             existing_key_set, key_to_row, key_to_meta, max_seq_by_date = preload_record_index()
+            material_pricebook = load_material_pricebook()
 
             summary = ProcessingSummary()
             record_rows: list = []
             detail_rows: list = []
+            materials_rows: list = []
 
             total_items = 0
             for date_str in date_list:
@@ -642,6 +714,34 @@ class MainWindow(QMainWindow):
                                 detail_rows.append(self._build_detail_row(
                                     t, report_id, date_str, info.series_no, dwg_no, desc
                                 ))
+
+                            parsed_mats = apply_material_pricing(
+                                parse_materials_txt(folder_path),
+                                material_pricebook,
+                            )
+                            for mat in parsed_mats:
+                                materials_rows.append({
+                                    "項目": None,
+                                    "報告編號": report_id,
+                                    "修改日期": date_str,
+                                    "Series NO": info.series_no,
+                                    "零件類型": mat.get("零件類型", ""),
+                                    "尺寸": mat.get("尺寸", ""),
+                                    "SCH": mat.get("SCH", ""),
+                                    "材質": mat.get("材質", ""),
+                                    "類別": mat.get("類別", "材料"),
+                                    "數量": mat.get("數量", ""),
+                                    "單位": mat.get("單位", ""),
+                                    "單價": mat.get("單價", ""),
+                                    "金額": mat.get("金額", ""),
+                                    "單價來源": mat.get("單價來源", ""),
+                                    "金額來源": mat.get("金額來源", ""),
+                                    "價目表ID": mat.get("價目表ID", ""),
+                                    "價目來源": mat.get("價目來源", ""),
+                                    "價目生效日": mat.get("價目生效日", ""),
+                                    "配價狀態": mat.get("配價狀態", ""),
+                                    "備註": mat.get("備註", ""),
+                                })
                         else:
                             summary.add_failed(f"{date_str}\\{folder}")
                             bridge.log_signal.emit(f"❌ 失敗: {folder} - {result.error}")
@@ -657,6 +757,9 @@ class MainWindow(QMainWindow):
             if detail_rows:
                 upsert_detail_rows(detail_rows)
                 bridge.log_signal.emit(f"📝 已更新明細: {len(detail_rows)} 筆")
+            if materials_rows:
+                upsert_materials_rows(materials_rows)
+                bridge.log_signal.emit(f"📝 已更新材料明細: {len(materials_rows)} 筆")
 
             bridge.summary_signal.emit(summary)
 
@@ -666,11 +769,16 @@ class MainWindow(QMainWindow):
 
         finally:
             try:
-                em2 = get_excel_manager()
-                em2.quit()
+                if get_excel_manager is not None:
+                    em2 = get_excel_manager()
+                    em2.quit()
             except Exception:
                 pass
-            pythoncom.CoUninitialize()
+            if com_initialized and pythoncom is not None:
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
             bridge.finished_signal.emit()
 
     def _build_detail_row(self, token: WeldToken, report_id: str, date_str: str,
@@ -713,9 +821,44 @@ class MainWindow(QMainWindow):
         self.btn_stop.setEnabled(False)
         self.status_label.setText("完成")
         self._update_progress(100, 100, "完成")
+        self._update_excel_com_controls(log_result=False)
+
+    def _update_excel_com_controls(self, renderer=None, *, log_result: bool = False):
+        renderer = renderer or get_renderer_descriptor("xlsx_com", probe_com_application=False)
+        self._xlsx_com_renderer = renderer
+        status = str(renderer.get("status", "") or "")
+        if status in {"legacy_available", "unprobed"}:
+            if not self.is_running:
+                self.btn_start.setEnabled(True)
+                self.btn_retry.setEnabled(True)
+            tooltip = _renderer_tooltip(renderer)
+            self.btn_start.setToolTip(tooltip)
+            self.btn_retry.setToolTip(tooltip)
+            self.renderer_status_label.setText(_renderer_status_text(renderer))
+            return
+
+        self.btn_start.setEnabled(False)
+        self.btn_retry.setEnabled(False)
+        message = format_renderer_unavailable(renderer)
+        self.btn_start.setToolTip(message)
+        self.btn_retry.setToolTip(message)
+        self.renderer_status_label.setText(_renderer_status_text(renderer))
+        if log_result:
+            self.log(f"⚠️ 舊版 COM 產出不可用：{renderer.get('reason', '')}")
 
     # ─── 重試失敗 ─────────────────────────────────────────
     def _retry_failed(self):
+        if self.is_running:
+            QMessageBox.information(self, "提示", "目前正在處理中，請稍候完成後再重試。")
+            return
+
+        renderer = get_renderer_descriptor("xlsx_com", probe_com_application=True)
+        if not renderer.get("available"):
+            self._update_excel_com_controls(renderer, log_result=True)
+            QMessageBox.warning(self, "舊版產出不可用", format_renderer_unavailable(renderer))
+            return
+        self._update_excel_com_controls(renderer, log_result=False)
+
         failed_folders = []
         for date_str in self.date_folders:
             attach_dir = os.path.join(ATTACHMENTS_ROOT, date_str)
@@ -991,6 +1134,7 @@ def main():
 
     # 清理
     try:
+        from excel_handler import get_excel_manager
         em = get_excel_manager()
         em.quit()
     except Exception:

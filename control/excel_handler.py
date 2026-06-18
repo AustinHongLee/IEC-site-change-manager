@@ -15,9 +15,7 @@ import atexit
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 
-import win32com.client
-from win32com.client import constants
-
+from capabilities import CapabilityResult, format_excel_com_unavailable
 from config import RUNTIME, get_template_for_mode, use_dual_images
 from utils import (
     safe_remove, check_integrity, write_error_marker,
@@ -26,6 +24,25 @@ from utils import (
 
 
 # ========= Excel 連線管理 =========
+class ExcelComUnavailable(RuntimeError):
+    """Raised when the optional Excel COM backend cannot be loaded."""
+
+
+def _load_excel_com_modules():
+    try:
+        import win32com.client as win32_client
+        from win32com.client import constants as win32_constants
+        return win32_client, win32_constants
+    except Exception as exc:
+        result = CapabilityResult(
+            name="excel_com",
+            available=False,
+            reason="缺少 pywin32 的 win32com 模組",
+            detail=str(exc),
+        )
+        raise ExcelComUnavailable(format_excel_com_unavailable(result)) from exc
+
+
 class ExcelManager:
     """Excel COM 連線管理器（單例模式）"""
     
@@ -73,7 +90,17 @@ class ExcelManager:
             self._excel = None
             time.sleep(0.3)
         
-        self._excel = win32com.client.DispatchEx("Excel.Application")
+        win32_client, win32_constants = _load_excel_com_modules()
+        try:
+            self._excel = win32_client.DispatchEx("Excel.Application")
+        except Exception as exc:
+            result = CapabilityResult(
+                name="excel_com",
+                available=False,
+                reason="無法啟動 Excel COM",
+                detail=str(exc),
+            )
+            raise ExcelComUnavailable(format_excel_com_unavailable(result)) from exc
         try:
             self._excel.Visible = False
         except Exception:
@@ -83,7 +110,7 @@ class ExcelManager:
         except Exception:
             pass
         try:
-            self._excel.AutomationSecurity = constants.msoAutomationSecurityLow
+            self._excel.AutomationSecurity = win32_constants.msoAutomationSecurityLow
         except Exception:
             pass
     
@@ -205,8 +232,11 @@ def generate_report(
     Returns:
         ReportResult
     """
-    em = get_excel_manager()
-    excel = em.excel
+    try:
+        em = get_excel_manager()
+        excel = em.excel
+    except ExcelComUnavailable as e:
+        return ReportResult(success=False, error=str(e))
     
     # 選擇模板
     tpl = get_template_for_mode(mode, len(tokens))

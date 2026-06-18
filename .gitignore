@@ -30,6 +30,10 @@ Thumbs.db
 *.temp
 ~$*
 *.bak
+.project.lock
+.project.lock.tmp
+*.journal
+.journals/
 
 # 日誌
 logs/*
@@ -42,6 +46,9 @@ backups/
 # 前置區（照片暫存）
 staging/*
 !staging/.gitkeep
+
+# 安全隔離區
+.trash/
 
 # 不要上傳大型輸出檔案（可選，依需求調整）
 # output/

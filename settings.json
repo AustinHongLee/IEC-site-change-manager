@@ -6,7 +6,8 @@
     "pdf_output": "",
     "last_browse_dir": "",
     "weld_control_table": "",
-    "prefab_drawing_dir": ""
+    "prefab_drawing_dir": "",
+    "soffice_path": ""
   },
   "weld_control": {
     "sheet_name": "焊口編號明細",
@@ -83,6 +84,6 @@
   },
   "meta": {
     "last_modified": "2026-06-16T00:00:00",
-    "version": "1.2"
+    "version": "1.3"
   }
 }

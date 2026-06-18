@@ -39,7 +39,7 @@ class HelpTooltip:
 
         self.label = QLabel("❓")
         self.label.setStyleSheet(
-            "color: #0066cc; font-size: 14px; padding: 0 4px; cursor: pointer;"
+            "color: #0066cc; font-size: 14px; padding: 0 4px;"
         )
         self.label.setCursor(Qt.CursorShape.PointingHandCursor)
         self.label.mousePressEvent = self._show_help
@@ -115,6 +115,7 @@ HELP_TEXTS = {
     "dwg_list_pk": "【DWG LIST 主鍵欄位】\n指定用來查詢的主鍵欄位名稱（通常是「NO」或「流水號」）。",
     "dwg_dynamic_columns": "【DWG LIST 欄位對應】\n設定要從 DWG LIST 取得哪些欄位資訊（如 DWG NO、DWG名稱、REV）。",
     "export_pdf": "【產出 PDF】\n同時產出 PDF 和 Excel 兩種格式。",
+    "libreoffice_pdf": "【LibreOffice PDF 轉檔】\n現場統計單與新模板輸出可不依賴 Excel COM，先產生 xlsx，再用 LibreOffice headless 轉成 PDF。\n\n留空時系統會自動搜尋 soffice.exe；若公司電腦安裝位置不同，可在這裡指定 soffice.exe。\n\n這不會取代舊 Excel COM 報表，只是提供非 COM 的 PDF 後處理路線。",
     "skip_unchanged": "【略過未修改的資料夾】\n比對指紋，未變更則跳過。",
     "auto_preprocess": "【自動預處理圖片】\n自動壓縮過大圖片，原圖保留 .orig 備份。",
     "debug_mode": "【除錯模式】\n顯示更詳細的執行資訊，幫助診斷問題。",
@@ -499,6 +500,32 @@ class SettingsPanel(QWidget):
         r1.addWidget(ht1.widget())
         r1.addStretch()
         rg.addLayout(r1)
+        lo_header = QHBoxLayout()
+        lo_header.addWidget(QLabel("LibreOffice PDF 轉檔："))
+        ht_lo = HelpTooltip(self, "LibreOffice PDF", HELP_TEXTS["libreoffice_pdf"])
+        lo_header.addWidget(ht_lo.widget())
+        self.libreoffice_status_label = QLabel("")
+        lo_header.addStretch()
+        lo_header.addWidget(self.libreoffice_status_label)
+        rg.addLayout(lo_header)
+        lo_row = QHBoxLayout()
+        self.soffice_path_edit = QLineEdit()
+        self.soffice_path_edit.setPlaceholderText("留空：自動搜尋 soffice.exe")
+        self.soffice_path_edit.textChanged.connect(lambda _text: self._update_libreoffice_status())
+        lo_row.addWidget(self.soffice_path_edit, 1)
+        btn_lo_browse = QPushButton("瀏覽")
+        btn_lo_browse.setFixedWidth(70)
+        btn_lo_browse.clicked.connect(self._browse_soffice)
+        lo_row.addWidget(btn_lo_browse)
+        btn_lo_test = QPushButton("測試")
+        btn_lo_test.setFixedWidth(70)
+        btn_lo_test.clicked.connect(self._test_libreoffice)
+        lo_row.addWidget(btn_lo_test)
+        btn_output_check = QPushButton("輸出能力檢查")
+        btn_output_check.setFixedWidth(120)
+        btn_output_check.clicked.connect(self._check_output_capabilities)
+        lo_row.addWidget(btn_output_check)
+        rg.addLayout(lo_row)
         vbox.addWidget(report_group)
 
         proc_group = QGroupBox("⚙️ 處理選項")
@@ -618,7 +645,7 @@ class SettingsPanel(QWidget):
             get_settings, get_weld_control_table_path, get_weld_control_config,
             get_drawing_list_path, get_weld_dynamic_columns,
             get_dwg_list_config, get_dwg_dynamic_columns,
-            get_prefab_drawing_dir
+            get_prefab_drawing_dir, get_soffice_path
         )
         sm = get_settings()
 
@@ -646,6 +673,7 @@ class SettingsPanel(QWidget):
         self._load_dwg_dynamic_columns(get_dwg_dynamic_columns())
 
         self.prefab_dir_edit.setText(get_prefab_drawing_dir())
+        self.soffice_path_edit.setText(get_soffice_path())
 
         self.export_pdf_chk.setChecked(sm.get_runtime("export_pdf", True))
         self.skip_unchanged_chk.setChecked(sm.get_runtime("skip_unchanged", True))
@@ -656,17 +684,19 @@ class SettingsPanel(QWidget):
 
         self._update_weld_status()
         self._update_dwg_status()
+        self._update_libreoffice_status()
 
     def _save_settings(self):
         from settings_manager import (
             get_settings, set_weld_control_table_path, set_weld_control_config,
             set_weld_dynamic_columns, set_dwg_list_config, set_dwg_dynamic_columns,
-            set_drawing_list_path, set_prefab_drawing_dir
+            set_drawing_list_path, set_prefab_drawing_dir, set_soffice_path
         )
         sm = get_settings()
 
         set_weld_control_table_path(self.weld_table_path_edit.text().strip())
         set_prefab_drawing_dir(self.prefab_dir_edit.text().strip())
+        set_soffice_path(self.soffice_path_edit.text().strip())
         config = {
             "sheet_name": self.sheet_name_edit.text().strip(),
             "auto_sync": self.auto_sync_chk.isChecked(),
@@ -701,6 +731,7 @@ class SettingsPanel(QWidget):
 
         self._update_weld_status()
         self._update_dwg_status()
+        self._update_libreoffice_status()
         self.save_status_label.setText("✅ 設定已儲存")
         self.save_status_label.setStyleSheet("color: green;")
         QTimer.singleShot(3000, lambda: self.save_status_label.setText(""))
@@ -729,6 +760,7 @@ class SettingsPanel(QWidget):
         self.dwg_fmt_raw.setChecked(True)
         self._load_dwg_dynamic_columns([])
         self.prefab_dir_edit.clear()
+        self.soffice_path_edit.clear()
         self.export_pdf_chk.setChecked(True)
         self.skip_unchanged_chk.setChecked(True)
         self.auto_preprocess_chk.setChecked(True)
@@ -778,6 +810,18 @@ class SettingsPanel(QWidget):
         else:
             QMessageBox.warning(self, "提示", "資料夾不存在")
 
+    def _browse_soffice(self):
+        fp, _ = QFileDialog.getOpenFileName(
+            self,
+            "選擇 LibreOffice soffice.exe",
+            "",
+            "LibreOffice soffice (soffice.exe soffice);;所有檔案 (*.*)",
+        )
+        if fp:
+            self.soffice_path_edit.setText(fp)
+            remember_browse_directory(fp)
+            self._update_libreoffice_status()
+
     # ────────────────── 狀態 ──────────────────
     def _update_weld_status(self):
         p = self.weld_table_path_edit.text().strip()
@@ -803,7 +847,66 @@ class SettingsPanel(QWidget):
             self.dwg_status_label.setText("✅ 檔案存在")
             self.dwg_status_label.setStyleSheet("color: green;")
 
+    def _update_libreoffice_status(self):
+        p = self.soffice_path_edit.text().strip()
+        if not p:
+            self.libreoffice_status_label.setText("ℹ️ 留空：自動搜尋")
+            self.libreoffice_status_label.setStyleSheet("color: #2563eb;")
+        elif not os.path.exists(p):
+            self.libreoffice_status_label.setText("❌ 檔案不存在")
+            self.libreoffice_status_label.setStyleSheet("color: red;")
+        else:
+            self.libreoffice_status_label.setText("✅ 檔案存在，建議測試")
+            self.libreoffice_status_label.setStyleSheet("color: green;")
+
     # ────────────────── 測試連線 ──────────────────
+    def _test_libreoffice(self):
+        from capabilities import detect_libreoffice
+
+        p = self.soffice_path_edit.text().strip() or None
+        result = detect_libreoffice(executable=p, force_refresh=True)
+        if result.available:
+            detail = f"（{result.detail}）" if result.detail else ""
+            self.libreoffice_status_label.setText(f"✅ 可用 {detail}")
+            self.libreoffice_status_label.setStyleSheet("color: green;")
+            QMessageBox.information(self, "LibreOffice 可用", f"PDF 轉檔後端可用。\n\n{result.executable}")
+            return
+        self.libreoffice_status_label.setText("❌ 不可用")
+        self.libreoffice_status_label.setStyleSheet("color: red;")
+        QMessageBox.warning(self, "LibreOffice 不可用", f"{result.reason}\n\n{result.detail}")
+
+    def _check_output_capabilities(self):
+        from output_capabilities import build_output_capability_report
+
+        report = build_output_capability_report(
+            probe_com_application=False,
+            probe_libreoffice_version=True,
+        )
+        QMessageBox.information(self, "輸出能力檢查", self._format_output_capability_report(report))
+
+    @staticmethod
+    def _format_output_capability_report(report: dict) -> str:
+        summary = report.get("summary", {}) or {}
+        lines = [
+            "目前輸出能力：",
+            f"可用 {summary.get('available', 0)} / {summary.get('total', 0)}",
+            f"需注意 {summary.get('attention', 0)}，阻擋 {summary.get('blocking', 0)}",
+            "",
+        ]
+        for item in report.get("capabilities", []) or []:
+            state = "可用" if item.get("available") else "不可用"
+            optional = "（選用）" if item.get("optional") else ""
+            lines.append(f"- {item.get('label', '')}：{state}{optional}")
+            reason = str(item.get("reason", "") or "").strip()
+            if reason:
+                lines.append(f"  {reason}")
+        recs = report.get("recommendations", []) or []
+        if recs:
+            lines.append("")
+            lines.append("建議：")
+            lines.extend(f"- {rec}" for rec in recs)
+        return "\n".join(lines)
+
     def _test_weld_table(self):
         path = self.weld_table_path_edit.text().strip()
         sheet_name = self.sheet_name_edit.text().strip()

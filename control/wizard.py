@@ -28,6 +28,7 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QImage, QPixmap
 
 from theme import Colors, Fonts, set_button_role, make_hint_label, make_separator
+from utils import move_to_trash
 
 # 嘗試匯入專案模組
 try:
@@ -997,8 +998,8 @@ class StagingPickerDialog(QDialog):
             return
         reply = QMessageBox.question(
             self, "清除 staging",
-            f"確定要刪除 staging/ 資料夾中的 {len(files)} 個檔案嗎？\n\n"
-            "此操作無法復原。",
+            f"確定要將 staging/ 資料夾中的 {len(files)} 個檔案移到隔離區嗎？\n\n"
+            "檔案會移到 .trash/，需要時仍可人工還原。",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -1006,11 +1007,11 @@ class StagingPickerDialog(QDialog):
         removed = 0
         for f in files:
             try:
-                os.remove(os.path.join(staging_dir, f))
-                removed += 1
+                if move_to_trash(os.path.join(staging_dir, f), BASE_DIR, reason="cleanup_staging"):
+                    removed += 1
             except OSError:
                 pass
-        QMessageBox.information(self, "完成", f"已刪除 {removed} 個檔案")
+        QMessageBox.information(self, "完成", f"已將 {removed} 個檔案移到隔離區")
         self._load()
 
     def _accept(self):
@@ -2175,14 +2176,14 @@ class _StagingSidebar(QFrame):
         """刪除檔案"""
         fname = os.path.basename(fpath)
         if QMessageBox.question(
-            self, "確認刪除", f"確定要刪除檔案？\n{fname}",
+            self, "移到隔離區", f"確定要將檔案移到隔離區？\n{fname}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         ) != QMessageBox.StandardButton.Yes:
             return
         try:
-            os.remove(fpath)
+            move_to_trash(fpath, BASE_DIR, reason="delete_staging_file")
         except Exception as e:
-            QMessageBox.warning(self, "刪除失敗", str(e))
+            QMessageBox.warning(self, "移動失敗", str(e))
         self.refresh()
 
     def _do_rename_file(self, fpath: str):
@@ -3184,7 +3185,7 @@ class FolderWizard(QDialog):
                 if reply == QMessageBox.StandardButton.Yes:
                     for sf in moved_from_staging:
                         try:
-                            os.remove(sf)
+                            move_to_trash(sf, BASE_DIR, reason="wizard_consumed_staging")
                         except OSError:
                             pass
 

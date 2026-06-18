@@ -22,6 +22,15 @@ def _get_settings_path() -> str:
     return os.path.join(base_dir, "settings.json")
 
 
+def _atomic_write_json(path: str, data: dict):
+    """原子性儲存設定檔，避免寫到一半中斷造成 settings.json 損壞。"""
+    tmp = path + ".tmp"
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
 # 預設設定
 DEFAULT_SETTINGS = {
     # 路徑設定
@@ -33,6 +42,7 @@ DEFAULT_SETTINGS = {
         "last_browse_dir": "",        # 上次瀏覽的目錄
         "weld_control_table": "",     # 焊口管制表路徑（必填）
         "prefab_drawing_dir": "",     # 預製圖 PDF 來源目錄
+        "soffice_path": "",           # LibreOffice soffice.exe 路徑（非 COM PDF）
     },
     
     # 焊口管制表設定
@@ -82,7 +92,7 @@ DEFAULT_SETTINGS = {
     # 記錄
     "meta": {
         "last_modified": "",
-        "version": "1.2",
+        "version": "1.3",
     }
 }
 
@@ -136,8 +146,7 @@ class SettingsManager:
         """儲存設定"""
         self._settings["meta"]["last_modified"] = datetime.now().isoformat()
         try:
-            with open(self._settings_path, 'w', encoding='utf-8') as f:
-                json.dump(self._settings, f, ensure_ascii=False, indent=2)
+            _atomic_write_json(self._settings_path, self._settings)
         except Exception as e:
             print(f"⚠️ 儲存設定失敗: {e}")
     
@@ -350,6 +359,16 @@ def get_prefab_drawing_dir() -> str:
 def set_prefab_drawing_dir(path: str):
     """設定預製圖 PDF 來源目錄"""
     get_settings().set_path("prefab_drawing_dir", path)
+
+
+def get_soffice_path() -> str:
+    """取得 LibreOffice soffice.exe 路徑。"""
+    return get_settings().get_path("soffice_path") or ""
+
+
+def set_soffice_path(path: str):
+    """設定 LibreOffice soffice.exe 路徑。"""
+    get_settings().set_path("soffice_path", path)
 
 
 if __name__ == "__main__":

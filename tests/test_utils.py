@@ -28,7 +28,38 @@ from utils import (
     clear_error_marker,
     find_attachment_pdf,
     copy_prefab_pdf,
+    atomic_write_json,
+    move_to_trash,
+    reentry_guard,
 )
+
+
+# ========= reentry_guard =========
+
+class TestReentryGuard:
+    """GUI 防重入裝飾器"""
+
+    def test_ignores_extra_qt_checked_argument_for_no_arg_slot(self):
+        class Target:
+            calls = 0
+
+            @reentry_guard("_busy")
+            def slot(self):
+                self.calls += 1
+                return "ok"
+
+        target = Target()
+
+        assert target.slot(False) == "ok"
+        assert target.calls == 1
+
+    def test_keeps_declared_positional_arguments(self):
+        class Target:
+            @reentry_guard("_busy")
+            def action(self, value):
+                return value
+
+        assert Target().action("record", False) == "record"
 
 
 # ========= parse_seq_from_report_id =========
@@ -345,6 +376,80 @@ class TestCopyPrefabPdf:
 
         result = copy_prefab_pdf(str(target), "10", prefab_dir=str(prefab))
         assert os.path.basename(result) == "10.DW-A.pdf"
+
+
+# ========= move_to_trash =========
+
+class TestMoveToTrash:
+    """隔離區移動測試"""
+
+    def test_moves_file_to_project_trash(self, tmp_path):
+        src = tmp_path / "staging" / "photo.jpg"
+        src.parent.mkdir()
+        src.write_bytes(b"image")
+
+        dst = move_to_trash(str(src), str(tmp_path), reason="cleanup_staging")
+
+        assert dst
+        assert not src.exists()
+        assert os.path.exists(dst)
+        assert ".trash" in dst
+        assert os.path.exists(os.path.join(os.path.dirname(os.path.dirname(dst)), "manifest.json"))
+
+    def test_nonexistent_returns_empty(self, tmp_path):
+        dst = move_to_trash(str(tmp_path / "missing.jpg"), str(tmp_path))
+        assert dst == ""
+
+    def test_external_file_uses_basename(self, tmp_path):
+        external = tmp_path.parent / "external_file_for_trash.txt"
+        external.write_text("x", encoding="utf-8")
+        try:
+            dst = move_to_trash(str(external), str(tmp_path), reason="external")
+            assert os.path.basename(dst) == "external_file_for_trash.txt"
+            assert os.path.exists(dst)
+        finally:
+            if external.exists():
+                external.unlink()
+
+
+# ========= atomic_write_json =========
+
+class TestAtomicWriteJson:
+    """JSON 原子寫入測試"""
+
+    def test_writes_file_without_parent_directory(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+
+        atomic_write_json("settings.json", {"ok": True})
+
+        assert (tmp_path / "settings.json").read_text(encoding="utf-8").strip() == '{\n  "ok": true\n}'
+
+
+# ========= reentry_guard =========
+
+class TestReentryGuard:
+    """重複觸發防護測試"""
+
+    def test_blocks_nested_call_and_resets_flag(self):
+        class Worker:
+            def __init__(self):
+                self.calls = 0
+                self.blocked = 0
+
+            @reentry_guard("_busy", lambda owner: setattr(owner, "blocked", owner.blocked + 1))
+            def run(self):
+                self.calls += 1
+                self.run()
+                return "done"
+
+        worker = Worker()
+        assert worker.run() == "done"
+        assert worker.calls == 1
+        assert worker.blocked == 1
+        assert worker._busy is False
+
+        assert worker.run() == "done"
+        assert worker.calls == 2
 
 
 if __name__ == "__main__":

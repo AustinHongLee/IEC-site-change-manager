@@ -7,6 +7,12 @@
 - 自動偵測變更並略過未修改項目
 - 附件 PDF 自動合併
 
+## 產品化文件
+公司級產品化、Big Bang 前導書、多 AI 討論規則與 Phase 0 落地任務，請從：
+
+- [docs/README.md](docs/README.md)
+- [docs/00_big_bang_產品進化總控室/README.md](docs/00_big_bang_產品進化總控室/README.md)
+
 ## 新增功能 (v2.1)
 - **🔍 資料夾驗證** - 檢查必要檔案是否齊全
 - **🖼️ 圖片預處理** - 自動調整尺寸、校正旋轉

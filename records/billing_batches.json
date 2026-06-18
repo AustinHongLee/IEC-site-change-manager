@@ -1,0 +1,10 @@
+{
+  "batches": [],
+  "meta": {
+    "version": "1.0",
+    "currency": "TWD",
+    "tax_mode": "exclusive",
+    "tax_rate": "5%",
+    "rounding_rule": "TWD_HALF_UP"
+  }
+}

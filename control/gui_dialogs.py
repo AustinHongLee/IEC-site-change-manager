@@ -28,10 +28,11 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QColor, QFont
 
-from config import ATTACHMENTS_ROOT, OUTPUT_ROOT
+from config import BASE_DIR, ATTACHMENTS_ROOT, OUTPUT_ROOT
 from record_manager import _load_store, _save_store, auto_backup, RECORDS_JSON_PATH
 from settings_manager import get_weld_control_config
 from theme import Colors, Fonts, set_button_role, make_separator, make_hint_label
+from utils import atomic_write_json, reentry_guard
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +47,10 @@ _FONT_SMALL = Fonts.small()
 def _make_hline() -> QFrame:
     """水平分隔線"""
     return make_separator()
+
+
+def _show_reentry_notice(owner):
+    QMessageBox.information(owner, "提示", "此動作正在執行中，請稍候。")
 
 
 # =====================================================================
@@ -609,6 +614,16 @@ class WeldSnapshotManager:
         )
         self.snapshot: dict | None = None
 
+    def _portable_attachments_root(self) -> str:
+        project_root = os.path.dirname(os.path.abspath(self.attachments_root))
+        try:
+            rel = os.path.relpath(os.path.abspath(self.attachments_root), project_root)
+            if not rel.startswith("..") and not os.path.isabs(rel):
+                return rel.replace("\\", "/")
+        except Exception:
+            pass
+        return self.attachments_root
+
     def load_snapshot(self) -> dict | None:
         if os.path.exists(self.snapshot_path):
             try:
@@ -623,7 +638,7 @@ class WeldSnapshotManager:
         pattern = re.compile(r"^(\d+)([rab])(.+)$")
         snapshot = {
             "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "attachments_root": self.attachments_root,
+            "attachments_root": self._portable_attachments_root(),
             "folder_count": 0,
             "weld_count": 0,
             "weld_index": {},
@@ -732,8 +747,10 @@ class WeldSnapshotManager:
             return False
         try:
             os.makedirs(os.path.dirname(self.snapshot_path), exist_ok=True)
-            with open(self.snapshot_path, "w", encoding="utf-8") as f:
+            tmp = self.snapshot_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(self.snapshot, f, ensure_ascii=False, indent=2)
+            os.replace(tmp, self.snapshot_path)
             return True
         except Exception as e:
             print(f"儲存快照失敗: {e}")
@@ -1061,6 +1078,7 @@ class WeldDuplicateCheckDialog(QDialog):
             return
 
         try:
+            from operation_journal import OperationJournal
             date_folder = os.path.dirname(full_path)
             archived_folder = os.path.join(date_folder, "_archived")
             os.makedirs(archived_folder, exist_ok=True)
@@ -1068,7 +1086,12 @@ class WeldDuplicateCheckDialog(QDialog):
             if os.path.exists(dest_path):
                 QMessageBox.critical(self, "錯誤", f"封存目標已存在:\n{dest_path}")
                 return
-            shutil.move(full_path, dest_path)
+            with OperationJournal(BASE_DIR, "archive_selected_folder", {
+                "folder": folder_name,
+                "date": date,
+            }) as journal:
+                journal.step("move_attachment_folder", source=full_path, target=dest_path)
+                shutil.move(full_path, dest_path)
             QMessageBox.information(self, "完成", f"✅ 已封存:\n{folder_name}\n\n到:\n{dest_path}")
             idx = self.folder_tree.indexOfTopLevelItem(it)
             self.folder_tree.takeTopLevelItem(idx)
@@ -1878,9 +1901,11 @@ class RecordManagerDialog(QDialog):
             ) == QMessageBox.StandardButton.Yes:
                 self._do_archive_record(record)
 
+    @reentry_guard("_record_move_in_progress", _show_reentry_notice)
     def _do_archive_record(self, record: dict):
         try:
             from config import ATTACHMENTS_ROOT
+            from operation_journal import OperationJournal
             archived_date_dir = os.path.join(ATTACHMENTS_ROOT, "_archived", record["date"])
             os.makedirs(archived_date_dir, exist_ok=True)
             src = record["folder_path"]
@@ -1888,15 +1913,22 @@ class RecordManagerDialog(QDialog):
             if os.path.exists(dst):
                 ts = datetime.now().strftime("%H%M%S")
                 dst = os.path.join(archived_date_dir, f"{record['folder_name']}_{ts}")
-            shutil.move(src, dst)
+            with OperationJournal(BASE_DIR, "archive_record_dialog", {
+                "folder": record["folder_name"],
+                "date": record["date"],
+            }) as journal:
+                journal.step("move_attachment_folder", source=src, target=dst)
+                shutil.move(src, dst)
             QMessageBox.information(self, "成功", f"✅ 已歸檔至:\n{dst}")
             self._scan_all_records()
         except Exception as e:
             QMessageBox.critical(self, "錯誤", f"歸檔失敗: {e}")
 
+    @reentry_guard("_record_move_in_progress", _show_reentry_notice)
     def _restore_record(self, record: dict):
         try:
             from config import ATTACHMENTS_ROOT
+            from operation_journal import OperationJournal
             target_dir = os.path.join(ATTACHMENTS_ROOT, record["date"])
             os.makedirs(target_dir, exist_ok=True)
             src = record["folder_path"]
@@ -1904,7 +1936,12 @@ class RecordManagerDialog(QDialog):
             if os.path.exists(dst):
                 QMessageBox.critical(self, "錯誤", f"目標位置已存在同名資料夾:\n{dst}")
                 return
-            shutil.move(src, dst)
+            with OperationJournal(BASE_DIR, "restore_record_dialog", {
+                "folder": record["folder_name"],
+                "date": record["date"],
+            }) as journal:
+                journal.step("move_attachment_folder", source=src, target=dst)
+                shutil.move(src, dst)
             QMessageBox.information(self, "成功", f"✅ 已還原至:\n{dst}")
             self._scan_all_records()
         except Exception as e:
@@ -2481,6 +2518,7 @@ class EditRecordDialog(QDialog):
         else:
             self.preview_label.setText("(請填寫完整資訊)")
 
+    @reentry_guard("_edit_record_save_in_progress", _show_reentry_notice)
     def _save_changes(self):
         new_serial = self.serial_edit.text().strip()
         if not new_serial or not new_serial.isdigit():
@@ -2548,8 +2586,7 @@ class EditRecordDialog(QDialog):
                 for w in _deduped_welds
             ]}
             wip = os.path.join(old_path, "weld_info.json")
-            with open(wip, "w", encoding="utf-8") as f:
-                json.dump(weld_info, f, ensure_ascii=False, indent=2)
+            atomic_write_json(wip, weld_info)
 
             # 2) GroupWeld.txt
             gw_path = os.path.join(old_path, "GroupWeld.txt")

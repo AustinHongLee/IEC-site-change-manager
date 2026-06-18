@@ -12,9 +12,14 @@ utils.py — 工具函數模組
 
 import os
 import re
+import json
+import shutil
 import hashlib
+import inspect
 import time
-from typing import List, Optional
+from datetime import datetime
+from functools import wraps
+from typing import Any, Callable, List, Optional
 from dataclasses import dataclass
 
 from openpyxl import load_workbook
@@ -99,6 +104,58 @@ def atomic_save_wb(wb, path: str):
     os.replace(tmp, path)
 
 
+def atomic_write_json(path: str, data: dict, *, ensure_ascii: bool = False, indent: int = 2):
+    """原子性儲存 JSON（避免寫到一半造成檔案損壞）。"""
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=ensure_ascii, indent=indent)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def reentry_guard(
+    flag_attr: str,
+    on_reentry: Callable[[Any], None] | None = None,
+):
+    """
+    防止同一個 GUI slot 在尚未結束時被重複觸發。
+
+    Args:
+        flag_attr: 存在 instance 上的 busy flag 名稱。
+        on_reentry: 第二次觸發時的提示 callback，可省略。
+    """
+    def decorate(func):
+        sig = inspect.signature(func)
+        positional_params = [
+            p for p in sig.parameters.values()
+            if p.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            )
+        ]
+        accepts_varargs = any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values())
+        # func 是未綁定方法，第一個 positional 參數是 self。
+        max_extra_args = None if accepts_varargs else max(0, len(positional_params) - 1)
+
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if getattr(self, flag_attr, False):
+                if on_reentry is not None:
+                    on_reentry(self)
+                return None
+            setattr(self, flag_attr, True)
+            try:
+                call_args = args if max_extra_args is None else args[:max_extra_args]
+                return func(self, *call_args, **kwargs)
+            finally:
+                setattr(self, flag_attr, False)
+        return wrapper
+    return decorate
+
+
 def safe_remove(path: str, retries: int = 3, delay: float = 0.3) -> bool:
     """安全刪除檔案"""
     for _ in range(retries):
@@ -109,6 +166,50 @@ def safe_remove(path: str, retries: int = 3, delay: float = 0.3) -> bool:
         except PermissionError:
             time.sleep(delay)
     return False
+
+
+def move_to_trash(path: str, project_root: str, *, reason: str = "manual") -> str:
+    """
+    將檔案/資料夾移入專案 .trash 隔離區，而不是永久刪除。
+
+    Returns:
+        隔離後的新路徑；來源不存在時回傳空字串。
+    """
+    src = os.path.abspath(path)
+    root = os.path.abspath(project_root)
+    if not os.path.exists(src):
+        return ""
+
+    try:
+        rel = os.path.relpath(src, root)
+        if rel.startswith("..") or os.path.isabs(rel):
+            rel = os.path.basename(src)
+    except ValueError:
+        rel = os.path.basename(src)
+
+    safe_reason = re.sub(r"[^A-Za-z0-9_-]+", "_", reason).strip("_") or "manual"
+    batch = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    trash_dir = os.path.join(root, ".trash", f"{batch}_{safe_reason}")
+    dst = os.path.join(trash_dir, rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+
+    final_dst = dst
+    counter = 1
+    while os.path.exists(final_dst):
+        base, ext = os.path.splitext(dst)
+        final_dst = f"{base}_{counter}{ext}"
+        counter += 1
+
+    shutil.move(src, final_dst)
+    manifest = {
+        "moved_at": datetime.now().isoformat(timespec="seconds"),
+        "reason": reason,
+        "source": src,
+        "project_root": root,
+        "trash_path": final_dst,
+    }
+    atomic_write_json(os.path.join(trash_dir, "manifest.json"), manifest)
+    return final_dst
 
 
 def wait_for_stable_file(path: str, tries: int = 30, interval: float = 0.2) -> bool:

@@ -21,7 +21,9 @@ from config import (
     RECORD_XLSX_PATH,
     RECORD_HEADER, DETAIL_HEADER, MATERIALS_HEADER
 )
-from utils import safe_load_workbook, atomic_save_wb, parse_seq_from_report_id
+from utils import safe_load_workbook, atomic_save_wb, atomic_write_json, parse_seq_from_report_id
+from billing_calculator import amount_to_text, parse_amount
+from billing_status import is_billing_locked
 from log_config import get_logger
 
 logger = get_logger(__name__)
@@ -31,7 +33,6 @@ _RECORDS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 RECORDS_JSON_PATH = os.path.join(_RECORDS_DIR, "records.json")
 BILLING_JSON_PATH = os.path.join(_RECORDS_DIR, "billing.json")
 DWG_MAP_JSON_PATH = os.path.join(_RECORDS_DIR, "dwg_map.json")
-
 
 # ========= 自動備份 =========
 def auto_backup(path: str = None, max_backups: int = 5) -> str:
@@ -113,14 +114,7 @@ def _save_store(store: dict):
     """儲存 records.json（原子寫入）"""
     _ensure_records_dir()
     store["meta"]["last_modified"] = datetime.now().isoformat()
-    tmp = RECORDS_JSON_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(store, f, ensure_ascii=False, indent=2)
-    # 原子替換
-    if os.path.exists(RECORDS_JSON_PATH):
-        os.replace(tmp, RECORDS_JSON_PATH)
-    else:
-        os.rename(tmp, RECORDS_JSON_PATH)
+    atomic_write_json(RECORDS_JSON_PATH, store)
     logger.debug(f"💾 records.json 已儲存 ({len(store['records'])} 筆)")
 
 
@@ -171,6 +165,9 @@ def preload_record_index(path: str = None) -> Tuple[
 
 
 # ========= Upsert 操作（JSON） =========
+REBUILD_FLAG_FIELDS = ("需重產", "需重產原因", "需重產時間")
+
+
 def upsert_record(rows: List[Dict[str, str]], path: str = None):
     """插入或更新 record 紀錄（寫入 JSON）"""
     auto_backup(RECORDS_JSON_PATH)
@@ -192,6 +189,7 @@ def upsert_record(rows: List[Dict[str, str]], path: str = None):
             # 更新
             idx = key_idx[key]
             records[idx].update(row)
+            _clear_rebuild_flags_after_successful_upsert(records[idx], row)
         else:
             # 新增
             records.append(dict(row))
@@ -199,6 +197,14 @@ def upsert_record(rows: List[Dict[str, str]], path: str = None):
 
     _save_store(store)
     logger.info(f"📝 records.json 已更新 {len(rows)} 筆 record")
+
+
+def _clear_rebuild_flags_after_successful_upsert(record: Dict[str, str], row: Dict[str, str]) -> None:
+    """重新產出成功寫回 record 後，清除舊的需重產旗標。"""
+    if str(row.get("需重產", "")).strip() == "1":
+        return
+    for field in REBUILD_FLAG_FIELDS:
+        record.pop(field, None)
 
 
 def upsert_detail_rows(detail_rows: List[Dict[str, str]], path: str = None):
@@ -249,16 +255,19 @@ def upsert_materials_rows(materials_rows: List[Dict[str, str]], path: str = None
     store = _load_store()
     materials = store["materials"]
 
-    # 主鍵：報告編號 + 零件類型 + 尺寸 + 材質
-    key_idx: Dict[Tuple[str, str, str, str], int] = {}
+    locked_report_ids = _load_locked_billing_report_ids()
+
+    # 主鍵：報告編號 + 零件類型 + 尺寸 + SCH + 材質
+    key_idx: Dict[Tuple[str, str, str, str, str], int] = {}
     max_item = 0
     for i, mat in enumerate(materials):
         rid = str(mat.get("報告編號", ""))
         comp = str(mat.get("零件類型", ""))
         sz = str(mat.get("尺寸", ""))
+        sch = str(mat.get("SCH", ""))
         mt = str(mat.get("材質", ""))
         if rid and comp:
-            key_idx[(rid, comp, sz, mt)] = i
+            key_idx[(rid, comp, sz, sch, mt)] = i
         try:
             v = mat.get("項目")
             if v is not None:
@@ -267,18 +276,33 @@ def upsert_materials_rows(materials_rows: List[Dict[str, str]], path: str = None
             pass
 
     for row in materials_rows:
+        rid = str(row.get("報告編號", ""))
         key = (
-            str(row.get("報告編號", "")),
+            rid,
             str(row.get("零件類型", "")),
             str(row.get("尺寸", "")),
+            str(row.get("SCH", "")),
             str(row.get("材質", "")),
         )
         if key in key_idx:
+            if rid in locked_report_ids:
+                logger.warning(f"已請款修改單材料列已鎖定，略過更新: {rid} {key[1:]}")
+                continue
             idx = key_idx[key]
+            existing = materials[idx]
             for k, v in row.items():
                 if k != "項目":
-                    materials[idx][k] = v
+                    if k in (
+                        "單價", "金額", "單價來源", "金額來源",
+                        "價目表ID", "價目來源", "價目生效日", "配價狀態",
+                    ) and _preserve_material_price(existing, row):
+                        continue
+                    existing[k] = v
+            _recalculate_preserved_material_amount(existing, row)
         else:
+            if rid in locked_report_ids:
+                logger.warning(f"已請款修改單材料列已鎖定，略過新增: {rid} {key[1:]}")
+                continue
             max_item += 1
             row["項目"] = max_item
             materials.append(dict(row))
@@ -286,6 +310,52 @@ def upsert_materials_rows(materials_rows: List[Dict[str, str]], path: str = None
 
     _save_store(store)
     logger.info(f"📝 records.json 已更新 {len(materials_rows)} 筆材料明細")
+
+
+def _load_locked_billing_report_ids() -> set[str]:
+    if not os.path.exists(BILLING_JSON_PATH):
+        return set()
+    try:
+        with open(BILLING_JSON_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        return set()
+    billing = data.get("billing", {})
+    if not isinstance(billing, dict):
+        return set()
+
+    locked: set[str] = set()
+    for report_id, item in billing.items():
+        if not isinstance(item, dict):
+            continue
+        status = item.get("status") or item.get("請款狀態") or ""
+        if is_billing_locked(status):
+            locked.add(str(report_id))
+    return locked
+
+
+def _preserve_material_price(existing: dict, incoming: dict) -> bool:
+    """已有單價時，不讓重跑產出的空白/價目表/未配價/未定價值回沖歷史快照。"""
+    existing_price = parse_amount(existing.get("單價"))
+    if existing_price is None:
+        return False
+    incoming_source = str(incoming.get("單價來源", "")).strip()
+    return incoming_source in ("", "pricebook", "missing_pricebook", "missing_price")
+
+
+def _recalculate_preserved_material_amount(existing: dict, incoming: dict) -> None:
+    if not _preserve_material_price(existing, incoming):
+        return
+    if str(existing.get("金額來源", "")).strip() == "manual":
+        return
+    qty = parse_amount(existing.get("數量"))
+    price = parse_amount(existing.get("單價"))
+    if qty is None or price is None:
+        return
+    existing["金額"] = amount_to_text(qty * price)
+    existing["金額來源"] = "calculated"
+    if not str(existing.get("單價來源", "")).strip():
+        existing["單價來源"] = "manual"
 
 
 # ========= Excel 遷移工具 =========
@@ -853,7 +923,6 @@ def _dwg_cache_valid(excel_path: str) -> bool:
 
 def _save_dwg_cache(mapping: Dict[str, Tuple[str, str]], excel_path: str):
     """將 DWG mapping 存為 JSON 快取"""
-    os.makedirs(os.path.dirname(DWG_MAP_JSON_PATH), exist_ok=True)
     data = {
         "source": os.path.basename(excel_path),
         "source_mtime": os.path.getmtime(excel_path),
@@ -861,8 +930,7 @@ def _save_dwg_cache(mapping: Dict[str, Tuple[str, str]], excel_path: str):
         "count": len(mapping),
         "mapping": {k: list(v) for k, v in mapping.items()},
     }
-    with open(DWG_MAP_JSON_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    atomic_write_json(DWG_MAP_JSON_PATH, data)
     logger.info(f"💾 DWG MAP 快取已更新 ({len(mapping)} 筆)")
 
 

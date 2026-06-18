@@ -12,9 +12,21 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+def _ensure_utf8_console():
+    """讓啟動守門訊息在 Windows 終端可正常輸出中文。"""
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        try:
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+
 def main():
     """主程式入口"""
     import argparse
+    _ensure_utf8_console()
     
     parser = argparse.ArgumentParser(
         description="管線修改單產出系統",
@@ -52,16 +64,114 @@ def main():
         '--debug', action='store_true',
         help='啟用 Debug 模式'
     )
+    parser.add_argument(
+        '--health-check', action='store_true',
+        help='只檢查專案資料夾健康狀態，不啟動 GUI/CLI'
+    )
+    parser.add_argument(
+        '--audit-integrity', action='store_true',
+        help='執行資料一致性稽核，不啟動 GUI/CLI'
+    )
+    parser.add_argument(
+        '--repair-project', action='store_true',
+        help='修復可安全自動修復的專案資料夾問題'
+    )
     
     args = parser.parse_args()
+
+    project_lock = None
+    try:
+        project_lock = _prepare_project_startup(args)
+        if args.health_check or args.audit_integrity:
+            return
     
-    if args.cli or args.date or args.retry:
-        # CLI 模式
-        run_cli(args)
-    else:
-        # GUI 模式
-        from gui import main as gui_main
-        gui_main()
+        if args.cli or args.date or args.retry:
+            # CLI 模式
+            run_cli(args)
+        else:
+            # GUI 模式
+            from gui import main as gui_main
+            gui_main()
+    finally:
+        if project_lock is not None:
+            project_lock.release()
+
+
+def _prepare_project_startup(args):
+    """啟動前專案守門，回傳已取得的 ProjectLock 或 None。"""
+    from config import BASE_DIR
+    from project_guard import (
+        ProjectLock,
+        format_guard_report,
+        inspect_project,
+        repair_project,
+    )
+
+    result = inspect_project(BASE_DIR)
+    should_repair = args.repair_project or (
+        not args.health_check and result.can_auto_repair
+    )
+    if should_repair:
+        result = repair_project(BASE_DIR)
+
+    if args.health_check or args.audit_integrity or result.repaired or result.has_blocking_issues:
+        print(format_guard_report(result))
+
+    if args.health_check or args.audit_integrity:
+        if not result.has_blocking_issues:
+            from integrity_audit import audit_integrity, format_integrity_report
+            print()
+            print(format_integrity_report(
+                audit_integrity(BASE_DIR),
+                max_refs=40 if args.audit_integrity else 12,
+            ))
+        return None
+
+    if result.has_blocking_issues:
+        msg = format_guard_report(result) + "\n\n專案資料夾有需要人工確認的問題，已停止啟動。"
+        if _is_gui_request(args):
+            _show_startup_message("專案資料夾需要確認", msg)
+        print()
+        print("專案資料夾有需要人工確認的問題，已停止啟動。")
+        sys.exit(2)
+
+    project_lock = ProjectLock(BASE_DIR)
+    if not project_lock.acquire(start_heartbeat=True):
+        existing = project_lock.read_existing() or {}
+        user = existing.get("user", "未知使用者")
+        host = existing.get("host", "未知電腦")
+        heartbeat = existing.get("heartbeat_at", "未知時間")
+        print("此專案目前已有另一個程式正在使用，為避免重複寫入已停止啟動。")
+        print(f"使用者: {user}")
+        print(f"電腦: {host}")
+        print(f"最後心跳: {heartbeat}")
+        print("若確認前一個程式已關閉，等待鎖定逾時後再重新啟動。")
+        if _is_gui_request(args):
+            _show_startup_message(
+                "專案正在使用中",
+                "此專案目前已有另一個程式正在使用，為避免重複寫入已停止啟動。\n\n"
+                f"使用者: {user}\n"
+                f"電腦: {host}\n"
+                f"最後心跳: {heartbeat}\n\n"
+                "若確認前一個程式已關閉，等待鎖定逾時後再重新啟動。",
+            )
+        sys.exit(3)
+    return project_lock
+
+
+def _is_gui_request(args) -> bool:
+    return not (args.cli or args.date or args.retry or args.health_check or args.audit_integrity)
+
+
+def _show_startup_message(title: str, message: str) -> None:
+    """GUI 模式啟動失敗時顯示人看得到的訊息。"""
+    try:
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+        QMessageBox.critical(None, title, message)
+        app.processEvents()
+    except Exception:
+        pass
 
 
 def run_cli(args):
@@ -70,6 +180,7 @@ def run_cli(args):
         ATTACHMENTS_ROOT, OUTPUT_ROOT, PDF_OUTPUT_DIR, RUNTIME, use_dual_images
     )
     from parsers import parse_folder, weld_code_list, build_auto_description
+    from material_pricebook import apply_material_pricing, load_material_pricebook
     from utils import (
         scan_date_folders, scan_subfolders, compute_fingerprint,
         find_attachment_pdf, copy_prefab_pdf, ProcessingSummary,
@@ -79,6 +190,7 @@ def run_cli(args):
         load_drawing_map, preload_record_index,
         upsert_record, upsert_detail_rows
     )
+    from capabilities import detect_excel_com, format_excel_com_unavailable
     from excel_handler import generate_report, check_images_exist, get_excel_manager
     
     # 更新設定
@@ -88,6 +200,11 @@ def run_cli(args):
         RUNTIME.skip_unchanged = False
     if args.debug:
         RUNTIME.debug_mode = True
+
+    capability = detect_excel_com()
+    if not capability.available:
+        print(format_excel_com_unavailable(capability))
+        sys.exit(4)
     
     print("=" * 50)
     print("管線修改單產出系統 - CLI 模式")
@@ -130,6 +247,7 @@ def run_cli(args):
     
     print("📖 載入紀錄索引...")
     existing_key_set, key_to_row, key_to_meta, max_seq_by_date = preload_record_index()
+    material_pricebook = load_material_pricebook()
     
     # 統計
     summary = ProcessingSummary()
@@ -276,7 +394,10 @@ def run_cli(args):
                         
                         # 材料明細
                         from parsers import parse_materials_txt
-                        parsed_mats = parse_materials_txt(folder_path)
+                        parsed_mats = apply_material_pricing(
+                            parse_materials_txt(folder_path),
+                            material_pricebook,
+                        )
                         for mat in parsed_mats:
                             materials_rows.append({
                                 "項目": None,
@@ -287,10 +408,17 @@ def run_cli(args):
                                 "尺寸": mat.get("尺寸", ""),
                                 "SCH": mat.get("SCH", ""),
                                 "材質": mat.get("材質", ""),
+                                "類別": mat.get("類別", "材料"),
                                 "數量": mat.get("數量", ""),
                                 "單位": mat.get("單位", ""),
-                                "單價": "",
-                                "金額": "",
+                                "單價": mat.get("單價", ""),
+                                "金額": mat.get("金額", ""),
+                                "單價來源": mat.get("單價來源", ""),
+                                "金額來源": mat.get("金額來源", ""),
+                                "價目表ID": mat.get("價目表ID", ""),
+                                "價目來源": mat.get("價目來源", ""),
+                                "價目生效日": mat.get("價目生效日", ""),
+                                "配價狀態": mat.get("配價狀態", ""),
                                 "備註": mat.get("備註", ""),
                             })
                     else:
