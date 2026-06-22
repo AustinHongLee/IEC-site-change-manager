@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
+import sys
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "control"))
+
+from app_info import APP_VERSION
 
 
 def test_pyinstaller_spec_tracks_required_entrypoint_and_assets():
@@ -35,5 +41,5 @@ def test_windows_version_info_tracks_app_version():
 
     assert "FileDescription', 'IEC Site Change Manager" in version_info
     assert "ProductName', 'IEC Site Change Manager" in version_info
-    assert "FileVersion', '0.1.0-alpha" in version_info
-    assert "ProductVersion', '0.1.0-alpha" in version_info
+    assert f"FileVersion', '{APP_VERSION}" in version_info
+    assert f"ProductVersion', '{APP_VERSION}" in version_info

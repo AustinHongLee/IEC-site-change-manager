@@ -22,6 +22,7 @@ _CONTROL_DIR = os.path.join(_ROOT, "control")
 if _CONTROL_DIR not in sys.path:
     sys.path.insert(0, _CONTROL_DIR)
 
+from app_info import APP_VERSION
 from console_io import configure_utf8_stdio
 from project_guard import build_startup_decision, inspect_project
 from run_packaged_cli_smoke import (
@@ -109,6 +110,51 @@ def _run_health_check(exe_path: Path, timeout: int) -> dict[str, Any]:
         "stdout": completed.stdout,
         "stderr": completed.stderr,
         "error": "",
+    }
+
+
+def _run_version_check(exe_path: Path, timeout: int) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [str(exe_path), "--version"],
+            cwd=exe_path.parent,
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "ran": True,
+            "ok": False,
+            "returncode": None,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+            "error": "timeout",
+            "expected_version": APP_VERSION,
+        }
+    except OSError as exc:
+        return {
+            "ran": True,
+            "ok": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": str(exc),
+            "error": "os_error",
+            "expected_version": APP_VERSION,
+        }
+
+    stdout = completed.stdout or ""
+    return {
+        "ran": True,
+        "ok": completed.returncode == 0 and APP_VERSION in stdout,
+        "returncode": completed.returncode,
+        "stdout": stdout,
+        "stderr": completed.stderr,
+        "error": "" if APP_VERSION in stdout else "version_mismatch",
+        "expected_version": APP_VERSION,
     }
 
 
@@ -213,6 +259,7 @@ def check_release_package(
             "package_dir": str(package),
             "exe_path": str(exe_path),
             "startup": None,
+            "version_check": {"ran": False},
             "health_check": {"ran": False},
             "diagnostics_probe": {"ran": False},
             "cli_smoke": {"ran": False},
@@ -257,11 +304,15 @@ def check_release_package(
             )
         )
 
+    version_check = {"ran": False}
     health = {"ran": False}
     diagnostics_probe = {"ran": False}
     cli_smoke = {"ran": False}
     if run_health_check:
         if exe_path.is_file():
+            version_check = _run_version_check(exe_path, health_timeout)
+            if not version_check.get("ok"):
+                issues.append(_issue("error", "exe_version_check_failed", "exe --version 與 app_info.APP_VERSION 不一致。", exe_path))
             health = _run_health_check(exe_path, health_timeout)
             if not health.get("ok"):
                 issues.append(_issue("error", "exe_health_check_failed", "exe --health-check 執行失敗。", exe_path))
@@ -276,6 +327,7 @@ def check_release_package(
                     )
                 )
         else:
+            version_check = {"ran": False, "ok": False, "error": "missing_exe"}
             health = {"ran": False, "ok": False, "error": "missing_exe"}
             diagnostics_probe = {"ran": False, "ok": False, "error": "missing_exe"}
 
@@ -309,6 +361,7 @@ def check_release_package(
         "package_dir": str(package),
         "exe_path": str(exe_path),
         "startup": startup,
+        "version_check": version_check,
         "health_check": health,
         "diagnostics_probe": diagnostics_probe,
         "cli_smoke": cli_smoke,
@@ -324,6 +377,9 @@ def _print_text(result: dict[str, Any]) -> None:
     decision = startup.get("decision") or {}
     if decision:
         print(f"startup：{startup.get('state')} / {decision.get('action')} - {decision.get('title')}")
+    version = result.get("version_check") or {}
+    if version.get("ran"):
+        print(f"exe version：{'OK' if version.get('ok') else 'NG'} expected={version.get('expected_version')}")
     health = result.get("health_check") or {}
     if health.get("ran"):
         print(f"exe health-check：{'OK' if health.get('ok') else 'NG'} returncode={health.get('returncode')}")
