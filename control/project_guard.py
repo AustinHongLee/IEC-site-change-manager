@@ -33,6 +33,11 @@ REQUIRED_DIRS = ("attachments", "records", "output", "pdf", "staging", "logs")
 REQUIRED_FILES = ("settings.json",)
 PROJECT_MARKER = ".project.json"
 LOCK_FILE = ".project.lock"
+BOOTSTRAP_REPAIR_CODES = {
+    "first_open",
+    "missing_settings",
+    *(f"missing_dir_{dirname}" for dirname in REQUIRED_DIRS),
+}
 
 
 def now_iso() -> str:
@@ -97,6 +102,97 @@ class GuardResult:
     @property
     def is_healthy(self) -> bool:
         return self.state == "healthy" and not self.issues
+
+
+@dataclass(frozen=True)
+class StartupDecision:
+    action: str
+    title: str
+    message: str
+    can_continue: bool
+    can_auto_repair: bool
+    blocking_codes: list[str] = field(default_factory=list)
+    repairable_codes: list[str] = field(default_factory=list)
+
+
+def build_startup_decision(result: GuardResult) -> StartupDecision:
+    blocking_codes = [issue.code for issue in result.blocking_issues]
+    repairable_codes = [issue.code for issue in result.auto_fixable_issues]
+
+    if result.has_blocking_issues:
+        if "possible_wrong_folder" in blocking_codes:
+            return StartupDecision(
+                action="blocked_wrong_folder",
+                title="可能跑錯資料夾",
+                message="目前位置不像工務修改單專案。為避免把資料夾結構寫到錯誤位置，啟動已停止。",
+                can_continue=False,
+                can_auto_repair=False,
+                blocking_codes=blocking_codes,
+                repairable_codes=repairable_codes,
+            )
+        if "missing_records_json" in blocking_codes:
+            return StartupDecision(
+                action="blocked_possible_deleted_records",
+                title="疑似 records.json 遺失",
+                message="attachments/ 已有資料，但主紀錄 records.json 不存在。這可能是誤刪，需人工確認後再修復。",
+                can_continue=False,
+                can_auto_repair=False,
+                blocking_codes=blocking_codes,
+                repairable_codes=repairable_codes,
+            )
+        return StartupDecision(
+            action="blocked",
+            title="啟動前需要人工處理",
+            message="專案資料存在阻擋性問題，程式不會自動覆蓋或修復。",
+            can_continue=False,
+            can_auto_repair=False,
+            blocking_codes=blocking_codes,
+            repairable_codes=repairable_codes,
+        )
+
+    bootstrap_only = all(code in BOOTSTRAP_REPAIR_CODES for code in repairable_codes)
+    if result.state == "first_open" and result.can_auto_repair and bootstrap_only:
+        return StartupDecision(
+            action="initialize",
+            title="第一次開啟專案",
+            message="此資料夾尚未初始化，可建立必要資料夾與預設設定後啟動。",
+            can_continue=True,
+            can_auto_repair=True,
+            blocking_codes=blocking_codes,
+            repairable_codes=repairable_codes,
+        )
+
+    if result.can_auto_repair:
+        return StartupDecision(
+            action="repair",
+            title="專案結構可自動修復",
+            message="偵測到缺少空資料夾或預設資料檔，可安全補建後啟動。",
+            can_continue=True,
+            can_auto_repair=True,
+            blocking_codes=blocking_codes,
+            repairable_codes=repairable_codes,
+        )
+
+    if result.issues:
+        return StartupDecision(
+            action="review",
+            title="專案需要人工確認",
+            message="專案可讀，但仍有不適合自動修復的提醒，建議先到健康檢查確認。",
+            can_continue=True,
+            can_auto_repair=False,
+            blocking_codes=blocking_codes,
+            repairable_codes=repairable_codes,
+        )
+
+    return StartupDecision(
+        action="healthy",
+        title="專案狀態正常",
+        message="必要資料夾與設定檔已就緒。",
+        can_continue=True,
+        can_auto_repair=False,
+        blocking_codes=blocking_codes,
+        repairable_codes=repairable_codes,
+    )
 
 
 def _default_settings() -> dict[str, Any]:
@@ -613,7 +709,12 @@ def repair_project(project_root: str | Path) -> GuardResult:
 
 
 def format_guard_report(result: GuardResult) -> str:
-    lines = [f"專案資料夾: {result.root}", f"狀態: {result.state}"]
+    decision = build_startup_decision(result)
+    lines = [
+        f"專案資料夾: {result.root}",
+        f"狀態: {result.state}",
+        f"啟動判斷: {decision.title}",
+    ]
     if result.repaired:
         lines.append("")
         lines.append("已修復:")

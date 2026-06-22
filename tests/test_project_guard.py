@@ -14,14 +14,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control")
 
 
 def test_repair_first_open_project(tmp_path):
-    from project_guard import REQUIRED_DIRS, inspect_project, repair_project
+    from project_guard import REQUIRED_DIRS, build_startup_decision, inspect_project, repair_project
 
     result = inspect_project(tmp_path)
     assert result.state == "first_open"
     assert result.can_auto_repair is True
+    decision = build_startup_decision(result)
+    assert decision.action == "initialize"
+    assert decision.can_auto_repair is True
 
     repaired = repair_project(tmp_path)
     assert repaired.has_blocking_issues is False
+    assert build_startup_decision(repaired).action == "healthy"
     for dirname in REQUIRED_DIRS:
         assert (tmp_path / dirname).is_dir()
     assert (tmp_path / ".project.json").exists()
@@ -34,7 +38,7 @@ def test_repair_first_open_project(tmp_path):
 
 
 def test_records_missing_with_attachments_requires_review(tmp_path):
-    from project_guard import inspect_project, repair_project
+    from project_guard import build_startup_decision, inspect_project, repair_project
 
     (tmp_path / "attachments" / "20260101" / "001_1r1").mkdir(parents=True)
     (tmp_path / "records").mkdir()
@@ -42,6 +46,9 @@ def test_records_missing_with_attachments_requires_review(tmp_path):
     result = inspect_project(tmp_path)
     assert result.has_blocking_issues is True
     assert any(i.code == "missing_records_json" for i in result.issues)
+    decision = build_startup_decision(result)
+    assert decision.action == "blocked_possible_deleted_records"
+    assert decision.can_continue is False
 
     repaired = repair_project(tmp_path)
     assert repaired.has_blocking_issues is True
@@ -49,7 +56,7 @@ def test_records_missing_with_attachments_requires_review(tmp_path):
 
 
 def test_non_empty_unrecognized_folder_is_not_auto_repaired(tmp_path):
-    from project_guard import inspect_project, repair_project
+    from project_guard import build_startup_decision, inspect_project, repair_project
 
     (tmp_path / "random_document.txt").write_text("not a project", encoding="utf-8")
 
@@ -57,6 +64,8 @@ def test_non_empty_unrecognized_folder_is_not_auto_repaired(tmp_path):
     assert result.has_blocking_issues is True
     assert any(i.code == "possible_wrong_folder" for i in result.issues)
     assert result.can_auto_repair is False
+    decision = build_startup_decision(result)
+    assert decision.action == "blocked_wrong_folder"
 
     repair_project(tmp_path)
     assert not (tmp_path / "attachments").exists()
@@ -64,7 +73,7 @@ def test_non_empty_unrecognized_folder_is_not_auto_repaired(tmp_path):
 
 
 def test_invalid_records_json_blocks_repair(tmp_path):
-    from project_guard import inspect_project, repair_project
+    from project_guard import build_startup_decision, inspect_project, repair_project
 
     for dirname in ("attachments", "records", "output", "pdf", "staging", "logs"):
         (tmp_path / dirname).mkdir()
@@ -74,13 +83,14 @@ def test_invalid_records_json_blocks_repair(tmp_path):
     result = inspect_project(tmp_path)
     assert result.has_blocking_issues is True
     assert any(i.code == "records_invalid_json" for i in result.issues)
+    assert build_startup_decision(result).action == "blocked"
 
     repair_project(tmp_path)
     assert records_path.read_text(encoding="utf-8") == "{broken"
 
 
 def test_snapshot_absolute_path_can_be_repaired(tmp_path):
-    from project_guard import inspect_project, repair_project
+    from project_guard import build_startup_decision, inspect_project, repair_project
 
     (tmp_path / "attachments").mkdir()
     (tmp_path / "records").mkdir()
@@ -96,6 +106,9 @@ def test_snapshot_absolute_path_can_be_repaired(tmp_path):
 
     result = inspect_project(tmp_path)
     assert any(i.code == "snapshot_absolute_path" for i in result.issues)
+    decision = build_startup_decision(result)
+    assert decision.action == "repair"
+    assert decision.can_auto_repair is True
 
     repaired = repair_project(tmp_path)
     assert "weld_snapshot.json 改為相對路徑" in repaired.repaired
