@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+if command -v python >/dev/null 2>&1; then
+  python tools/repo_guard.py --staged
+else
+  py -3 tools/repo_guard.py --staged
+fi
