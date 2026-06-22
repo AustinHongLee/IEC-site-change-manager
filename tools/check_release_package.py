@@ -1,0 +1,229 @@
+# -*- coding: utf-8 -*-
+"""
+Validate a PyInstaller onedir release package before handing it to users.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+
+_THIS = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_THIS)
+_CONTROL_DIR = os.path.join(_ROOT, "control")
+if _CONTROL_DIR not in sys.path:
+    sys.path.insert(0, _CONTROL_DIR)
+
+from console_io import configure_utf8_stdio
+from project_guard import build_startup_decision, inspect_project
+
+
+DEFAULT_PACKAGE_DIR = Path(_ROOT) / "dist" / "IEC-site-change-manager"
+DEFAULT_EXE_NAME = "IEC-site-change-manager.exe"
+ALLOWED_TOP_LEVEL = {DEFAULT_EXE_NAME, "_internal"}
+REQUIRED_INTERNAL_ASSETS = (
+    ("template", "dir"),
+    ("control/image", "dir"),
+    ("control/wizard_data.json", "file"),
+    ("material_pricebook_seed.json", "file"),
+)
+
+
+def _issue(severity: str, code: str, message: str, path: Path | str = "") -> dict[str, str]:
+    return {
+        "severity": severity,
+        "code": code,
+        "message": message,
+        "path": str(path),
+    }
+
+
+def _guard_issue_to_dict(issue) -> dict[str, Any]:
+    return {
+        "severity": issue.severity,
+        "code": issue.code,
+        "title": issue.title,
+        "message": issue.message,
+        "path": issue.path,
+        "auto_fixable": issue.auto_fixable,
+    }
+
+
+def _check_asset(path: Path, kind: str) -> bool:
+    if kind == "dir":
+        return path.is_dir()
+    if kind == "file":
+        return path.is_file()
+    raise ValueError(f"unknown asset kind: {kind}")
+
+
+def _run_health_check(exe_path: Path, timeout: int) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            [str(exe_path), "--health-check"],
+            cwd=exe_path.parent,
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        return {
+            "ran": True,
+            "ok": False,
+            "returncode": None,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+            "error": "timeout",
+        }
+    except OSError as exc:
+        return {
+            "ran": True,
+            "ok": False,
+            "returncode": None,
+            "stdout": "",
+            "stderr": str(exc),
+            "error": "os_error",
+        }
+
+    return {
+        "ran": True,
+        "ok": completed.returncode == 0,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "error": "",
+    }
+
+
+def check_release_package(
+    package_dir: str | Path = DEFAULT_PACKAGE_DIR,
+    *,
+    exe_name: str = DEFAULT_EXE_NAME,
+    run_health_check: bool = False,
+    health_timeout: int = 60,
+) -> dict[str, Any]:
+    package = Path(package_dir).resolve()
+    exe_path = package / exe_name
+    internal = package / "_internal"
+    issues: list[dict[str, str]] = []
+
+    if not package.is_dir():
+        issues.append(_issue("error", "missing_package_dir", "找不到 release package 資料夾。", package))
+        return {
+            "ok": False,
+            "package_dir": str(package),
+            "exe_path": str(exe_path),
+            "startup": None,
+            "health_check": {"ran": False},
+            "issues": issues,
+        }
+
+    if not exe_path.is_file():
+        issues.append(_issue("error", "missing_exe", "找不到 release package 入口 exe。", exe_path))
+    if not internal.is_dir():
+        issues.append(_issue("error", "missing_internal_dir", "找不到 PyInstaller _internal 資料夾。", internal))
+
+    allowed = set(ALLOWED_TOP_LEVEL)
+    allowed.add(exe_name)
+    for child in sorted(package.iterdir(), key=lambda item: item.name.lower()):
+        if child.name not in allowed:
+            issues.append(_issue("error", "top_level_extra", "release package 頂層不應夾帶專案資料或雜檔。", child))
+
+    for relative, kind in REQUIRED_INTERNAL_ASSETS:
+        asset_path = internal / relative
+        if not _check_asset(asset_path, kind):
+            issues.append(_issue("error", "missing_internal_asset", f"缺少打包內嵌資產：{relative}", asset_path))
+
+    guard = inspect_project(package)
+    decision = build_startup_decision(guard)
+    startup = {
+        "state": guard.state,
+        "decision": {
+            "action": decision.action,
+            "title": decision.title,
+            "can_continue": decision.can_continue,
+            "can_auto_repair": decision.can_auto_repair,
+        },
+        "issues": [_guard_issue_to_dict(issue) for issue in guard.issues],
+    }
+    if decision.action != "initialize":
+        issues.append(
+            _issue(
+                "error",
+                "unexpected_startup_action",
+                "乾淨 release package 應被啟動守門判定為第一次開啟。",
+                package,
+            )
+        )
+
+    health = {"ran": False}
+    if run_health_check:
+        if exe_path.is_file():
+            health = _run_health_check(exe_path, health_timeout)
+            if not health.get("ok"):
+                issues.append(_issue("error", "exe_health_check_failed", "exe --health-check 執行失敗。", exe_path))
+        else:
+            health = {"ran": False, "ok": False, "error": "missing_exe"}
+
+    has_errors = any(issue["severity"] == "error" for issue in issues)
+    return {
+        "ok": not has_errors,
+        "package_dir": str(package),
+        "exe_path": str(exe_path),
+        "startup": startup,
+        "health_check": health,
+        "issues": issues,
+    }
+
+
+def _print_text(result: dict[str, Any]) -> None:
+    print(f"Release package：{'合格' if result.get('ok') else '不合格'}")
+    print(f"package_dir：{result.get('package_dir')}")
+    print(f"exe_path：{result.get('exe_path')}")
+    startup = result.get("startup") or {}
+    decision = startup.get("decision") or {}
+    if decision:
+        print(f"startup：{startup.get('state')} / {decision.get('action')} - {decision.get('title')}")
+    health = result.get("health_check") or {}
+    if health.get("ran"):
+        print(f"exe health-check：{'OK' if health.get('ok') else 'NG'} returncode={health.get('returncode')}")
+    for issue in result.get("issues") or []:
+        print(f"- [{issue.get('severity')}] {issue.get('code')}: {issue.get('message')}")
+        if issue.get("path"):
+            print(f"  {issue.get('path')}")
+
+
+def main() -> int:
+    configure_utf8_stdio()
+    parser = argparse.ArgumentParser(description="檢查 PyInstaller release package")
+    parser.add_argument("--package-dir", default=str(DEFAULT_PACKAGE_DIR), help="要檢查的 onedir package")
+    parser.add_argument("--exe-name", default=DEFAULT_EXE_NAME, help="入口 exe 檔名")
+    parser.add_argument("--run-health-check", action="store_true", help="執行 exe --health-check")
+    parser.add_argument("--health-timeout", type=int, default=60, help="exe health-check timeout 秒數")
+    parser.add_argument("--json", action="store_true", help="輸出 JSON")
+    args = parser.parse_args()
+
+    result = check_release_package(
+        args.package_dir,
+        exe_name=args.exe_name,
+        run_health_check=args.run_health_check,
+        health_timeout=args.health_timeout,
+    )
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        _print_text(result)
+    return 0 if result.get("ok") else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
