@@ -8,6 +8,7 @@
 - 依賴與打包資產放在 PyInstaller 預設 `_internal/`。
 - `project_guard` 會忽略本工具的 exe 與 `_internal/`，讓空白資料夾仍可被判定為第一次開啟。
 - 先保留 console 視窗，方便看啟動守門與 release smoke 訊息。
+- Windows 檔案屬性版本資訊由 `packaging/windows_version_info.txt` 提供。
 - `onefile`、簽章、安裝包與 portable LibreOffice 後續再做。
 
 建置：
