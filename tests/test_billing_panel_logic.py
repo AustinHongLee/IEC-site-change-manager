@@ -205,8 +205,8 @@ def test_record_manager_rebuild_queue_export_message_mentions_count_and_path():
     assert "C:/tmp/rebuild.csv" in message
 
 
-def test_record_manager_showcase_confirmation_mentions_safe_output():
-    message = RecordManagerPanel._format_showcase_export_confirmation(
+def test_record_manager_output_center_confirmation_mentions_safe_output():
+    message = RecordManagerPanel._format_output_center_export_confirmation(
         "C:/project/staging/site_output_center_gui",
         "目前篩選結果 (2)",
         2,
@@ -221,37 +221,37 @@ def test_record_manager_showcase_confirmation_mentions_safe_output():
     assert "輸出內容：照片 PDF" in message
 
 
-def test_record_manager_showcase_content_label_lists_selected_outputs():
-    assert RecordManagerPanel._format_showcase_content_label({
+def test_record_manager_output_center_content_label_lists_selected_outputs():
+    assert RecordManagerPanel._format_output_center_content_label({
         "statistics_xlsx": True,
         "summary_pdf": False,
         "photo_grid_pdf": True,
     }) == "現場統計單 Excel、照片 PDF"
-    assert RecordManagerPanel._format_showcase_content_label({
+    assert RecordManagerPanel._format_output_center_content_label({
         "statistics_xlsx": False,
         "summary_pdf": False,
         "photo_grid_pdf": False,
     }) == "未選擇"
 
 
-def test_record_manager_showcase_output_dir_normalization_uses_default():
+def test_record_manager_output_center_output_dir_normalization_uses_default():
     default_dir = "C:/project/staging/site_output_center_gui"
 
-    assert RecordManagerPanel._normalize_showcase_output_dir("", default_dir).endswith(
+    assert RecordManagerPanel._normalize_output_center_output_dir("", default_dir).endswith(
         "site_output_center_gui"
     )
-    assert RecordManagerPanel._normalize_showcase_output_dir('"C:/tmp/showcase"', default_dir) == os.path.abspath("C:/tmp/showcase")
+    assert RecordManagerPanel._normalize_output_center_output_dir('"C:/tmp/output_center"', default_dir) == os.path.abspath("C:/tmp/output_center")
 
 
-def test_record_manager_showcase_output_items_list_user_artifacts(tmp_path):
+def test_record_manager_output_center_output_items_list_user_artifacts(tmp_path):
     report_set = tmp_path / "real_canonical_report_set.json"
     stats = tmp_path / "real_site_statistics.xlsx"
-    summary = tmp_path / "showcase_summary.json"
+    summary = tmp_path / "output_center_summary.json"
     photo_pdf = tmp_path / "real_photo_grid_0547_AG.pdf"
     for path in (report_set, stats, summary, photo_pdf):
         path.write_text("x", encoding="utf-8")
 
-    items = RecordManagerPanel._showcase_output_items({
+    items = RecordManagerPanel._output_center_output_items({
         "files": {
             "report_set": str(report_set),
             "statistics_xlsx": str(stats),
@@ -482,8 +482,8 @@ def test_record_manager_output_center_note_text_helpers(tmp_path):
     assert RecordManagerPanel._read_output_center_note_text(str(note_path)) == "現場加長修改\n"
 
 
-def test_record_manager_showcase_report_keys_skip_archived_and_deduplicate():
-    keys = RecordManagerPanel._showcase_report_keys([
+def test_record_manager_output_center_report_keys_skip_archived_and_deduplicate():
+    keys = RecordManagerPanel._output_center_report_keys([
         {"date": "20260112", "folder": "0547_AG", "is_archived": False},
         {"date": "20260112", "folder": "0547_AG", "is_archived": False},
         {"date": "20250820", "folder": "55_2a2", "is_archived": True},
@@ -493,8 +493,8 @@ def test_record_manager_showcase_report_keys_skip_archived_and_deduplicate():
     assert keys == [("20260112", "0547_AG")]
 
 
-def test_record_manager_showcase_scope_options_include_available_scopes():
-    options = RecordManagerPanel._showcase_scope_options(
+def test_record_manager_output_center_scope_options_include_available_scopes():
+    options = RecordManagerPanel._output_center_scope_options(
         selected_count=1,
         visible_count=2,
         total_count=3,
@@ -506,8 +506,8 @@ def test_record_manager_showcase_scope_options_include_available_scopes():
     assert "1" in options[2]["label"]
 
 
-def test_record_manager_showcase_export_message_summarizes_outputs():
-    message = RecordManagerPanel._format_showcase_export_message({
+def test_record_manager_output_center_export_message_summarizes_outputs():
+    message = RecordManagerPanel._format_output_center_export_message({
         "ok": True,
         "output_center": "C:/project/staging/site_output_center_gui",
         "report_count": 2,
