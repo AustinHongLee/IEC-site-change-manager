@@ -12,6 +12,10 @@ def test_pyinstaller_spec_tracks_required_entrypoint_and_assets():
     assert 'asset("template", "template")' in spec
     assert 'asset("control/image", "control/image")' in spec
     assert 'asset("control/wizard_data.json", "control")' in spec
+    assert 'excluded_modules = [' in spec
+    assert '"pytest"' in spec
+    assert '"torch"' in spec
+    assert '"torchvision"' in spec
     assert 'contents_directory="."' not in spec
     assert 'console=True' in spec
     assert 'version=str(ROOT / "packaging" / "windows_version_info.txt")' in spec

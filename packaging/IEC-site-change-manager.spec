@@ -28,6 +28,14 @@ hiddenimports = [
     "win32com.client",
 ]
 
+excluded_modules = [
+    "pytest",
+    "tensorboard",
+    "tensorflow",
+    "torch",
+    "torchvision",
+]
+
 a = Analysis(
     [str(ROOT / "control" / "main.py")],
     pathex=[str(ROOT), str(ROOT / "control")],
@@ -37,7 +45,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=excluded_modules,
     noarchive=False,
     optimize=0,
 )
