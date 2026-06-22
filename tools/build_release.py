@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,7 @@ from console_io import configure_utf8_stdio
 
 
 DEFAULT_SPEC = _ROOT / "packaging" / "IEC-site-change-manager.spec"
+DEFAULT_ARCHIVE_DIR = _ROOT / "dist" / "releases"
 
 
 def _run_pyinstaller(spec_path: Path, *, clean: bool = True) -> dict[str, Any]:
@@ -55,12 +58,70 @@ def _tail_lines(text: str, *, limit: int = 40) -> str:
     return "\n".join(lines[-limit:])
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _archive_name() -> str:
+    return f"IEC-site-change-manager_{APP_VERSION}_win64_onedir.zip"
+
+
+def create_release_archive(
+    package_dir: str | Path,
+    *,
+    archive_dir: str | Path = DEFAULT_ARCHIVE_DIR,
+) -> dict[str, Any]:
+    package = Path(package_dir).resolve()
+    output = Path(archive_dir).resolve()
+    if output == package or output.is_relative_to(package):
+        raise ValueError("archive_dir must not be inside package_dir")
+
+    output.mkdir(parents=True, exist_ok=True)
+    archive_path = output / _archive_name()
+    checksum_path = archive_path.with_suffix(archive_path.suffix + ".sha256")
+    if archive_path.exists():
+        archive_path.unlink()
+    if checksum_path.exists():
+        checksum_path.unlink()
+
+    file_count = 0
+    dir_count = 0
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for item in sorted(package.rglob("*"), key=lambda path: str(path).lower()):
+            arcname = (Path(package.name) / item.relative_to(package)).as_posix()
+            if item.is_dir():
+                archive.writestr(arcname + "/", "")
+                dir_count += 1
+                continue
+            if not item.is_file():
+                continue
+            archive.write(item, arcname)
+            file_count += 1
+
+    checksum = _sha256_file(archive_path)
+    checksum_path.write_text(f"{checksum}  {archive_path.name}\n", encoding="utf-8")
+    return {
+        "path": str(archive_path),
+        "checksum_path": str(checksum_path),
+        "sha256": checksum,
+        "bytes": archive_path.stat().st_size,
+        "file_count": file_count,
+        "dir_count": dir_count,
+    }
+
+
 def build_release(
     *,
     spec_path: str | Path = DEFAULT_SPEC,
     package_dir: str | Path = DEFAULT_PACKAGE_DIR,
     skip_build: bool = False,
     run_health_check: bool = True,
+    create_archive: bool = False,
+    archive_dir: str | Path = DEFAULT_ARCHIVE_DIR,
 ) -> dict[str, Any]:
     spec = Path(spec_path).resolve()
     package = Path(package_dir).resolve()
@@ -71,6 +132,7 @@ def build_release(
         "package_dir": str(package),
         "build": {"skipped": skip_build},
         "package_check": None,
+        "archive": None,
     }
 
     if not skip_build:
@@ -89,6 +151,15 @@ def build_release(
     result["ok"] = bool(package_check.get("ok"))
     if not result["ok"]:
         result["reason"] = "package_check_failed"
+        return result
+
+    if create_archive:
+        try:
+            result["archive"] = create_release_archive(package, archive_dir=archive_dir)
+        except Exception as exc:
+            result["ok"] = False
+            result["reason"] = "archive_failed"
+            result["archive"] = {"error": str(exc)}
     return result
 
 
@@ -107,6 +178,13 @@ def _print_text(result: dict[str, Any]) -> None:
         print(f"package_check：{'OK' if package.get('ok') else 'NG'}")
         for issue in package.get("issues") or []:
             print(f"- [{issue.get('severity')}] {issue.get('code')}: {issue.get('message')}")
+    archive = result.get("archive") or {}
+    if archive:
+        if archive.get("path"):
+            print(f"archive：{archive.get('path')}")
+            print(f"sha256：{archive.get('sha256')}")
+        else:
+            print(f"archive：NG {archive.get('error')}")
 
 
 def main() -> int:
@@ -116,6 +194,8 @@ def main() -> int:
     parser.add_argument("--package-dir", default=str(DEFAULT_PACKAGE_DIR), help="release package 資料夾")
     parser.add_argument("--skip-build", action="store_true", help="略過 PyInstaller，只跑 package gate")
     parser.add_argument("--no-health-check", action="store_true", help="package gate 不執行 exe --health-check")
+    parser.add_argument("--archive", action="store_true", help="package gate 通過後產生 zip 與 sha256")
+    parser.add_argument("--archive-dir", default=str(DEFAULT_ARCHIVE_DIR), help="release archive 輸出資料夾")
     parser.add_argument("--json", action="store_true", help="輸出 JSON")
     args = parser.parse_args()
 
@@ -124,6 +204,8 @@ def main() -> int:
         package_dir=args.package_dir,
         skip_build=args.skip_build,
         run_health_check=not args.no_health_check,
+        create_archive=args.archive,
+        archive_dir=args.archive_dir,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -23,6 +23,12 @@ python -m PyInstaller --noconfirm --clean packaging\IEC-site-change-manager.spec
 python tools\build_release.py
 ```
 
+產生可交付 zip 與 checksum：
+
+```powershell
+python tools\build_release.py --archive
+```
+
 建置後先跑：
 
 ```powershell
