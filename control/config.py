@@ -9,12 +9,16 @@ config.py — 所有設定、常數、路徑配置
 """
 
 import os
+import sys
 from dataclasses import dataclass
 from typing import Dict, Any
 
 # ========= 自動定位 base_dir =========
 def resolve_base_dir() -> str:
     """自動定位到「工務修改單」這層資料夾"""
+    if getattr(sys, "frozen", False):
+        return os.path.abspath(os.path.dirname(sys.executable))
+
     here = os.path.abspath(os.path.dirname(__file__))
     candidates = [
         os.path.abspath(os.path.join(here, os.pardir)),  # control 的上層
