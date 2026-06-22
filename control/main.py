@@ -26,6 +26,8 @@ def _ensure_utf8_console():
 def main():
     """主程式入口"""
     import argparse
+    from app_info import format_version_cli
+
     _ensure_utf8_console()
     
     parser = argparse.ArgumentParser(
@@ -69,6 +71,11 @@ def main():
         help='只檢查專案資料夾健康狀態，不啟動 GUI/CLI'
     )
     parser.add_argument(
+        '--version', action='version',
+        version=format_version_cli(),
+        help='顯示版本資訊'
+    )
+    parser.add_argument(
         '--audit-integrity', action='store_true',
         help='執行資料一致性稽核，不啟動 GUI/CLI'
     )
@@ -99,6 +106,7 @@ def main():
 
 def _prepare_project_startup(args):
     """啟動前專案守門，回傳已取得的 ProjectLock 或 None。"""
+    from app_info import format_app_identity
     from config import BASE_DIR
     from project_guard import (
         ProjectLock,
@@ -113,6 +121,9 @@ def _prepare_project_startup(args):
     )
     if should_repair:
         result = repair_project(BASE_DIR)
+
+    if args.health_check or args.audit_integrity:
+        print(format_app_identity())
 
     if args.health_check or args.audit_integrity or result.repaired or result.has_blocking_issues:
         print(format_guard_report(result))

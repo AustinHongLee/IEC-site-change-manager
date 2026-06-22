@@ -55,6 +55,7 @@ from config import (
     BASE_DIR, ATTACHMENTS_ROOT, OUTPUT_ROOT, PDF_OUTPUT_DIR,
     RUNTIME, use_dual_images
 )
+from app_info import format_window_title
 from renderer_registry import format_renderer_unavailable, get_renderer_descriptor
 from parsers import (
     parse_folder, parse_materials_txt, weld_code_list, build_auto_description, WeldToken
@@ -117,7 +118,7 @@ def _renderer_tooltip(renderer: dict) -> str:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("管線修改單產出系統 v2.1 (PyQt6)")
+        self.setWindowTitle(format_window_title())
         self.resize(960, 720)
         self.setMinimumSize(800, 600)
 
