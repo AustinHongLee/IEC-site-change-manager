@@ -3333,6 +3333,15 @@ class HealthCheckPanel(QWidget):
         self.btn_repair.clicked.connect(self.repair_project)
         top_row.addWidget(self.btn_repair)
 
+        btn_support = QPushButton("支援診斷包")
+        btn_support.setToolTip("產生可交給工程端排查問題的診斷 zip")
+        btn_support.clicked.connect(self.create_support_bundle)
+        top_row.addWidget(btn_support)
+
+        btn_about = QPushButton("版本資訊")
+        btn_about.clicked.connect(self.show_app_info)
+        top_row.addWidget(btn_about)
+
         root.addLayout(top_row)
 
         self.counts_label = QLabel("")
@@ -3439,6 +3448,28 @@ class HealthCheckPanel(QWidget):
         repaired = "\n".join(result.repaired) if result.repaired else "沒有實際變更"
         QMessageBox.information(self, "修復完成", repaired)
         self.run_check()
+
+    def create_support_bundle(self):
+        from diagnostics import collect_support_bundle
+
+        try:
+            result = collect_support_bundle(BASE_DIR)
+        except Exception as exc:
+            QMessageBox.critical(self, "支援診斷包失敗", str(exc))
+            return
+
+        QMessageBox.information(
+            self,
+            "支援診斷包完成",
+            "已產生支援診斷包：\n"
+            f"{result.get('bundle_path', '')}\n\n"
+            f"啟動判斷：{result.get('startup_action', '')}",
+        )
+
+    def show_app_info(self):
+        from app_info import format_app_identity
+
+        QMessageBox.information(self, "版本資訊", format_app_identity())
 
     @staticmethod
     def _count_guard_severity(issues) -> dict[str, int]:

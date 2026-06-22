@@ -12,7 +12,7 @@ pytest.importorskip("PyQt6")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
-from PyQt6.QtWidgets import QApplication, QPushButton, QDialog, QTreeWidget
+from PyQt6.QtWidgets import QApplication, QPushButton, QDialog, QMessageBox, QTreeWidget
 
 from gui import MainWindow
 from gui_panels import RecordManagerPanel
@@ -76,6 +76,44 @@ def test_main_window_smoke_keeps_output_center_reachable(qapp):
             if button.text() == "輸出中心"
         ]
         assert output_buttons
+
+        health_buttons = {button.text() for button in window.health_panel.findChildren(QPushButton)}
+        assert "支援診斷包" in health_buttons
+        assert "版本資訊" in health_buttons
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_health_panel_support_bundle_button_uses_diagnostics(qapp, monkeypatch):
+    import diagnostics
+
+    window = MainWindow()
+    messages = []
+    captured = {}
+
+    def fake_collect(project_root, **kwargs):
+        captured["project_root"] = str(project_root)
+        return {
+            "ok": True,
+            "bundle_path": r"C:\Temp\support_bundle.zip",
+            "startup_action": "healthy",
+        }
+
+    def fake_information(parent, title, message):
+        messages.append((title, message))
+        return QMessageBox.StandardButton.Ok
+
+    monkeypatch.setattr(diagnostics, "collect_support_bundle", fake_collect)
+    monkeypatch.setattr(QMessageBox, "information", fake_information)
+
+    try:
+        window.health_panel.create_support_bundle()
+
+        assert captured["project_root"]
+        assert messages
+        assert messages[0][0] == "支援診斷包完成"
+        assert "support_bundle.zip" in messages[0][1]
     finally:
         window.close()
         window.deleteLater()
