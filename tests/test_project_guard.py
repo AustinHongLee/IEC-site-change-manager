@@ -72,6 +72,19 @@ def test_non_empty_unrecognized_folder_is_not_auto_repaired(tmp_path):
     assert not (tmp_path / ".project.json").exists()
 
 
+def test_runtime_artifacts_do_not_block_first_open(tmp_path):
+    from project_guard import build_startup_decision, inspect_project
+
+    (tmp_path / "IEC-site-change-manager.exe").write_text("fake exe", encoding="utf-8")
+    (tmp_path / "_internal").mkdir()
+
+    result = inspect_project(tmp_path)
+    decision = build_startup_decision(result)
+
+    assert result.state == "first_open"
+    assert decision.action == "initialize"
+
+
 def test_invalid_records_json_blocks_repair(tmp_path):
     from project_guard import build_startup_decision, inspect_project, repair_project
 

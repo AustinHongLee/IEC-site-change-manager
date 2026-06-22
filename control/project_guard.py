@@ -38,6 +38,7 @@ BOOTSTRAP_REPAIR_CODES = {
     "missing_settings",
     *(f"missing_dir_{dirname}" for dirname in REQUIRED_DIRS),
 }
+RUNTIME_ARTIFACT_NAMES = {"IEC-site-change-manager.exe", "_internal"}
 
 
 def now_iso() -> str:
@@ -307,7 +308,10 @@ def _has_attachment_folders(root: Path) -> bool:
 def _looks_empty_project_root(root: Path) -> bool:
     known = set(REQUIRED_DIRS) | {PROJECT_MARKER, "settings.json"}
     try:
-        visible = [p.name for p in root.iterdir() if not p.name.startswith(".git")]
+        visible = [
+            p.name for p in root.iterdir()
+            if not p.name.startswith(".git") and p.name not in RUNTIME_ARTIFACT_NAMES
+        ]
     except OSError:
         return False
     return not visible or all(name in known for name in visible)
