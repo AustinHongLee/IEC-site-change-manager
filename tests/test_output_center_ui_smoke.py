@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control")
 
 from PyQt6.QtWidgets import QApplication, QPushButton, QDialog, QTreeWidget
 
+from gui import MainWindow
 from gui_panels import RecordManagerPanel
 
 
@@ -56,6 +57,28 @@ def test_record_manager_panel_exposes_output_center_entry(qapp):
             assert not hasattr(panel, legacy_name)
     finally:
         panel.deleteLater()
+
+
+def test_main_window_smoke_keeps_output_center_reachable(qapp):
+    window = MainWindow()
+    try:
+        tab_texts = [window.notebook.tabText(index) for index in range(window.notebook.count())]
+
+        assert any("產出報告" in text for text in tab_texts)
+        assert any("紀錄管理" in text for text in tab_texts)
+        assert any("材料價目" in text for text in tab_texts)
+        assert any("請款追蹤" in text for text in tab_texts)
+        assert any("設定" in text for text in tab_texts)
+        assert any("健康" in text for text in tab_texts)
+
+        output_buttons = [
+            button for button in window.record_panel.findChildren(QPushButton)
+            if button.text() == "輸出中心"
+        ]
+        assert output_buttons
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_output_center_result_dialog_builds_expected_controls(qapp, monkeypatch, tmp_path):
