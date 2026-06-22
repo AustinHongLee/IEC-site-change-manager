@@ -11,18 +11,17 @@ log_config.py — 統一日誌管理模組
 
 import os
 import sys
-import io
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
+
+from resources import project_path
 
 
 # ========= 日誌目錄 =========
 def _get_log_dir() -> str:
     """取得日誌目錄"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.abspath(os.path.join(here, os.pardir))
-    log_dir = os.path.join(base_dir, "logs")
+    log_dir = project_path("logs")
     os.makedirs(log_dir, exist_ok=True)
     return log_dir
 
@@ -33,10 +32,8 @@ def _fix_console_encoding():
     for attr in ('stdout', 'stderr'):
         stream = getattr(sys, attr)
         try:
-            if hasattr(stream, 'buffer'):
-                setattr(sys, attr, io.TextIOWrapper(
-                    stream.buffer, encoding='utf-8', errors='replace'
-                ))
+            if hasattr(stream, 'reconfigure'):
+                stream.reconfigure(encoding='utf-8', errors='replace')
         except Exception:
             pass
 

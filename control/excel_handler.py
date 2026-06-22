@@ -275,7 +275,7 @@ def generate_report(
         # 插入圖片
         before_img = os.path.join(folder_path, 'before.jpg')
         after_img = os.path.join(folder_path, 'after.jpg')
-        macro = f"'{wb.Name}'!PDF_匯出.InsertAndFitPicture_ByAddr"
+        macro = f"'{wb.Name}'!InsertAndFitPicture_ByAddr"
         
         wb.Activate()
         ws.Activate()
@@ -321,6 +321,7 @@ def generate_report(
         # 匯出 PDF
         pdf_path = os.path.join(pdf_dir, f"{report_id}.pdf")
         safe_remove(pdf_path)
+        pdf_for_integrity = pdf_path if RUNTIME.export_pdf else None
         
         if RUNTIME.export_pdf:
             ok_pdf = export_pdf_with_retry(ws, pdf_path)
@@ -348,11 +349,11 @@ def generate_report(
         attach_pdf = find_attachment_pdf(folder_path, series_no)
         with_aps = [attach_pdf] if attach_pdf else None
         
-        if not check_integrity(output_file, pdf_path, level=integrity_level, with_attachments=with_aps):
+        if not check_integrity(output_file, pdf_for_integrity, level=integrity_level, with_attachments=with_aps):
             write_error_marker(folder_path, "post-export integrity failed")
             return ReportResult(success=False, error="完整性檢查失敗")
         
-        return ReportResult(success=True, output_file=output_file, pdf_file=pdf_path)
+        return ReportResult(success=True, output_file=output_file, pdf_file=pdf_for_integrity)
     
     except Exception as e:
         if wb is not None:

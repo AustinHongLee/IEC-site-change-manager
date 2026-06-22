@@ -25,11 +25,12 @@ from utils import safe_load_workbook, atomic_save_wb, atomic_write_json, parse_s
 from billing_calculator import amount_to_text, parse_amount
 from billing_status import is_billing_locked
 from log_config import get_logger
+from resources import project_path
 
 logger = get_logger(__name__)
 
 # ========= JSON 資料路徑 =========
-_RECORDS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "records")
+_RECORDS_DIR = project_path("records")
 RECORDS_JSON_PATH = os.path.join(_RECORDS_DIR, "records.json")
 BILLING_JSON_PATH = os.path.join(_RECORDS_DIR, "billing.json")
 DWG_MAP_JSON_PATH = os.path.join(_RECORDS_DIR, "dwg_map.json")

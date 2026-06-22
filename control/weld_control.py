@@ -22,6 +22,8 @@ import time
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
+from resources import project_path
+
 try:
     from openpyxl import load_workbook
     OPENPYXL_AVAILABLE = True
@@ -1333,11 +1335,10 @@ def find_record_xlsx_path() -> Optional[str]:
     ⚠ 已棄用 — 僅供向後相容。新程式碼請使用 build_report_id_lookup()
     （直接讀取 records.json）。
     """
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    standard_path = os.path.join(base_dir, "管線修改紀錄清單.xlsx")
+    standard_path = project_path("管線修改紀錄清單.xlsx")
     if os.path.exists(standard_path):
         return standard_path
-    search_dirs = [base_dir, os.path.join(base_dir, "records")]
+    search_dirs = [os.path.dirname(standard_path), project_path("records")]
     for search_dir in search_dirs:
         if not os.path.exists(search_dir):
             continue
@@ -1358,10 +1359,7 @@ def build_report_id_lookup(record_xlsx_path: str = None) -> Dict[Tuple[str, str]
         dict: {(series_no_padded, weld_no): report_id, ...}
     """
     # ---------- 1. 優先：讀 records.json ----------
-    records_json_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "records", "records.json"
-    )
+    records_json_path = project_path("records", "records.json")
 
     if os.path.exists(records_json_path):
         try:

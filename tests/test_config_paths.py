@@ -2,6 +2,7 @@
 
 import os
 import sys
+import importlib
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
@@ -47,3 +48,25 @@ def test_project_path_stays_on_exe_folder_when_resources_are_internal(monkeypatc
     assert resources.resource_path("material_pricebook_seed.json") == str(
         internal / "material_pricebook_seed.json"
     )
+
+
+def test_record_and_log_paths_stay_on_project_dir_when_frozen(monkeypatch, tmp_path):
+    import log_config
+    import record_manager
+
+    internal = tmp_path / "_internal"
+    internal.mkdir()
+    exe_path = tmp_path / "IEC-site-change-manager.exe"
+
+    with monkeypatch.context() as frozen:
+        frozen.setattr(resources.sys, "frozen", True, raising=False)
+        frozen.setattr(resources.sys, "executable", str(exe_path), raising=False)
+        frozen.setattr(resources.sys, "_MEIPASS", str(internal), raising=False)
+
+        record_manager = importlib.reload(record_manager)
+        assert record_manager.RECORDS_JSON_PATH == str(tmp_path / "records" / "records.json")
+        assert record_manager.BILLING_JSON_PATH == str(tmp_path / "records" / "billing.json")
+        assert record_manager.DWG_MAP_JSON_PATH == str(tmp_path / "records" / "dwg_map.json")
+        assert log_config._get_log_dir() == str(tmp_path / "logs")
+
+    importlib.reload(record_manager)

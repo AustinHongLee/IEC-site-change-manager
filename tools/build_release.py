@@ -23,7 +23,13 @@ if str(_THIS) not in sys.path:
     sys.path.insert(0, str(_THIS))
 
 from app_info import APP_VERSION
-from check_release_package import DEFAULT_PACKAGE_DIR, check_release_package
+from check_release_package import (
+    DEFAULT_CLI_SMOKE_DATE,
+    DEFAULT_CLI_SMOKE_FOLDER,
+    DEFAULT_CLI_SMOKE_SOURCE_PROJECT,
+    DEFAULT_PACKAGE_DIR,
+    check_release_package,
+)
 from console_io import configure_utf8_stdio
 
 
@@ -120,6 +126,12 @@ def build_release(
     package_dir: str | Path = DEFAULT_PACKAGE_DIR,
     skip_build: bool = False,
     run_health_check: bool = True,
+    run_cli_smoke: bool = False,
+    cli_smoke_source_project: str | Path = DEFAULT_CLI_SMOKE_SOURCE_PROJECT,
+    cli_smoke_date: str = DEFAULT_CLI_SMOKE_DATE,
+    cli_smoke_folder: str = DEFAULT_CLI_SMOKE_FOLDER,
+    cli_smoke_timeout: int = 180,
+    cli_smoke_with_pdf: bool = False,
     create_archive: bool = False,
     archive_dir: str | Path = DEFAULT_ARCHIVE_DIR,
 ) -> dict[str, Any]:
@@ -146,6 +158,12 @@ def build_release(
     package_check = check_release_package(
         package,
         run_health_check=run_health_check,
+        run_cli_smoke=run_cli_smoke,
+        cli_smoke_source_project=cli_smoke_source_project,
+        cli_smoke_date=cli_smoke_date,
+        cli_smoke_folder=cli_smoke_folder,
+        cli_smoke_timeout=cli_smoke_timeout,
+        cli_smoke_with_pdf=cli_smoke_with_pdf,
     )
     result["package_check"] = package_check
     result["ok"] = bool(package_check.get("ok"))
@@ -178,6 +196,9 @@ def _print_text(result: dict[str, Any]) -> None:
         print(f"package_check：{'OK' if package.get('ok') else 'NG'}")
         for issue in package.get("issues") or []:
             print(f"- [{issue.get('severity')}] {issue.get('code')}: {issue.get('message')}")
+        cli_smoke = package.get("cli_smoke") or {}
+        if cli_smoke.get("ran"):
+            print(f"cli_smoke：{'OK' if cli_smoke.get('ok') else 'NG'} reason={cli_smoke.get('reason', '')}")
     archive = result.get("archive") or {}
     if archive:
         if archive.get("path"):
@@ -194,6 +215,12 @@ def main() -> int:
     parser.add_argument("--package-dir", default=str(DEFAULT_PACKAGE_DIR), help="release package 資料夾")
     parser.add_argument("--skip-build", action="store_true", help="略過 PyInstaller，只跑 package gate")
     parser.add_argument("--no-health-check", action="store_true", help="package gate 不執行 exe --health-check")
+    parser.add_argument("--cli-smoke", action="store_true", help="package gate 執行打包後 exe CLI 真輸出冒煙")
+    parser.add_argument("--cli-smoke-source-project", default=str(DEFAULT_CLI_SMOKE_SOURCE_PROJECT), help="CLI smoke 測試附件來源專案")
+    parser.add_argument("--cli-smoke-date", default=DEFAULT_CLI_SMOKE_DATE, help="CLI smoke 測試日期")
+    parser.add_argument("--cli-smoke-folder", default=DEFAULT_CLI_SMOKE_FOLDER, help="CLI smoke 測試附件資料夾")
+    parser.add_argument("--cli-smoke-timeout", type=int, default=180, help="CLI smoke 單一 exe 呼叫 timeout 秒數")
+    parser.add_argument("--cli-smoke-with-pdf", action="store_true", help="CLI smoke 同時要求匯出 PDF")
     parser.add_argument("--archive", action="store_true", help="package gate 通過後產生 zip 與 sha256")
     parser.add_argument("--archive-dir", default=str(DEFAULT_ARCHIVE_DIR), help="release archive 輸出資料夾")
     parser.add_argument("--json", action="store_true", help="輸出 JSON")
@@ -204,6 +231,12 @@ def main() -> int:
         package_dir=args.package_dir,
         skip_build=args.skip_build,
         run_health_check=not args.no_health_check,
+        run_cli_smoke=args.cli_smoke,
+        cli_smoke_source_project=args.cli_smoke_source_project,
+        cli_smoke_date=args.cli_smoke_date,
+        cli_smoke_folder=args.cli_smoke_folder,
+        cli_smoke_timeout=args.cli_smoke_timeout,
+        cli_smoke_with_pdf=args.cli_smoke_with_pdf,
         create_archive=args.archive,
         archive_dir=args.archive_dir,
     )

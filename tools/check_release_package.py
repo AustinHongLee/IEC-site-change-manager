@@ -24,6 +24,12 @@ if _CONTROL_DIR not in sys.path:
 
 from console_io import configure_utf8_stdio
 from project_guard import build_startup_decision, inspect_project
+from run_packaged_cli_smoke import (
+    DEFAULT_CASE_DATE as DEFAULT_CLI_SMOKE_DATE,
+    DEFAULT_CASE_FOLDER as DEFAULT_CLI_SMOKE_FOLDER,
+    DEFAULT_SOURCE_PROJECT as DEFAULT_CLI_SMOKE_SOURCE_PROJECT,
+    run_packaged_cli_smoke,
+)
 
 
 DEFAULT_PACKAGE_DIR = Path(_ROOT) / "dist" / "IEC-site-change-manager"
@@ -188,6 +194,12 @@ def check_release_package(
     exe_name: str = DEFAULT_EXE_NAME,
     run_health_check: bool = False,
     health_timeout: int = 60,
+    run_cli_smoke: bool = False,
+    cli_smoke_source_project: str | Path = DEFAULT_CLI_SMOKE_SOURCE_PROJECT,
+    cli_smoke_date: str = DEFAULT_CLI_SMOKE_DATE,
+    cli_smoke_folder: str = DEFAULT_CLI_SMOKE_FOLDER,
+    cli_smoke_timeout: int = 180,
+    cli_smoke_with_pdf: bool = False,
 ) -> dict[str, Any]:
     package = Path(package_dir).resolve()
     exe_path = package / exe_name
@@ -203,6 +215,7 @@ def check_release_package(
             "startup": None,
             "health_check": {"ran": False},
             "diagnostics_probe": {"ran": False},
+            "cli_smoke": {"ran": False},
             "issues": issues,
         }
 
@@ -246,6 +259,7 @@ def check_release_package(
 
     health = {"ran": False}
     diagnostics_probe = {"ran": False}
+    cli_smoke = {"ran": False}
     if run_health_check:
         if exe_path.is_file():
             health = _run_health_check(exe_path, health_timeout)
@@ -265,6 +279,30 @@ def check_release_package(
             health = {"ran": False, "ok": False, "error": "missing_exe"}
             diagnostics_probe = {"ran": False, "ok": False, "error": "missing_exe"}
 
+    if run_cli_smoke:
+        if exe_path.is_file():
+            cli_smoke = run_packaged_cli_smoke(
+                package,
+                exe_name=exe_name,
+                source_project=cli_smoke_source_project,
+                case_date=cli_smoke_date,
+                case_folder=cli_smoke_folder,
+                timeout=cli_smoke_timeout,
+                no_pdf=not cli_smoke_with_pdf,
+            )
+            if not cli_smoke.get("ok"):
+                reason = cli_smoke.get("reason") or "unknown"
+                issues.append(
+                    _issue(
+                        "error",
+                        "exe_cli_smoke_failed",
+                        f"exe CLI 真輸出冒煙失敗：{reason}",
+                        exe_path,
+                    )
+                )
+        else:
+            cli_smoke = {"ran": False, "ok": False, "error": "missing_exe"}
+
     has_errors = any(issue["severity"] == "error" for issue in issues)
     return {
         "ok": not has_errors,
@@ -273,6 +311,7 @@ def check_release_package(
         "startup": startup,
         "health_check": health,
         "diagnostics_probe": diagnostics_probe,
+        "cli_smoke": cli_smoke,
         "issues": issues,
     }
 
@@ -291,6 +330,15 @@ def _print_text(result: dict[str, Any]) -> None:
     probe = result.get("diagnostics_probe") or {}
     if probe.get("ran"):
         print(f"exe diagnostics probe：{'OK' if probe.get('ok') else 'NG'}")
+    cli_smoke = result.get("cli_smoke") or {}
+    if cli_smoke.get("ran"):
+        case = cli_smoke.get("case") or {}
+        print(
+            "exe CLI smoke："
+            f"{'OK' if cli_smoke.get('ok') else 'NG'} "
+            f"case={case.get('date')}/{case.get('folder')} "
+            f"reason={cli_smoke.get('reason', '')}"
+        )
     for issue in result.get("issues") or []:
         print(f"- [{issue.get('severity')}] {issue.get('code')}: {issue.get('message')}")
         if issue.get("path"):
@@ -304,6 +352,12 @@ def main() -> int:
     parser.add_argument("--exe-name", default=DEFAULT_EXE_NAME, help="入口 exe 檔名")
     parser.add_argument("--run-health-check", action="store_true", help="執行 exe --health-check")
     parser.add_argument("--health-timeout", type=int, default=60, help="exe health-check timeout 秒數")
+    parser.add_argument("--run-cli-smoke", action="store_true", help="執行打包後 exe CLI 真輸出冒煙")
+    parser.add_argument("--cli-smoke-source-project", default=str(DEFAULT_CLI_SMOKE_SOURCE_PROJECT), help="CLI smoke 測試附件來源專案")
+    parser.add_argument("--cli-smoke-date", default=DEFAULT_CLI_SMOKE_DATE, help="CLI smoke 測試日期")
+    parser.add_argument("--cli-smoke-folder", default=DEFAULT_CLI_SMOKE_FOLDER, help="CLI smoke 測試附件資料夾")
+    parser.add_argument("--cli-smoke-timeout", type=int, default=180, help="CLI smoke 單一 exe 呼叫 timeout 秒數")
+    parser.add_argument("--cli-smoke-with-pdf", action="store_true", help="CLI smoke 同時要求匯出 PDF")
     parser.add_argument("--json", action="store_true", help="輸出 JSON")
     args = parser.parse_args()
 
@@ -312,6 +366,12 @@ def main() -> int:
         exe_name=args.exe_name,
         run_health_check=args.run_health_check,
         health_timeout=args.health_timeout,
+        run_cli_smoke=args.run_cli_smoke,
+        cli_smoke_source_project=args.cli_smoke_source_project,
+        cli_smoke_date=args.cli_smoke_date,
+        cli_smoke_folder=args.cli_smoke_folder,
+        cli_smoke_timeout=args.cli_smoke_timeout,
+        cli_smoke_with_pdf=args.cli_smoke_with_pdf,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
