@@ -12,7 +12,9 @@
   - 預設執行 PyInstaller onedir build。
   - build 成功後執行 `check_release_package`。
   - 預設會讓 package gate 執行 `exe --health-check`。
+  - 後續已改為預設執行 packaged CLI 真輸出 smoke；正式執行機器需有 Microsoft Excel。
   - 支援 `--skip-build`，方便只檢查現有 dist。
+  - 支援 `--no-cli-smoke`，僅供快速結構檢查或 fake package 測試。
   - 支援 `--json`，方便 CI 或其他 AI 讀取。
 - `tests/test_build_release_tool.py`
   - 測試 `--skip-build` 可以跑 package gate。
@@ -32,6 +34,12 @@ python tools\build_release.py
 
 ```powershell
 python tools\build_release.py --skip-build
+```
+
+快速結構檢查（不跑 Excel 真輸出）：
+
+```powershell
+python tools\build_release.py --skip-build --no-cli-smoke
 ```
 
 JSON：

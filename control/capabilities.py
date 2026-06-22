@@ -140,6 +140,19 @@ def format_excel_com_unavailable(result: CapabilityResult | None = None) -> str:
     )
 
 
+def format_mandatory_excel_unavailable(result: CapabilityResult | None = None) -> str:
+    result = result or detect_excel_com()
+    reason = result.reason or "Excel COM 不可用"
+    detail = f"\n\n技術細節：{result.detail}" if result.detail else ""
+    return (
+        "此電腦不符合公司使用條件，已停止啟動。\n\n"
+        "公司版工務修改單必須安裝並可啟動 Microsoft Excel，"
+        "且 pywin32/Excel COM 後端必須可用。沒有 Excel 的電腦不允許使用此軟體。\n\n"
+        f"原因：{reason}"
+        f"{detail}"
+    )
+
+
 def detect_libreoffice(
     *,
     executable: str | None = None,

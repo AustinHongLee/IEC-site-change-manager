@@ -105,6 +105,8 @@ def main():
 
     project_lock = None
     try:
+        if _requires_excel_runtime(args):
+            _enforce_excel_requirement(args)
         project_lock = _prepare_project_startup(args)
         if args.health_check or args.audit_integrity:
             return
@@ -119,6 +121,24 @@ def main():
     finally:
         if project_lock is not None:
             project_lock.release()
+
+
+def _requires_excel_runtime(args) -> bool:
+    """Normal app usage requires Excel; support-only commands stay available."""
+    return not (args.health_check or args.audit_integrity or args.diagnostics)
+
+
+def _enforce_excel_requirement(args) -> None:
+    from capabilities import detect_excel_com, format_mandatory_excel_unavailable
+
+    capability = detect_excel_com()
+    if capability.available:
+        return
+    message = format_mandatory_excel_unavailable(capability)
+    print(message)
+    if _is_gui_request(args):
+        _show_startup_message("此電腦不符合使用條件", message)
+    sys.exit(4)
 
 
 def _prepare_project_startup(args):
@@ -221,7 +241,7 @@ def run_cli(args):
         load_drawing_map, preload_record_index,
         upsert_record, upsert_detail_rows
     )
-    from capabilities import detect_excel_com, format_excel_com_unavailable
+    from capabilities import detect_excel_com, format_mandatory_excel_unavailable
     from excel_handler import generate_report, check_images_exist, get_excel_manager
     
     # 更新設定
@@ -234,7 +254,7 @@ def run_cli(args):
 
     capability = detect_excel_com()
     if not capability.available:
-        print(format_excel_com_unavailable(capability))
+        print(format_mandatory_excel_unavailable(capability))
         sys.exit(4)
     
     print("=" * 50)

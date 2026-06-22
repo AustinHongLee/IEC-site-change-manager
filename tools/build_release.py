@@ -126,7 +126,7 @@ def build_release(
     package_dir: str | Path = DEFAULT_PACKAGE_DIR,
     skip_build: bool = False,
     run_health_check: bool = True,
-    run_cli_smoke: bool = False,
+    run_cli_smoke: bool = True,
     cli_smoke_source_project: str | Path = DEFAULT_CLI_SMOKE_SOURCE_PROJECT,
     cli_smoke_date: str = DEFAULT_CLI_SMOKE_DATE,
     cli_smoke_folder: str = DEFAULT_CLI_SMOKE_FOLDER,
@@ -215,7 +215,20 @@ def main() -> int:
     parser.add_argument("--package-dir", default=str(DEFAULT_PACKAGE_DIR), help="release package 資料夾")
     parser.add_argument("--skip-build", action="store_true", help="略過 PyInstaller，只跑 package gate")
     parser.add_argument("--no-health-check", action="store_true", help="package gate 不執行 exe --health-check")
-    parser.add_argument("--cli-smoke", action="store_true", help="package gate 執行打包後 exe CLI 真輸出冒煙")
+    cli_smoke_group = parser.add_mutually_exclusive_group()
+    cli_smoke_group.add_argument(
+        "--cli-smoke",
+        dest="cli_smoke",
+        action="store_true",
+        default=True,
+        help="package gate 執行打包後 exe CLI 真輸出冒煙（預設）",
+    )
+    cli_smoke_group.add_argument(
+        "--no-cli-smoke",
+        dest="cli_smoke",
+        action="store_false",
+        help="略過打包後 exe CLI 真輸出冒煙；只適合快速結構檢查",
+    )
     parser.add_argument("--cli-smoke-source-project", default=str(DEFAULT_CLI_SMOKE_SOURCE_PROJECT), help="CLI smoke 測試附件來源專案")
     parser.add_argument("--cli-smoke-date", default=DEFAULT_CLI_SMOKE_DATE, help="CLI smoke 測試日期")
     parser.add_argument("--cli-smoke-folder", default=DEFAULT_CLI_SMOKE_FOLDER, help="CLI smoke 測試附件資料夾")

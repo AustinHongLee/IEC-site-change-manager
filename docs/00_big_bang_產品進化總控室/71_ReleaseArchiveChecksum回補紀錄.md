@@ -32,4 +32,4 @@ python tools\build_release.py --skip-build --archive
 
 ## 注意
 
-目前真實 dist 約數百 MB。日常驗證可只跑 `python tools\build_release.py --skip-build`；需要交付給同事時再加 `--archive`。
+目前真實 dist 約數百 MB。正式驗證可跑 `python tools\build_release.py --skip-build`，此命令會執行 packaged CLI 真輸出 smoke，機器必須有 Microsoft Excel。若只是快速結構檢查，使用 `python tools\build_release.py --skip-build --no-cli-smoke`；需要交付給同事時再加 `--archive`。
