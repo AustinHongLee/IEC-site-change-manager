@@ -12,9 +12,12 @@ from pathlib import Path
 from typing import Any
 
 from app_info import APP_CHANNEL, APP_ID, APP_LOCAL_NAME, APP_NAME, APP_VERSION, format_app_identity
+from config import RESOURCE_DIR, TEMPLATE_PATH_6, TEMPLATE_PATH_27
 from integrity_audit import audit_integrity, format_integrity_report
+from material_constants import WIZARD_DATA_PATH
 from output_capabilities import build_output_capability_report
 from project_guard import build_startup_decision, format_guard_report, inspect_project
+from resources import resource_path
 
 
 def _issue_to_dict(issue) -> dict[str, Any]:
@@ -63,6 +66,17 @@ def collect_support_bundle(
             "version": APP_VERSION,
             "channel": APP_CHANNEL,
             "identity": format_app_identity(),
+            "paths": {
+                "resource_dir": RESOURCE_DIR,
+                "template_path_6": TEMPLATE_PATH_6,
+                "template_6_exists": Path(TEMPLATE_PATH_6).is_file(),
+                "template_path_27": TEMPLATE_PATH_27,
+                "template_27_exists": Path(TEMPLATE_PATH_27).is_file(),
+                "wizard_data_path": WIZARD_DATA_PATH,
+                "wizard_data_exists": Path(WIZARD_DATA_PATH).is_file(),
+                "material_pricebook_seed_path": resource_path("material_pricebook_seed.json"),
+                "material_pricebook_seed_exists": Path(resource_path("material_pricebook_seed.json")).is_file(),
+            },
         },
         "environment": {
             "python": platform.python_version(),

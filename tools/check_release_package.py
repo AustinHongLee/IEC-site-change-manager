@@ -10,6 +10,8 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +106,82 @@ def _run_health_check(exe_path: Path, timeout: int) -> dict[str, Any]:
     }
 
 
+def _run_diagnostics_probe(exe_path: Path, expected_internal: Path, timeout: int) -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="iec_diag_probe_") as temp:
+        output = Path(temp)
+        try:
+            completed = subprocess.run(
+                [str(exe_path), "--diagnostics", "--diagnostics-output", str(output)],
+                cwd=exe_path.parent,
+                text=True,
+                encoding="utf-8",
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "ran": True,
+                "ok": False,
+                "returncode": None,
+                "stdout": exc.stdout or "",
+                "stderr": exc.stderr or "",
+                "error": "timeout",
+            }
+        except OSError as exc:
+            return {
+                "ran": True,
+                "ok": False,
+                "returncode": None,
+                "stdout": "",
+                "stderr": str(exc),
+                "error": "os_error",
+            }
+
+        result: dict[str, Any] = {
+            "ran": True,
+            "ok": False,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "error": "",
+            "paths": {},
+        }
+        if completed.returncode != 0:
+            result["error"] = "diagnostics_failed"
+            return result
+
+        bundles = sorted(output.glob("support_bundle_*.zip"))
+        if not bundles:
+            result["error"] = "missing_bundle"
+            return result
+
+        try:
+            with zipfile.ZipFile(bundles[-1]) as bundle:
+                diagnostics = json.loads(bundle.read("diagnostics.json").decode("utf-8"))
+        except Exception as exc:
+            result["error"] = f"invalid_bundle: {exc}"
+            return result
+
+        paths = ((diagnostics.get("app") or {}).get("paths") or {})
+        result["paths"] = paths
+        resource_dir = Path(str(paths.get("resource_dir") or "")).resolve()
+        expected = expected_internal.resolve()
+        required_exists = (
+            bool(paths.get("template_6_exists"))
+            and bool(paths.get("template_27_exists"))
+            and bool(paths.get("wizard_data_exists"))
+            and bool(paths.get("material_pricebook_seed_exists"))
+        )
+        result["ok"] = resource_dir == expected and required_exists
+        if resource_dir != expected:
+            result["error"] = "resource_dir_mismatch"
+        elif not required_exists:
+            result["error"] = "missing_runtime_resource"
+        return result
+
+
 def check_release_package(
     package_dir: str | Path = DEFAULT_PACKAGE_DIR,
     *,
@@ -124,6 +202,7 @@ def check_release_package(
             "exe_path": str(exe_path),
             "startup": None,
             "health_check": {"ran": False},
+            "diagnostics_probe": {"ran": False},
             "issues": issues,
         }
 
@@ -166,13 +245,25 @@ def check_release_package(
         )
 
     health = {"ran": False}
+    diagnostics_probe = {"ran": False}
     if run_health_check:
         if exe_path.is_file():
             health = _run_health_check(exe_path, health_timeout)
             if not health.get("ok"):
                 issues.append(_issue("error", "exe_health_check_failed", "exe --health-check 執行失敗。", exe_path))
+            diagnostics_probe = _run_diagnostics_probe(exe_path, internal, health_timeout)
+            if not diagnostics_probe.get("ok"):
+                issues.append(
+                    _issue(
+                        "error",
+                        "exe_diagnostics_probe_failed",
+                        "exe 診斷包無法確認打包資源路徑與必要資產。",
+                        exe_path,
+                    )
+                )
         else:
             health = {"ran": False, "ok": False, "error": "missing_exe"}
+            diagnostics_probe = {"ran": False, "ok": False, "error": "missing_exe"}
 
     has_errors = any(issue["severity"] == "error" for issue in issues)
     return {
@@ -181,6 +272,7 @@ def check_release_package(
         "exe_path": str(exe_path),
         "startup": startup,
         "health_check": health,
+        "diagnostics_probe": diagnostics_probe,
         "issues": issues,
     }
 
@@ -196,6 +288,9 @@ def _print_text(result: dict[str, Any]) -> None:
     health = result.get("health_check") or {}
     if health.get("ran"):
         print(f"exe health-check：{'OK' if health.get('ok') else 'NG'} returncode={health.get('returncode')}")
+    probe = result.get("diagnostics_probe") or {}
+    if probe.get("ran"):
+        print(f"exe diagnostics probe：{'OK' if probe.get('ok') else 'NG'}")
     for issue in result.get("issues") or []:
         print(f"- [{issue.get('severity')}] {issue.get('code')}: {issue.get('message')}")
         if issue.get("path"):

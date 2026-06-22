@@ -29,6 +29,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QImage, QPixmap
 
 from theme import Colors, Fonts, set_button_role, make_hint_label, make_separator
 from utils import move_to_trash
+from resources import resource_path
 
 # 嘗試匯入專案模組
 try:
@@ -67,7 +68,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 #  Wizard 資料管理
 # ---------------------------------------------------------------------------
-WIZARD_DATA_PATH = os.path.join(os.path.dirname(__file__), "wizard_data.json")
+WIZARD_DATA_PATH = resource_path("control", "wizard_data.json")
 
 _FONT_TITLE = Fonts.heading()
 _FONT_SUBTITLE = Fonts.subheading()
@@ -1329,7 +1330,7 @@ class Step6_Materials(WizardStep):
         ag = QVBoxLayout(add_grp)
 
         # ─── 零件圖片按鈕矩陣 ───
-        img_dir = os.path.join(os.path.dirname(__file__), "image")
+        img_dir = resource_path("control", "image")
         self._comp_btn_group = QButtonGroup(self.page)
         self._comp_btn_group.setExclusive(True)
 

@@ -34,6 +34,8 @@ def test_collect_support_bundle_writes_zip_with_json_and_health_text(tmp_path):
 
     assert diagnostics["schema_version"] == "support_bundle.v1"
     assert diagnostics["app"]["version"]
+    assert diagnostics["app"]["paths"]["template_6_exists"] is True
+    assert diagnostics["app"]["paths"]["wizard_data_exists"] is True
     assert diagnostics["project"]["startup"]["decision"]["action"] == "initialize"
     assert "IEC Site Change Manager" in health
 

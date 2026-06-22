@@ -13,13 +13,13 @@ import json
 from typing import Any
 from datetime import datetime
 
+from resources import project_path, resolve_project_dir
+
 
 # 設定檔路徑（放在專案資料夾內）
 def _get_settings_path() -> str:
     """取得 settings.json 的路徑"""
-    here = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.abspath(os.path.join(here, os.pardir))
-    return os.path.join(base_dir, "settings.json")
+    return project_path("settings.json")
 
 
 def _atomic_write_json(path: str, data: dict):
@@ -216,9 +216,7 @@ def get_drawing_list_path() -> str:
         return saved_path
     
     # 2. 自動搜尋
-    here = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.abspath(os.path.join(here, os.pardir))
-    gl05_dir = os.path.dirname(base_dir)
+    gl05_dir = os.path.dirname(resolve_project_dir())
     
     pattern = os.path.join(gl05_dir, "可寧衛_DRAWING LIST*.xlsm")
     matches = glob.glob(pattern)

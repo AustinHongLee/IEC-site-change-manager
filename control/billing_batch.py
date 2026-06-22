@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import copy
 import getpass
-import os
 import socket
 import uuid
 from dataclasses import dataclass
@@ -27,10 +26,10 @@ from billing_calculator import (
     tax_rate_to_text,
 )
 from utils import atomic_write_json
+from resources import project_path
 
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BILLING_BATCHES_JSON_PATH = os.path.join(_PROJECT_ROOT, "records", "billing_batches.json")
+BILLING_BATCHES_JSON_PATH = project_path("records", "billing_batches.json")
 BILLING_BATCH_VERSION = "1.0"
 
 BATCH_DRAFT = "草稿"

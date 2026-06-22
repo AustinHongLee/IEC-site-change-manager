@@ -13,34 +13,25 @@ import sys
 from dataclasses import dataclass
 from typing import Dict, Any
 
+from resources import resolve_project_dir, resolve_resource_dir, resource_path
+
 # ========= 自動定位 base_dir =========
 def resolve_base_dir() -> str:
     """自動定位到「工務修改單」這層資料夾"""
-    if getattr(sys, "frozen", False):
-        return os.path.abspath(os.path.dirname(sys.executable))
-
-    here = os.path.abspath(os.path.dirname(__file__))
-    candidates = [
-        os.path.abspath(os.path.join(here, os.pardir)),  # control 的上層
-        os.path.abspath(os.path.join(here, os.pardir, os.pardir)),
-        here,
-    ]
-    for b in candidates:
-        if os.path.isdir(os.path.join(b, "attachments")) and os.path.isdir(os.path.join(b, "template")):
-            return b
-    return os.path.abspath(os.path.join(here, os.pardir))
+    return resolve_project_dir()
 
 
 # ========= 路徑常數 =========
 BASE_DIR = resolve_base_dir()
+RESOURCE_DIR = resolve_resource_dir()
 ATTACHMENTS_ROOT = os.path.join(BASE_DIR, 'attachments')
 OUTPUT_ROOT = os.path.join(BASE_DIR, 'output')
 PDF_OUTPUT_DIR = os.path.join(BASE_DIR, 'pdf')
 RECORD_XLSX_PATH = os.path.join(BASE_DIR, '管線修改紀錄清單.xlsx')
 LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 
-TEMPLATE_PATH_6 = os.path.join(BASE_DIR, 'template', 'template_file.xlsm')
-TEMPLATE_PATH_27 = os.path.join(BASE_DIR, 'template', 'template_file_27w.xlsm')
+TEMPLATE_PATH_6 = resource_path('template', 'template_file.xlsm')
+TEMPLATE_PATH_27 = resource_path('template', 'template_file_27w.xlsm')
 
 
 # ========= DWG LIST（從設定管理器取得）=========
@@ -176,6 +167,7 @@ def use_dual_images(mode: str, token_count: int) -> bool:
 def print_config_info():
     """印出目前設定資訊"""
     print(f"▶ 基準資料夾 base_dir = {BASE_DIR}")
+    print(f"▶ 程式資源資料夾       = {RESOURCE_DIR}")
     print(f"▶ 附件資料夾         = {ATTACHMENTS_ROOT}")
     print(f"▶ 模板(6/27)         = {TEMPLATE_PATH_6}")
     print(f"                      {TEMPLATE_PATH_27}")

@@ -10,14 +10,13 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import re
 from dataclasses import dataclass
 from typing import Any
 
+from resources import resource_path
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WIZARD_DATA_PATH = os.path.join(_PROJECT_ROOT, "control", "wizard_data.json")
+WIZARD_DATA_PATH = resource_path("control", "wizard_data.json")
 
 MATERIAL_FIELD_COMPONENT = "零件類型"
 MATERIAL_FIELD_SIZE = "尺寸"

@@ -32,10 +32,10 @@ from material_constants import (
     normalize_material_key,
 )
 from utils import atomic_write_json
+from resources import project_path
 
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PRICEBOOK_JSON_PATH = os.path.join(_PROJECT_ROOT, "records", "material_pricebook.json")
+PRICEBOOK_JSON_PATH = project_path("records", "material_pricebook.json")
 PRICE_SOURCE_MISSING = "missing_pricebook"
 PRICE_SOURCE_MISSING_PRICE = "missing_price"
 AMOUNT_SOURCE_MISSING = "missing_price"

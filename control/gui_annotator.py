@@ -661,7 +661,8 @@ class AnnotationDialog(QDialog):
         """從 wizard_data.json 載入 note_presets 作為常用字（與 Step5 同源）"""
         try:
             import json
-            wdata_path = os.path.join(os.path.dirname(__file__), "wizard_data.json")
+            from resources import resource_path
+            wdata_path = resource_path("control", "wizard_data.json")
             if os.path.exists(wdata_path):
                 with open(wdata_path, "r", encoding="utf-8") as f:
                     wdata = json.load(f)
