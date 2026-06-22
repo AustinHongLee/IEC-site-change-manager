@@ -1,0 +1,36 @@
+# 行尾正規化 — repo 內一律存 LF,checkout 也用 LF。
+# 目的:永久消滅「整檔 LF<->CRLF 翻動」造成的幻影 diff。
+* text=auto eol=lf
+
+# 程式與文字檔:明確鎖 LF
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.txt   text eol=lf
+*.csv   text eol=lf
+*.cfg   text eol=lf
+*.ini   text eol=lf
+*.toml  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Windows 專用腳本必須是 CRLF,否則 cmd 可能出錯
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# 二進位檔:git 絕對不可碰行尾
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.pdf   binary
+*.xlsx  binary
+*.xls   binary
+*.xlsm  binary
+*.zip   binary
+*.7z    binary
+*.exe   binary
+*.dll   binary
