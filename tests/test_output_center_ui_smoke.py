@@ -34,6 +34,7 @@ def test_record_manager_panel_exposes_output_center_entry(qapp):
         assert output_buttons
         assert "attachments" in output_buttons[0].toolTip()
         assert hasattr(panel, "_export_site_output_center")
+        assert not hasattr(panel, "_export_real_attachments_showcase")
     finally:
         panel.deleteLater()
 

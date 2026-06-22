@@ -325,10 +325,10 @@ class RecordManagerPanel(QWidget):
         btn_site_stats_pdf.setToolTip("匯出現場統計單 xlsx 後，用 LibreOffice 轉出 PDF")
         btn_site_stats_pdf.clicked.connect(lambda checked=False: self._export_site_statistics(with_pdf=True))
         fr.addWidget(btn_site_stats_pdf)
-        btn_photo_grid_pdf = QPushButton("輸出中心")
-        btn_photo_grid_pdf.setToolTip("用目前 attachments 產出現場統計單、summary PDF 或 before/after 照片 PDF")
-        btn_photo_grid_pdf.clicked.connect(self._export_site_output_center)
-        fr.addWidget(btn_photo_grid_pdf)
+        btn_output_center = QPushButton("輸出中心")
+        btn_output_center.setToolTip("用目前 attachments 產出現場統計單、summary PDF 或 before/after 照片 PDF")
+        btn_output_center.clicked.connect(self._export_site_output_center)
+        fr.addWidget(btn_output_center)
         btn_rebuild_filter = QPushButton("需重產")
         btn_rebuild_filter.setToolTip("快速顯示補價或資料異動後需要重新產出的修改單")
         btn_rebuild_filter.clicked.connect(self._show_rebuild_queue)
@@ -1580,7 +1580,7 @@ class RecordManagerPanel(QWidget):
             return None
 
         dlg = QDialog(self)
-        dlg.setWindowTitle("照片 PDF 輸出")
+        dlg.setWindowTitle("輸出中心")
         dlg.resize(520, 220)
         layout = QVBoxLayout(dlg)
         layout.setSpacing(10)
@@ -2267,7 +2267,6 @@ class RecordManagerPanel(QWidget):
                 lines.append(f"...還有 {len(issues) - 6} 筆")
         return "\n".join(lines)
 
-    _export_real_attachments_showcase = _export_site_output_center
     _show_showcase_result_dialog = _show_output_center_result_dialog
     _choose_showcase_scope = _choose_output_center_scope
     _showcase_report_keys = _output_center_report_keys
