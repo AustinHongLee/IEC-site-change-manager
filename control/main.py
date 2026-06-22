@@ -83,8 +83,25 @@ def main():
         '--repair-project', action='store_true',
         help='修復可安全自動修復的專案資料夾問題'
     )
+    parser.add_argument(
+        '--diagnostics', action='store_true',
+        help='產生支援診斷包，不啟動 GUI/CLI'
+    )
+    parser.add_argument(
+        '--diagnostics-output', type=str, default='',
+        help='支援診斷包輸出資料夾'
+    )
     
     args = parser.parse_args()
+
+    if args.diagnostics:
+        from config import BASE_DIR
+        from diagnostics import collect_support_bundle
+
+        result = collect_support_bundle(BASE_DIR, output_dir=args.diagnostics_output or None)
+        print(f"支援診斷包: {result['bundle_path']}")
+        print(f"啟動判斷: {result['startup_action']}")
+        return
 
     project_lock = None
     try:
@@ -171,7 +188,10 @@ def _prepare_project_startup(args):
 
 
 def _is_gui_request(args) -> bool:
-    return not (args.cli or args.date or args.retry or args.health_check or args.audit_integrity)
+    return not (
+        args.cli or args.date or args.retry or args.health_check
+        or args.audit_integrity or args.diagnostics
+    )
 
 
 def _show_startup_message(title: str, message: str) -> None:

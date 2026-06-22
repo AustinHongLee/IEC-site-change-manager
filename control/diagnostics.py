@@ -1,0 +1,115 @@
+# -*- coding: utf-8 -*-
+"""Read-only support bundle collection for field troubleshooting."""
+
+from __future__ import annotations
+
+import json
+import os
+import platform
+import zipfile
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from app_info import APP_CHANNEL, APP_ID, APP_LOCAL_NAME, APP_NAME, APP_VERSION, format_app_identity
+from integrity_audit import audit_integrity, format_integrity_report
+from output_capabilities import build_output_capability_report
+from project_guard import build_startup_decision, format_guard_report, inspect_project
+
+
+def _issue_to_dict(issue) -> dict[str, Any]:
+    return {
+        "severity": issue.severity,
+        "code": issue.code,
+        "title": getattr(issue, "title", ""),
+        "message": issue.message,
+        "path": getattr(issue, "path", ""),
+        "refs": list(getattr(issue, "refs", []) or []),
+        "auto_fixable": getattr(issue, "auto_fixable", False),
+    }
+
+
+def _default_output_dir(project_root: Path) -> Path:
+    return project_root / "staging" / "support_bundle"
+
+
+def collect_support_bundle(
+    project_root: str | Path,
+    *,
+    output_dir: str | Path | None = None,
+    timestamp: datetime | None = None,
+) -> dict[str, Any]:
+    root = Path(project_root).resolve()
+    created_at = timestamp or datetime.now()
+    stamp = created_at.strftime("%Y%m%d_%H%M%S")
+    output = Path(output_dir).resolve() if output_dir else _default_output_dir(root)
+    zip_path = output / f"support_bundle_{stamp}.zip"
+
+    guard = inspect_project(root)
+    decision = build_startup_decision(guard)
+    integrity = audit_integrity(root)
+    capability = build_output_capability_report(
+        probe_com_application=False,
+        probe_libreoffice_version=False,
+    )
+
+    diagnostics = {
+        "schema_version": "support_bundle.v1",
+        "created_at": created_at.isoformat(timespec="seconds"),
+        "app": {
+            "id": APP_ID,
+            "name": APP_NAME,
+            "local_name": APP_LOCAL_NAME,
+            "version": APP_VERSION,
+            "channel": APP_CHANNEL,
+            "identity": format_app_identity(),
+        },
+        "environment": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "user": os.environ.get("USERNAME") or os.environ.get("USER") or "",
+            "computer": os.environ.get("COMPUTERNAME") or platform.node(),
+        },
+        "project": {
+            "root": str(root),
+            "startup": {
+                "state": guard.state,
+                "decision": {
+                    "action": decision.action,
+                    "title": decision.title,
+                    "can_continue": decision.can_continue,
+                    "can_auto_repair": decision.can_auto_repair,
+                    "blocking_codes": decision.blocking_codes,
+                    "repairable_codes": decision.repairable_codes,
+                },
+                "issues": [_issue_to_dict(issue) for issue in guard.issues],
+            },
+            "integrity": {
+                "has_errors": integrity.has_errors,
+                "counts": integrity.counts,
+                "severity": integrity.count_by_severity(),
+                "issues": [_issue_to_dict(issue) for issue in integrity.issues],
+            },
+        },
+        "output_capabilities": capability,
+    }
+    health_text = "\n\n".join(
+        [
+            format_app_identity(),
+            format_guard_report(guard),
+            format_integrity_report(integrity, max_refs=40),
+        ]
+    )
+
+    output.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr("diagnostics.json", json.dumps(diagnostics, ensure_ascii=False, indent=2))
+        bundle.writestr("health_check.txt", health_text)
+
+    return {
+        "ok": True,
+        "bundle_path": str(zip_path),
+        "project_root": str(root),
+        "startup_action": decision.action,
+        "integrity_severity": integrity.count_by_severity(),
+    }
