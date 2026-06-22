@@ -2267,23 +2267,6 @@ class RecordManagerPanel(QWidget):
                 lines.append(f"...還有 {len(issues) - 6} 筆")
         return "\n".join(lines)
 
-    _show_showcase_result_dialog = _show_output_center_result_dialog
-    _choose_showcase_scope = _choose_output_center_scope
-    _showcase_report_keys = _output_center_report_keys
-    _showcase_scope_options = _output_center_scope_options
-    _format_showcase_content_label = _format_output_center_content_label
-    _normalize_showcase_output_dir = _normalize_output_center_output_dir
-    _showcase_output_items = _output_center_output_items
-    _showcase_output_groups = _output_center_output_groups
-    _showcase_issue_items = _output_center_issue_items
-    _showcase_issue_action = _output_center_issue_action
-    _format_showcase_issue_tooltip = _format_output_center_issue_tooltip
-    _showcase_issue_record_ref = _output_center_issue_record_ref
-    _showcase_filters_are_narrowed = _output_center_filters_are_narrowed
-    _showcase_note_text_is_valid = _output_center_note_text_is_valid
-    _format_showcase_export_confirmation = _format_output_center_export_confirmation
-    _format_showcase_export_message = _format_output_center_export_message
-
     def _show_rebuild_queue(self):
         rows = build_rebuild_queue(_load_store())
         if not rows:

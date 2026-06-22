@@ -35,6 +35,25 @@ def test_record_manager_panel_exposes_output_center_entry(qapp):
         assert "attachments" in output_buttons[0].toolTip()
         assert hasattr(panel, "_export_site_output_center")
         assert not hasattr(panel, "_export_real_attachments_showcase")
+        for legacy_name in (
+            "_show_showcase_result_dialog",
+            "_choose_showcase_scope",
+            "_showcase_report_keys",
+            "_showcase_scope_options",
+            "_format_showcase_content_label",
+            "_normalize_showcase_output_dir",
+            "_showcase_output_items",
+            "_showcase_output_groups",
+            "_showcase_issue_items",
+            "_showcase_issue_action",
+            "_format_showcase_issue_tooltip",
+            "_showcase_issue_record_ref",
+            "_showcase_filters_are_narrowed",
+            "_showcase_note_text_is_valid",
+            "_format_showcase_export_confirmation",
+            "_format_showcase_export_message",
+        ):
+            assert not hasattr(panel, legacy_name)
     finally:
         panel.deleteLater()
 
