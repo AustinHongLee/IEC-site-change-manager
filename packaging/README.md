@@ -16,6 +16,12 @@
 python -m PyInstaller --noconfirm --clean packaging\IEC-site-change-manager.spec
 ```
 
+建置加交付前檢查：
+
+```powershell
+python tools\build_release.py
+```
+
 建置後先跑：
 
 ```powershell
