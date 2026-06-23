@@ -8,6 +8,7 @@ __pycache__/
 .Python
 build/
 dist/
+packaging/generated/
 *.egg-info/
 .eggs/
 *.egg

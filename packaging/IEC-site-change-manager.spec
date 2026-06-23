@@ -4,6 +4,20 @@ from pathlib import Path
 
 
 ROOT = Path(SPECPATH).resolve().parent
+BUILD_INFO = ROOT / "packaging" / "generated" / "build_info.json"
+
+if not BUILD_INFO.is_file():
+    BUILD_INFO.parent.mkdir(parents=True, exist_ok=True)
+    BUILD_INFO.write_text(
+        '{\n'
+        '  "schema_version": "build_info.v1",\n'
+        '  "app_version": "UNKNOWN",\n'
+        '  "git_commit": "UNKNOWN",\n'
+        '  "built_at": "UNKNOWN",\n'
+        '  "source_dirty": true\n'
+        '}\n',
+        encoding="utf-8",
+    )
 
 
 def asset(src: str, dest: str):
@@ -11,6 +25,7 @@ def asset(src: str, dest: str):
 
 
 datas = [
+    asset("packaging/generated/build_info.json", "."),
     asset("template", "template"),
     asset("control/image", "control/image"),
     asset("control/wizard_data.json", "control"),

@@ -7,12 +7,43 @@ import zipfile
 from pathlib import Path
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "control"))
+
+from app_info import APP_VERSION
+
+
+def current_git_commit(repo: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def write_build_info(package: Path, repo: Path):
+    info = {
+        "schema_version": "build_info.v1",
+        "app_version": APP_VERSION,
+        "git_commit": current_git_commit(repo),
+        "built_at": "2026-06-22T00:00:00Z",
+        "source_dirty": False,
+    }
+    (package / "_internal" / "build_info.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+
+
 def make_package(root: Path):
+    repo = Path(__file__).resolve().parents[1]
     package = root / "IEC-site-change-manager"
     (package / "_internal" / "template").mkdir(parents=True)
     (package / "_internal" / "control" / "image").mkdir(parents=True)
     (package / "_internal" / "control" / "wizard_data.json").write_text("{}", encoding="utf-8")
     (package / "_internal" / "material_pricebook_seed.json").write_text("[]", encoding="utf-8")
+    write_build_info(package, repo)
     (package / "IEC-site-change-manager.exe").write_text("fake exe", encoding="utf-8")
     return package
 
@@ -48,6 +79,7 @@ def test_build_release_skip_build_runs_package_gate(tmp_path):
     assert data["ok"] is True
     assert data["build"]["skipped"] is True
     assert data["package_check"]["startup"]["decision"]["action"] == "initialize"
+    assert data["package_check"]["build_info"]["ok"] is True
 
 
 def test_build_release_skip_build_reports_package_failure(tmp_path):
@@ -96,11 +128,12 @@ def test_build_release_archive_writes_zip_and_checksum(tmp_path):
     assert len(archive["sha256"]) == 64
     assert Path(archive["path"]).exists()
     assert Path(archive["checksum_path"]).exists()
-    assert archive["file_count"] == 3
+    assert archive["file_count"] == 4
     assert archive["dir_count"] == 4
     with zipfile.ZipFile(archive["path"]) as zipped:
         names = set(zipped.namelist())
         assert "IEC-site-change-manager/IEC-site-change-manager.exe" in names
+        assert "IEC-site-change-manager/_internal/build_info.json" in names
         assert "IEC-site-change-manager/_internal/template/" in names
         assert "IEC-site-change-manager/_internal/control/image/" in names
     assert archive["sha256"] in Path(archive["checksum_path"]).read_text(encoding="utf-8")

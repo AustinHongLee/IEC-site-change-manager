@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,59 @@ from console_io import configure_utf8_stdio
 
 DEFAULT_SPEC = _ROOT / "packaging" / "IEC-site-change-manager.spec"
 DEFAULT_ARCHIVE_DIR = _ROOT / "dist" / "releases"
+GENERATED_BUILD_INFO = _ROOT / "packaging" / "generated" / "build_info.json"
+BUILD_INFO_SCHEMA = "build_info.v1"
+
+
+def _git_stdout(*args: str) -> str:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=_ROOT,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        message = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(message or f"git {' '.join(args)} failed")
+    return completed.stdout.strip()
+
+
+def _current_git_commit() -> str:
+    return _git_stdout("rev-parse", "HEAD")
+
+
+def _source_dirty() -> bool:
+    completed = subprocess.run(
+        ["git", "diff-index", "--quiet", "HEAD", "--"],
+        cwd=_ROOT,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode == 0:
+        return False
+    if completed.returncode == 1:
+        return True
+    message = (completed.stderr or completed.stdout or "").strip()
+    raise RuntimeError(message or "git diff-index --quiet HEAD -- failed")
+
+
+def _write_build_info(path: Path = GENERATED_BUILD_INFO) -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "schema_version": BUILD_INFO_SCHEMA,
+        "app_version": APP_VERSION,
+        "git_commit": _current_git_commit(),
+        "built_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "source_dirty": _source_dirty(),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(info, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"path": str(path), **info}
 
 
 def _run_pyinstaller(spec_path: Path, *, clean: bool = True) -> dict[str, Any]:
@@ -142,12 +196,19 @@ def build_release(
         "app_version": APP_VERSION,
         "spec_path": str(spec),
         "package_dir": str(package),
+        "build_info": {"generated": False},
         "build": {"skipped": skip_build},
         "package_check": None,
         "archive": None,
     }
 
     if not skip_build:
+        try:
+            result["build_info"] = {"generated": True, **_write_build_info()}
+        except Exception as exc:
+            result["reason"] = "build_info_failed"
+            result["build_info"] = {"generated": False, "error": str(exc)}
+            return result
         build = _run_pyinstaller(spec)
         build["skipped"] = False
         result["build"] = build

@@ -36,6 +36,7 @@ from run_packaged_cli_smoke import (
 DEFAULT_PACKAGE_DIR = Path(_ROOT) / "dist" / "IEC-site-change-manager"
 DEFAULT_EXE_NAME = "IEC-site-change-manager.exe"
 ALLOWED_TOP_LEVEL = {DEFAULT_EXE_NAME, "_internal"}
+BUILD_INFO_SCHEMA = "build_info.v1"
 REQUIRED_INTERNAL_ASSETS = (
     ("template", "dir"),
     ("control/image", "dir"),
@@ -70,6 +71,65 @@ def _check_asset(path: Path, kind: str) -> bool:
     if kind == "file":
         return path.is_file()
     raise ValueError(f"unknown asset kind: {kind}")
+
+
+def _current_git_commit() -> tuple[str, str]:
+    completed = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=_ROOT,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode != 0:
+        message = (completed.stderr or completed.stdout or "").strip()
+        return "", message or "git rev-parse HEAD failed"
+    return completed.stdout.strip(), ""
+
+
+def _validate_build_info(internal: Path) -> dict[str, Any]:
+    path = internal / "build_info.json"
+    result: dict[str, Any] = {
+        "ok": False,
+        "path": str(path),
+        "data": None,
+        "expected_app_version": APP_VERSION,
+        "expected_git_commit": "",
+        "errors": [],
+        "warnings": [],
+    }
+    if not path.is_file():
+        result["errors"].append({"code": "missing", "message": "缺少 _internal/build_info.json。"})
+        return result
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        result["errors"].append({"code": "invalid_json", "message": f"build_info.json 不是有效 JSON：{exc}"})
+        return result
+
+    if not isinstance(data, dict):
+        result["errors"].append({"code": "invalid_shape", "message": "build_info.json 必須是 JSON object。"})
+        return result
+
+    result["data"] = data
+    expected_commit, git_error = _current_git_commit()
+    result["expected_git_commit"] = expected_commit
+    if git_error:
+        result["errors"].append({"code": "git_unavailable", "message": f"無法取得目前 git HEAD：{git_error}"})
+    if data.get("schema_version") != BUILD_INFO_SCHEMA:
+        result["errors"].append({"code": "schema_mismatch", "message": "build_info schema_version 不正確。"})
+    if data.get("app_version") != APP_VERSION:
+        result["errors"].append({"code": "app_version_mismatch", "message": "build_info app_version 與 app_info.APP_VERSION 不一致。"})
+    if expected_commit and data.get("git_commit") != expected_commit:
+        result["errors"].append({"code": "git_commit_mismatch", "message": "build_info git_commit 不是目前 HEAD。"})
+    if data.get("source_dirty") is True:
+        result["warnings"].append({"code": "source_dirty", "message": "此 package 建置時工作樹不是完全乾淨。"})
+
+    result["ok"] = not result["errors"]
+    return result
 
 
 def _run_health_check(exe_path: Path, timeout: int) -> dict[str, Any]:
@@ -259,6 +319,7 @@ def check_release_package(
             "package_dir": str(package),
             "exe_path": str(exe_path),
             "startup": None,
+            "build_info": {"ok": False, "path": "", "errors": [{"code": "missing_package_dir"}], "warnings": []},
             "version_check": {"ran": False},
             "health_check": {"ran": False},
             "diagnostics_probe": {"ran": False},
@@ -281,6 +342,12 @@ def check_release_package(
         asset_path = internal / relative
         if not _check_asset(asset_path, kind):
             issues.append(_issue("error", "missing_internal_asset", f"缺少打包內嵌資產：{relative}", asset_path))
+
+    build_info = _validate_build_info(internal)
+    for problem in build_info.get("errors") or []:
+        issues.append(_issue("error", f"build_info_{problem.get('code')}", problem.get("message", "build_info 驗證失敗。"), build_info.get("path", "")))
+    for problem in build_info.get("warnings") or []:
+        issues.append(_issue("warning", f"build_info_{problem.get('code')}", problem.get("message", "build_info 有警告。"), build_info.get("path", "")))
 
     guard = inspect_project(package)
     decision = build_startup_decision(guard)
@@ -361,6 +428,7 @@ def check_release_package(
         "package_dir": str(package),
         "exe_path": str(exe_path),
         "startup": startup,
+        "build_info": build_info,
         "version_check": version_check,
         "health_check": health,
         "diagnostics_probe": diagnostics_probe,
@@ -377,6 +445,16 @@ def _print_text(result: dict[str, Any]) -> None:
     decision = startup.get("decision") or {}
     if decision:
         print(f"startup：{startup.get('state')} / {decision.get('action')} - {decision.get('title')}")
+    build_info = result.get("build_info") or {}
+    if build_info.get("path"):
+        data = build_info.get("data") or {}
+        commit = str(data.get("git_commit") or "")
+        print(
+            "build_info："
+            f"{'OK' if build_info.get('ok') else 'NG'} "
+            f"version={data.get('app_version', '')} "
+            f"commit={commit[:12]}"
+        )
     version = result.get("version_check") or {}
     if version.get("ran"):
         print(f"exe version：{'OK' if version.get('ok') else 'NG'} expected={version.get('expected_version')}")
