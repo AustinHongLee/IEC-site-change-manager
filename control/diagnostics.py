@@ -36,6 +36,38 @@ def _default_output_dir(project_root: Path) -> Path:
     return project_root / "staging" / "support_bundle"
 
 
+def _collect_log_excerpts(
+    project_root: Path,
+    *,
+    max_files: int = 3,
+    max_bytes: int = 512 * 1024,
+) -> list[tuple[str, str]]:
+    """收集最新幾個 log 檔的尾段，給現場故障回報用（唯讀，不修改原檔）。"""
+    logs_dir = project_root / "logs"
+    if not logs_dir.is_dir():
+        return []
+    candidates = sorted(
+        (p for p in logs_dir.glob("*.log*") if p.is_file()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )[:max_files]
+    excerpts: list[tuple[str, str]] = []
+    for path in candidates:
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as handle:
+                if size > max_bytes:
+                    handle.seek(-max_bytes, os.SEEK_END)
+                raw = handle.read()
+            text = raw.decode("utf-8", errors="replace")
+            if size > max_bytes:
+                text = f"（已截斷，僅保留最後 {max_bytes // 1024} KB）\n{text}"
+            excerpts.append((f"logs/{path.name}", text))
+        except OSError as exc:
+            excerpts.append((f"logs/{path.name}.read_error.txt", f"無法讀取此日誌：{exc}"))
+    return excerpts
+
+
 def collect_support_bundle(
     project_root: str | Path,
     *,
@@ -115,10 +147,14 @@ def collect_support_bundle(
         ]
     )
 
+    log_excerpts = _collect_log_excerpts(root)
+
     output.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         bundle.writestr("diagnostics.json", json.dumps(diagnostics, ensure_ascii=False, indent=2))
         bundle.writestr("health_check.txt", health_text)
+        for arcname, content in log_excerpts:
+            bundle.writestr(arcname, content)
 
     return {
         "ok": True,
@@ -126,4 +162,5 @@ def collect_support_bundle(
         "project_root": str(root),
         "startup_action": decision.action,
         "integrity_severity": integrity.count_by_severity(),
+        "logs_included": len(log_excerpts),
     }
