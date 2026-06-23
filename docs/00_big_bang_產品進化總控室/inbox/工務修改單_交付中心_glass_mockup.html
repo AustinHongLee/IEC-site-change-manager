@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工務修改單 · 交付中心 — Glass UI 概念</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal:#5fe3c4; --teal-soft:rgba(95,227,196,.16);
+    --violet:#9b8cff; --amber:#ffcf6b;
+    --ink:#eaf2ff; --ink-2:rgba(234,242,255,.66); --ink-3:rgba(234,242,255,.42);
+    --glass:rgba(255,255,255,.075);
+    --glass-strong:rgba(255,255,255,.12);
+    --stroke:rgba(255,255,255,.16);
+    --stroke-soft:rgba(255,255,255,.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Noto Sans TC",-apple-system,"Microsoft JhengHei",sans-serif;
+    background:#0a1020; color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; padding:28px;
+  }
+  .stage{
+    position:relative; width:1180px; max-width:100%; aspect-ratio:118/76;
+    border-radius:30px; overflow:hidden;
+    box-shadow:0 40px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+  }
+  /* ---- 背景情境(呼應你參考圖的暮色湖景,但收斂成專業色) ---- */
+  .scene{position:absolute; inset:0; z-index:0}
+  .scene .sky{position:absolute; inset:0;
+    background:
+      radial-gradient(120% 80% at 78% 8%, rgba(255,196,140,.55), transparent 46%),
+      radial-gradient(90% 70% at 18% 0%, rgba(120,150,255,.45), transparent 50%),
+      linear-gradient(180deg,#26375f 0%, #38507e 30%, #7d6f8e 52%, #2a3a5c 64%, #0e1830 100%);
+  }
+  .scene .sun{position:absolute; left:74%; top:20%; width:140px; height:140px; border-radius:50%;
+    background:radial-gradient(circle, rgba(255,232,196,.9), rgba(255,200,150,.25) 60%, transparent 70%); filter:blur(2px)}
+  .scene .water{position:absolute; left:0; right:0; bottom:0; height:38%;
+    background:linear-gradient(180deg, rgba(40,55,95,.2), #0c1730 70%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+  .scene .ridge{position:absolute; left:0; right:0; top:54%; height:10%;
+    background:linear-gradient(180deg,#1d2742,#141d33); filter:blur(1px); opacity:.85}
+  .scene .person{position:absolute; left:48%; bottom:14%; width:54px; height:150px; transform:translateX(-50%);
+    background:linear-gradient(180deg,#0b1222,#070b16); border-radius:26px 26px 8px 8px; opacity:.92;
+    box-shadow:0 30px 40px rgba(0,0,0,.4)}
+  .grain{position:absolute; inset:0; z-index:1; pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 30%, transparent 60%, rgba(0,0,0,.28))}
+
+  /* ---- 玻璃通用 ---- */
+  .glass{background:var(--glass); -webkit-backdrop-filter:blur(22px) saturate(160%);
+    backdrop-filter:blur(22px) saturate(160%); border:1px solid var(--stroke);
+    box-shadow:0 12px 44px rgba(8,15,30,.42), inset 0 1px 0 rgba(255,255,255,.22)}
+
+  /* ---- 頂列 ---- */
+  .topbar{position:absolute; z-index:5; left:18px; right:18px; top:16px; height:52px; border-radius:18px;
+    display:flex; align-items:center; gap:14px; padding:0 16px}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:500; letter-spacing:.3px}
+  .brand .dot{width:26px;height:26px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--violet));
+    box-shadow:0 0 18px var(--teal-soft)}
+  .brand small{display:block; font-size:11px; color:var(--ink-3); font-weight:400; letter-spacing:.5px}
+  .crumb{font-size:12.5px;color:var(--ink-2)}
+  .proj{margin-left:auto; display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink);
+    padding:7px 13px; border-radius:11px; background:var(--glass-strong); border:1px solid var(--stroke-soft)}
+  .proj b{font-weight:500}
+  .wbtns{display:flex; gap:8px}
+  .circle{width:34px;height:34px;border-radius:50%; display:grid; place-items:center;
+    background:var(--glass-strong); border:1px solid var(--stroke-soft); color:var(--ink-2); cursor:pointer}
+  .circle:hover{color:var(--ink)}
+  .ic{width:16px;height:16px;display:block;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ---- 左側 dock(4 區工作流) ---- */
+  .dock{position:absolute; z-index:5; left:18px; top:84px; bottom:96px; width:62px; border-radius:20px;
+    display:flex; flex-direction:column; align-items:center; padding:12px 0; gap:8px}
+  .nav{width:44px;height:44px;border-radius:14px; display:grid; place-items:center; color:var(--ink-2);
+    position:relative; cursor:pointer}
+  .nav:hover{color:var(--ink); background:var(--glass-strong)}
+  .nav .ic{width:21px;height:21px;stroke-width:1.5}
+  .nav.active{color:#06241d; background:linear-gradient(135deg,var(--teal),#8ef0d6);
+    box-shadow:0 6px 22px rgba(95,227,196,.5)}
+  .nav .tip{position:absolute; left:54px; white-space:nowrap; font-size:11px; color:var(--ink-2);
+    background:rgba(10,16,30,.7); padding:3px 8px; border-radius:7px; opacity:0; transition:.15s; pointer-events:none}
+  .nav:hover .tip{opacity:1}
+  .dock .sep{flex:1}
+
+  /* ---- 中央卡片群 ---- */
+  .stagecards{position:absolute; z-index:4; left:0; right:0; top:96px; bottom:92px;
+    display:flex; align-items:center; justify-content:center}
+  .card{position:absolute; width:300px; border-radius:24px; padding:16px; color:var(--ink)}
+  .card.side{width:240px; opacity:.55; filter:blur(1.5px)}
+  .card.left{transform:translateX(-330px) scale(.9) rotateY(16deg)}
+  .card.right{transform:translateX(330px) scale(.9) rotateY(-16deg)}
+  .card.focus{transform:translateY(-6px) scale(1.04); box-shadow:0 26px 70px rgba(4,10,22,.55), inset 0 1px 0 rgba(255,255,255,.28);
+    border:1px solid rgba(255,255,255,.22)}
+  .card .head{display:flex; align-items:center; gap:9px; margin-bottom:12px}
+  .rid{font-weight:500; font-size:15px; letter-spacing:.4px}
+  .series{font-size:11.5px; color:var(--ink-3)}
+  .pill{margin-left:auto; font-size:11px; padding:4px 10px; border-radius:20px; font-weight:500}
+  .pill.ok{color:#06241d; background:rgba(95,227,196,.85)}
+  .pill.warn{color:#3a2a00; background:rgba(255,207,107,.85)}
+  .pill.new{color:#15102e; background:rgba(155,140,255,.85)}
+  .thumbs{display:flex; gap:8px; margin-bottom:12px}
+  .thumb{flex:1; height:78px; border-radius:13px; position:relative; overflow:hidden; border:1px solid var(--stroke-soft)}
+  .thumb span{position:absolute; left:7px; top:6px; font-size:10px; padding:2px 7px; border-radius:7px;
+    background:rgba(8,14,28,.55); color:var(--ink); letter-spacing:.5px}
+  .t-before{background:linear-gradient(135deg,#4b6079,#2c3a52)}
+  .t-after{background:linear-gradient(135deg,#3f7d6c,#244b46)}
+  .chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:13px}
+  .chip{font-size:11px; padding:4px 9px; border-radius:9px; background:var(--glass-strong);
+    border:1px solid var(--stroke-soft); color:var(--ink-2)}
+  .chip.k{color:var(--teal); border-color:rgba(95,227,196,.35)}
+  .actions{display:flex; gap:8px}
+  .act{flex:1; display:flex; align-items:center; justify-content:center; gap:7px; font-size:12px; color:var(--ink);
+    padding:9px 0; border-radius:12px; background:var(--glass-strong); border:1px solid var(--stroke-soft); cursor:pointer}
+  .act:hover{border-color:var(--stroke)}
+  .act.primary{background:linear-gradient(135deg,var(--teal),#8ef0d6); color:#06241d; border:0; font-weight:500;
+    box-shadow:0 8px 24px rgba(95,227,196,.45)}
+
+  /* ---- 背景漂浮小卡(景深) ---- */
+  .mini{position:absolute; z-index:3; border-radius:16px; padding:10px 12px; width:170px; opacity:.5; filter:blur(.4px)}
+  .mini .r{font-size:12px;font-weight:500}
+  .mini .s{font-size:10.5px;color:var(--ink-3)}
+  .mini .bar{height:4px;border-radius:3px;background:rgba(255,255,255,.18); margin-top:9px; overflow:hidden}
+  .mini .bar i{display:block;height:100%;background:var(--teal); border-radius:3px}
+  .m1{left:120px; top:70px; transform:rotate(-4deg)}
+  .m2{right:96px; top:60px; transform:rotate(5deg)}
+  .m3{right:150px; bottom:120px; transform:rotate(-3deg); opacity:.42}
+
+  /* ---- 右側 FAB ---- */
+  .fabs{position:absolute; z-index:6; right:20px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:12px; align-items:center}
+  .fab{width:52px;height:52px;border-radius:50%; display:grid; place-items:center; color:var(--ink); cursor:pointer}
+  .fab .ic{width:20px;height:20px}
+  .fab.accent{background:linear-gradient(135deg,var(--teal),#8ef0d6); color:#06241d; border:0;
+    box-shadow:0 10px 30px rgba(95,227,196,.5)}
+  .fab small{position:absolute}
+
+  /* ---- 底部播放/輸出列 ---- */
+  .transport{position:absolute; z-index:7; left:18px; right:18px; bottom:16px; height:70px; border-radius:20px;
+    display:flex; align-items:center; gap:16px; padding:0 18px}
+  .play{width:46px;height:46px;border-radius:50%; flex:none; display:grid; place-items:center; color:#06241d;
+    background:linear-gradient(135deg,var(--teal),#8ef0d6); box-shadow:0 8px 26px rgba(95,227,196,.5); cursor:pointer}
+  .play .ic{width:20px;height:20px;fill:#06241d;stroke:none}
+  .tmeta{flex:none; min-width:150px}
+  .tmeta .t1{font-size:13px;font-weight:500}
+  .tmeta .t2{font-size:11px;color:var(--ink-3); margin-top:2px}
+  .scrub{flex:1; display:flex; flex-direction:column; gap:7px}
+  .scrub .time{display:flex; justify-content:space-between; font-size:10.5px; color:var(--ink-3)}
+  .track{position:relative; height:6px; border-radius:6px; background:rgba(255,255,255,.14)}
+  .track .fill{position:absolute; left:0; top:0; bottom:0; width:64%; border-radius:6px;
+    background:linear-gradient(90deg,var(--violet),var(--teal))}
+  .track .dot{position:absolute; top:50%; width:9px;height:9px;border-radius:50%; transform:translate(-50%,-50%);
+    background:#fff; box-shadow:0 0 10px rgba(255,255,255,.6)}
+  .track .seg{position:absolute; top:50%; width:5px;height:5px;border-radius:50%; transform:translate(-50%,-50%);
+    background:rgba(255,255,255,.45)}
+  .tright{flex:none; display:flex; align-items:center; gap:10px; color:var(--ink-2)}
+  .tag-warn{font-size:11px; color:var(--amber); display:flex; align-items:center; gap:6px;
+    padding:6px 11px; border-radius:11px; background:rgba(255,207,107,.12); border:1px solid rgba(255,207,107,.3)}
+</style>
+</head>
+<body>
+<div class="stage">
+  <!-- 背景 -->
+  <div class="scene">
+    <div class="sky"></div><div class="sun"></div><div class="ridge"></div>
+    <div class="water"></div><div class="person"></div>
+  </div>
+  <div class="grain"></div>
+
+  <!-- 漂浮小卡 -->
+  <div class="mini glass m1"><div class="r">20260112-01</div><div class="s">Series 0547 · 已輸出</div><div class="bar"><i style="width:100%"></i></div></div>
+  <div class="mini glass m2"><div class="r">20260112-05</div><div class="s">Series 0613 · 缺後照</div><div class="bar"><i style="width:46%"></i></div></div>
+  <div class="mini glass m3"><div class="r">20250820-12</div><div class="s">Series 2A2 · 已入庫</div><div class="bar"><i style="width:100%"></i></div></div>
+
+  <!-- 頂列 -->
+  <div class="topbar glass">
+    <div class="brand"><span class="dot"></span><span>工務修改單<small>交付中心 · Delivery Center</small></span></div>
+    <span class="crumb">／ 本次交付批次</span>
+    <div class="proj"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg>專案：<b>A1 管線標 · 2026Q2</b></div>
+    <div class="wbtns">
+      <div class="circle"><svg class="ic" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></div>
+      <div class="circle"><svg class="ic" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3m13 5h3a2 2 0 0 0 2-2v-3"/></svg></div>
+    </div>
+  </div>
+
+  <!-- 左 dock -->
+  <div class="dock glass">
+    <div class="nav"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16z"/></svg><span class="tip">現場填單</span></div>
+    <div class="nav active"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg><span class="tip">交付中心</span></div>
+    <div class="nav"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/></svg><span class="tip">管理</span></div>
+    <div class="sep"></div>
+    <div class="nav"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 0 0-1.7-1l-.3-2.6h-4l-.3 2.6a7 7 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 1.7 1l.3 2.6h4l.3-2.6a7 7 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6a7 7 0 0 0 .1-1z"/></svg><span class="tip">系統</span></div>
+  </div>
+
+  <!-- 中央卡片 -->
+  <div class="stagecards">
+    <!-- 左卡 -->
+    <div class="card side left glass">
+      <div class="head"><div><div class="rid">20260112-02</div><div class="series">Series 0547</div></div><span class="pill ok">已輸出</span></div>
+      <div class="thumbs"><div class="thumb t-before"><span>BEFORE</span></div><div class="thumb t-after"><span>AFTER</span></div></div>
+      <div class="chips"><span class="chip k">2A2</span><span class="chip k">2A3</span><span class="chip">裁切重焊</span></div>
+    </div>
+
+    <!-- 右卡 -->
+    <div class="card side right glass">
+      <div class="head"><div><div class="rid">20260112-05</div><div class="series">Series 0613</div></div><span class="pill warn">缺後照</span></div>
+      <div class="thumbs"><div class="thumb t-before"><span>BEFORE</span></div><div class="thumb" style="background:rgba(255,255,255,.06);display:grid;place-items:center"><span style="position:static">待補</span></div></div>
+      <div class="chips"><span class="chip k">3A1</span><span class="chip">加長</span></div>
+    </div>
+
+    <!-- 焦點卡 -->
+    <div class="card focus glass">
+      <div class="head"><div><div class="rid">20260112-03</div><div class="series">Series 0547 · LINE 6"-CS</div></div><span class="pill ok">已輸出</span></div>
+      <div class="thumbs">
+        <div class="thumb t-before"><span>BEFORE</span></div>
+        <div class="thumb t-after"><span>AFTER</span></div>
+      </div>
+      <div class="chips"><span class="chip k">2A2=6"</span><span class="chip k">2A3=6"</span><span class="chip k">3A1=4"</span><span class="chip">裁切重焊</span><span class="chip">3 焊口</span></div>
+      <div class="actions">
+        <div class="act primary"><svg class="ic" viewBox="0 0 24 24" style="stroke:#06241d"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M5 14a7 7 0 0 0 12 3M19 10A7 7 0 0 0 7 7"/></svg>重新輸出</div>
+        <div class="act"><svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg>預檢</div>
+        <div class="act"><svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-7-5.7-7-11a7 7 0 0 1 14 0c0 5.3-7 11-7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>定位</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右 FAB -->
+  <div class="fabs">
+    <div class="fab accent"><svg class="ic" viewBox="0 0 24 24" style="stroke:#06241d"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M5 14a7 7 0 0 0 12 3M19 10A7 7 0 0 0 7 7"/></svg></div>
+    <div class="fab glass"><svg class="ic" viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M21 12a9 9 0 1 1-6.2-8.5"/></svg></div>
+    <div class="fab glass"><svg class="ic" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3m13 5h3a2 2 0 0 0 2-2v-3"/></svg></div>
+  </div>
+
+  <!-- 底部輸出列 -->
+  <div class="transport glass">
+    <div class="play"><svg class="ic" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+    <div class="tmeta"><div class="t1">本次輸出批次</div><div class="t2">12 / 14 已輸出 · 2 待補照片</div></div>
+    <div class="scrub">
+      <div class="track">
+        <div class="fill"></div>
+        <div class="seg" style="left:20%"></div><div class="seg" style="left:38%"></div>
+        <div class="seg" style="left:52%"></div><div class="seg" style="left:80%;background:rgba(255,207,107,.9)"></div>
+        <div class="dot" style="left:64%"></div>
+      </div>
+      <div class="time"><span>已產出 12 張修改單</span><span>剩餘 2 · 約 0:18</span></div>
+    </div>
+    <div class="tright">
+      <div class="tag-warn"><svg class="ic" viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>2 筆缺照</div>
+      <div class="circle"><svg class="ic" viewBox="0 0 24 24"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/></svg></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
