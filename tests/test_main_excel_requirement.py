@@ -21,6 +21,7 @@ def _args(**overrides):
         "health_check": False,
         "audit_integrity": False,
         "diagnostics": False,
+        "diagnostics_probe": False,
     }
     data.update(overrides)
     return SimpleNamespace(**data)
@@ -30,6 +31,7 @@ def test_support_commands_do_not_require_excel_runtime():
     assert app_main._requires_excel_runtime(_args(health_check=True)) is False
     assert app_main._requires_excel_runtime(_args(audit_integrity=True)) is False
     assert app_main._requires_excel_runtime(_args(diagnostics=True)) is False
+    assert app_main._requires_excel_runtime(_args(diagnostics_probe=True)) is False
     assert app_main._requires_excel_runtime(_args()) is True
 
 

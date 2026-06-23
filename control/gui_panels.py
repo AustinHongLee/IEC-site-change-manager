@@ -3338,6 +3338,11 @@ class HealthCheckPanel(QWidget):
         btn_support.clicked.connect(self.create_support_bundle)
         top_row.addWidget(btn_support)
 
+        btn_probe_support = QPushButton("深度診斷包")
+        btn_probe_support.setToolTip("產生診斷 zip，並探測 Excel COM / LibreOffice 實際狀態")
+        btn_probe_support.clicked.connect(lambda: self.create_support_bundle(probe=True))
+        top_row.addWidget(btn_probe_support)
+
         btn_about = QPushButton("版本資訊")
         btn_about.clicked.connect(self.show_app_info)
         top_row.addWidget(btn_about)
@@ -3449,18 +3454,23 @@ class HealthCheckPanel(QWidget):
         QMessageBox.information(self, "修復完成", repaired)
         self.run_check()
 
-    def create_support_bundle(self):
+    def create_support_bundle(self, probe: bool = False):
         from diagnostics import collect_support_bundle
 
         try:
-            result = collect_support_bundle(BASE_DIR)
+            result = collect_support_bundle(
+                BASE_DIR,
+                probe_com_application=probe,
+                probe_libreoffice_version=probe,
+            )
         except Exception as exc:
             QMessageBox.critical(self, "支援診斷包失敗", str(exc))
             return
 
+        title = "深度診斷包完成" if probe else "支援診斷包完成"
         QMessageBox.information(
             self,
-            "支援診斷包完成",
+            title,
             "已產生支援診斷包：\n"
             f"{result.get('bundle_path', '')}\n\n"
             f"啟動判斷：{result.get('startup_action', '')}",

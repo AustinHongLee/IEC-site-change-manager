@@ -73,6 +73,8 @@ def collect_support_bundle(
     *,
     output_dir: str | Path | None = None,
     timestamp: datetime | None = None,
+    probe_com_application: bool = False,
+    probe_libreoffice_version: bool = False,
 ) -> dict[str, Any]:
     root = Path(project_root).resolve()
     created_at = timestamp or datetime.now()
@@ -84,8 +86,8 @@ def collect_support_bundle(
     decision = build_startup_decision(guard)
     integrity = audit_integrity(root)
     capability = build_output_capability_report(
-        probe_com_application=False,
-        probe_libreoffice_version=False,
+        probe_com_application=probe_com_application,
+        probe_libreoffice_version=probe_libreoffice_version,
     )
 
     diagnostics = {
@@ -138,6 +140,10 @@ def collect_support_bundle(
             },
         },
         "output_capabilities": capability,
+        "probe": {
+            "com_application": probe_com_application,
+            "libreoffice_version": probe_libreoffice_version,
+        },
     }
     health_text = "\n\n".join(
         [

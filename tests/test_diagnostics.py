@@ -10,6 +10,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
+import diagnostics as diagnostics_module
 from diagnostics import _collect_log_excerpts, collect_support_bundle
 
 
@@ -82,6 +83,36 @@ def test_collect_support_bundle_includes_recent_logs(tmp_path):
         names = set(bundle.namelist())
         assert "logs/app.log" in names
         assert "RC0 smoke 測試訊息" in bundle.read("logs/app.log").decode("utf-8")
+
+
+def test_collect_support_bundle_can_enable_output_probes(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_capability_report(*, probe_com_application, probe_libreoffice_version):
+        captured["probe_com_application"] = probe_com_application
+        captured["probe_libreoffice_version"] = probe_libreoffice_version
+        return {"ok": True, "capabilities": []}
+
+    monkeypatch.setattr(diagnostics_module, "build_output_capability_report", fake_capability_report)
+
+    result = collect_support_bundle(
+        tmp_path,
+        output_dir=tmp_path / "out",
+        timestamp=datetime(2026, 6, 22, 12, 0, 0),
+        probe_com_application=True,
+        probe_libreoffice_version=True,
+    )
+
+    assert captured == {
+        "probe_com_application": True,
+        "probe_libreoffice_version": True,
+    }
+    with zipfile.ZipFile(result["bundle_path"]) as bundle:
+        diagnostics = json.loads(bundle.read("diagnostics.json").decode("utf-8"))
+    assert diagnostics["probe"] == {
+        "com_application": True,
+        "libreoffice_version": True,
+    }
 
 
 def test_collect_log_excerpts_limits_to_newest_files_and_tails_large_logs(tmp_path):

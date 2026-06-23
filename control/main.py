@@ -91,16 +91,27 @@ def main():
         '--diagnostics-output', type=str, default='',
         help='支援診斷包輸出資料夾'
     )
+    parser.add_argument(
+        '--diagnostics-probe', action='store_true',
+        help='產生支援診斷包並深度探測 Excel COM / LibreOffice 狀態'
+    )
     
     args = parser.parse_args()
 
-    if args.diagnostics:
+    if args.diagnostics or args.diagnostics_probe:
         from config import BASE_DIR
         from diagnostics import collect_support_bundle
 
-        result = collect_support_bundle(BASE_DIR, output_dir=args.diagnostics_output or None)
+        result = collect_support_bundle(
+            BASE_DIR,
+            output_dir=args.diagnostics_output or None,
+            probe_com_application=args.diagnostics_probe,
+            probe_libreoffice_version=args.diagnostics_probe,
+        )
         print(f"支援診斷包: {result['bundle_path']}")
         print(f"啟動判斷: {result['startup_action']}")
+        if args.diagnostics_probe:
+            print("深度探測: enabled")
         return
 
     project_lock = None
@@ -125,7 +136,12 @@ def main():
 
 def _requires_excel_runtime(args) -> bool:
     """Normal app usage requires Excel; support-only commands stay available."""
-    return not (args.health_check or args.audit_integrity or args.diagnostics)
+    return not (
+        args.health_check
+        or args.audit_integrity
+        or args.diagnostics
+        or getattr(args, "diagnostics_probe", False)
+    )
 
 
 def _enforce_excel_requirement(args) -> None:
@@ -211,6 +227,7 @@ def _is_gui_request(args) -> bool:
     return not (
         args.cli or args.date or args.retry or args.health_check
         or args.audit_integrity or args.diagnostics
+        or getattr(args, "diagnostics_probe", False)
     )
 
 

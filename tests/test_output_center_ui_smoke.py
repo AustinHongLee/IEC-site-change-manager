@@ -79,6 +79,7 @@ def test_main_window_smoke_keeps_output_center_reachable(qapp):
 
         health_buttons = {button.text() for button in window.health_panel.findChildren(QPushButton)}
         assert "支援診斷包" in health_buttons
+        assert "深度診斷包" in health_buttons
         assert "版本資訊" in health_buttons
     finally:
         window.close()
@@ -90,10 +91,10 @@ def test_health_panel_support_bundle_button_uses_diagnostics(qapp, monkeypatch):
 
     window = MainWindow()
     messages = []
-    captured = {}
+    captured = []
 
     def fake_collect(project_root, **kwargs):
-        captured["project_root"] = str(project_root)
+        captured.append({"project_root": str(project_root), **kwargs})
         return {
             "ok": True,
             "bundle_path": r"C:\Temp\support_bundle.zip",
@@ -109,10 +110,16 @@ def test_health_panel_support_bundle_button_uses_diagnostics(qapp, monkeypatch):
 
     try:
         window.health_panel.create_support_bundle()
+        window.health_panel.create_support_bundle(probe=True)
 
-        assert captured["project_root"]
-        assert messages
+        assert captured[0]["project_root"]
+        assert captured[0]["probe_com_application"] is False
+        assert captured[0]["probe_libreoffice_version"] is False
+        assert captured[1]["probe_com_application"] is True
+        assert captured[1]["probe_libreoffice_version"] is True
+        assert len(messages) == 2
         assert messages[0][0] == "支援診斷包完成"
+        assert messages[1][0] == "深度診斷包完成"
         assert "support_bundle.zip" in messages[0][1]
     finally:
         window.close()
