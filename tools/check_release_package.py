@@ -24,7 +24,7 @@ if _CONTROL_DIR not in sys.path:
 
 from app_info import APP_VERSION
 from console_io import configure_utf8_stdio
-from project_guard import build_startup_decision, inspect_project
+from project_guard import DISTRIBUTION_ARTIFACT_NAMES, build_startup_decision, inspect_project
 from run_packaged_cli_smoke import (
     DEFAULT_CASE_DATE as DEFAULT_CLI_SMOKE_DATE,
     DEFAULT_CASE_FOLDER as DEFAULT_CLI_SMOKE_FOLDER,
@@ -35,7 +35,7 @@ from run_packaged_cli_smoke import (
 
 DEFAULT_PACKAGE_DIR = Path(_ROOT) / "dist" / "IEC-site-change-manager"
 DEFAULT_EXE_NAME = "IEC-site-change-manager.exe"
-ALLOWED_TOP_LEVEL = {DEFAULT_EXE_NAME, "_internal"}
+ALLOWED_TOP_LEVEL = {DEFAULT_EXE_NAME, "_internal", *DISTRIBUTION_ARTIFACT_NAMES}
 BUILD_INFO_SCHEMA = "build_info.v1"
 REQUIRED_INTERNAL_ASSETS = (
     ("template", "dir"),
@@ -71,6 +71,11 @@ def _check_asset(path: Path, kind: str) -> bool:
     if kind == "file":
         return path.is_file()
     raise ValueError(f"unknown asset kind: {kind}")
+
+
+def _is_allowed_top_level(name: str, allowed: set[str]) -> bool:
+    normalized = name.casefold()
+    return any(normalized == item.casefold() for item in allowed)
 
 
 def _current_git_commit() -> tuple[str, str]:
@@ -335,7 +340,7 @@ def check_release_package(
     allowed = set(ALLOWED_TOP_LEVEL)
     allowed.add(exe_name)
     for child in sorted(package.iterdir(), key=lambda item: item.name.lower()):
-        if child.name not in allowed:
+        if not _is_allowed_top_level(child.name, allowed):
             issues.append(_issue("error", "top_level_extra", "release package 頂層不應夾帶專案資料或雜檔。", child))
 
     for relative, kind in REQUIRED_INTERNAL_ASSETS:

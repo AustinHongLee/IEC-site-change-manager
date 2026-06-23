@@ -125,3 +125,19 @@ def test_check_release_package_rejects_top_level_project_data(tmp_path):
     data = json.loads(result.stdout)
     assert data["ok"] is False
     assert any(issue["code"] == "top_level_extra" for issue in data["issues"])
+
+
+def test_check_release_package_allows_distribution_top_level_artifacts(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    package = make_package(tmp_path)
+    (package / "README.txt").write_text("release notes", encoding="utf-8")
+    (package / "使用說明.txt").write_text("使用說明", encoding="utf-8")
+    (package / "啟動工務修改單.bat").write_text("@echo off\n", encoding="utf-8")
+    (package / "LibreOffice").mkdir()
+
+    result = run_tool(repo, "--package-dir", str(package), "--json")
+
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["startup"]["decision"]["action"] == "initialize"

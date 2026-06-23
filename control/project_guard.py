@@ -39,6 +39,20 @@ BOOTSTRAP_REPAIR_CODES = {
     *(f"missing_dir_{dirname}" for dirname in REQUIRED_DIRS),
 }
 RUNTIME_ARTIFACT_NAMES = {"IEC-site-change-manager.exe", "_internal"}
+DISTRIBUTION_ARTIFACT_NAMES = {
+    "README.md",
+    "README.txt",
+    "使用說明.md",
+    "使用說明.txt",
+    "啟動工務修改單.bat",
+    "啟動工務修改單.cmd",
+    "LibreOffice",
+}
+
+
+def _name_matches(name: str, allowed: set[str]) -> bool:
+    normalized = name.casefold()
+    return any(normalized == item.casefold() for item in allowed)
 
 
 def now_iso() -> str:
@@ -308,12 +322,17 @@ def _has_attachment_folders(root: Path) -> bool:
 def _looks_empty_project_root(root: Path) -> bool:
     known = set(REQUIRED_DIRS) | {PROJECT_MARKER, "settings.json"}
     try:
-        visible = [
-            p.name for p in root.iterdir()
-            if not p.name.startswith(".git") and p.name not in RUNTIME_ARTIFACT_NAMES
-        ]
+        names = [p.name for p in root.iterdir() if not p.name.startswith(".git")]
     except OSError:
         return False
+    has_runtime_artifact = any(_name_matches(name, RUNTIME_ARTIFACT_NAMES) for name in names)
+    visible = []
+    for name in names:
+        if _name_matches(name, RUNTIME_ARTIFACT_NAMES):
+            continue
+        if has_runtime_artifact and _name_matches(name, DISTRIBUTION_ARTIFACT_NAMES):
+            continue
+        visible.append(name)
     return not visible or all(name in known for name in visible)
 
 

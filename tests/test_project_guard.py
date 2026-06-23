@@ -85,6 +85,36 @@ def test_runtime_artifacts_do_not_block_first_open(tmp_path):
     assert decision.action == "initialize"
 
 
+def test_distribution_docs_do_not_block_packaged_first_open(tmp_path):
+    from project_guard import build_startup_decision, inspect_project
+
+    (tmp_path / "IEC-site-change-manager.exe").write_text("fake exe", encoding="utf-8")
+    (tmp_path / "_internal").mkdir()
+    (tmp_path / "README.txt").write_text("release notes", encoding="utf-8")
+    (tmp_path / "使用說明.txt").write_text("使用說明", encoding="utf-8")
+    (tmp_path / "啟動工務修改單.bat").write_text("@echo off\n", encoding="utf-8")
+    (tmp_path / "LibreOffice").mkdir()
+
+    result = inspect_project(tmp_path)
+    decision = build_startup_decision(result)
+
+    assert result.state == "first_open"
+    assert decision.action == "initialize"
+
+
+def test_distribution_docs_without_runtime_artifacts_still_block_wrong_folder(tmp_path):
+    from project_guard import build_startup_decision, inspect_project
+
+    (tmp_path / "README.txt").write_text("not a package", encoding="utf-8")
+
+    result = inspect_project(tmp_path)
+    decision = build_startup_decision(result)
+
+    assert result.has_blocking_issues is True
+    assert any(i.code == "possible_wrong_folder" for i in result.issues)
+    assert decision.action == "blocked_wrong_folder"
+
+
 def test_invalid_records_json_blocks_repair(tmp_path):
     from project_guard import build_startup_decision, inspect_project, repair_project
 
