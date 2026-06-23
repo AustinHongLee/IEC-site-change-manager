@@ -40,10 +40,10 @@ GENERATED_BUILD_INFO = _ROOT / "packaging" / "generated" / "build_info.json"
 BUILD_INFO_SCHEMA = "build_info.v1"
 
 
-def _git_stdout(*args: str) -> str:
+def _git_stdout(*args: str, cwd: Path = _ROOT) -> str:
     completed = subprocess.run(
         ["git", *args],
-        cwd=_ROOT,
+        cwd=cwd,
         text=True,
         encoding="utf-8",
         stdout=subprocess.PIPE,
@@ -60,22 +60,8 @@ def _current_git_commit() -> str:
     return _git_stdout("rev-parse", "HEAD")
 
 
-def _source_dirty() -> bool:
-    completed = subprocess.run(
-        ["git", "diff-index", "--quiet", "HEAD", "--"],
-        cwd=_ROOT,
-        text=True,
-        encoding="utf-8",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if completed.returncode == 0:
-        return False
-    if completed.returncode == 1:
-        return True
-    message = (completed.stderr or completed.stdout or "").strip()
-    raise RuntimeError(message or "git diff-index --quiet HEAD -- failed")
+def _source_dirty(cwd: Path = _ROOT) -> bool:
+    return bool(_git_stdout("status", "--porcelain", cwd=cwd))
 
 
 def _write_build_info(path: Path = GENERATED_BUILD_INFO) -> dict[str, Any]:
@@ -186,6 +172,7 @@ def build_release(
     cli_smoke_folder: str = DEFAULT_CLI_SMOKE_FOLDER,
     cli_smoke_timeout: int = 180,
     cli_smoke_with_pdf: bool = False,
+    allow_dirty: bool = False,
     create_archive: bool = False,
     archive_dir: str | Path = DEFAULT_ARCHIVE_DIR,
 ) -> dict[str, Any]:
@@ -197,6 +184,7 @@ def build_release(
         "spec_path": str(spec),
         "package_dir": str(package),
         "build_info": {"generated": False},
+        "allow_dirty": allow_dirty,
         "build": {"skipped": skip_build},
         "package_check": None,
         "archive": None,
@@ -225,6 +213,7 @@ def build_release(
         cli_smoke_folder=cli_smoke_folder,
         cli_smoke_timeout=cli_smoke_timeout,
         cli_smoke_with_pdf=cli_smoke_with_pdf,
+        allow_dirty=allow_dirty,
     )
     result["package_check"] = package_check
     result["ok"] = bool(package_check.get("ok"))
@@ -295,6 +284,7 @@ def main() -> int:
     parser.add_argument("--cli-smoke-folder", default=DEFAULT_CLI_SMOKE_FOLDER, help="CLI smoke 測試附件資料夾")
     parser.add_argument("--cli-smoke-timeout", type=int, default=180, help="CLI smoke 單一 exe 呼叫 timeout 秒數")
     parser.add_argument("--cli-smoke-with-pdf", action="store_true", help="CLI smoke 同時要求匯出 PDF")
+    parser.add_argument("--allow-dirty", action="store_true", help="允許 source_dirty=true 的 package 通過 gate；僅供除錯，不適合正式交付")
     parser.add_argument("--archive", action="store_true", help="package gate 通過後產生 zip 與 sha256")
     parser.add_argument("--archive-dir", default=str(DEFAULT_ARCHIVE_DIR), help="release archive 輸出資料夾")
     parser.add_argument("--json", action="store_true", help="輸出 JSON")
@@ -311,6 +301,7 @@ def main() -> int:
         cli_smoke_folder=args.cli_smoke_folder,
         cli_smoke_timeout=args.cli_smoke_timeout,
         cli_smoke_with_pdf=args.cli_smoke_with_pdf,
+        allow_dirty=args.allow_dirty,
         create_archive=args.archive,
         archive_dir=args.archive_dir,
     )

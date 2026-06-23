@@ -24,13 +24,20 @@ def current_git_commit(repo: Path) -> str:
     return result.stdout.strip()
 
 
-def write_build_info(package: Path, repo: Path, *, git_commit: str | None = None, app_version: str = APP_VERSION):
+def write_build_info(
+    package: Path,
+    repo: Path,
+    *,
+    git_commit: str | None = None,
+    app_version: str = APP_VERSION,
+    source_dirty: bool = False,
+):
     info = {
         "schema_version": "build_info.v1",
         "app_version": app_version,
         "git_commit": git_commit or current_git_commit(repo),
         "built_at": "2026-06-22T00:00:00Z",
-        "source_dirty": False,
+        "source_dirty": source_dirty,
     }
     (package / "_internal" / "build_info.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
 
@@ -99,6 +106,34 @@ def test_check_release_package_rejects_stale_build_commit(tmp_path):
     assert data["ok"] is False
     assert data["build_info"]["expected_git_commit"] == current_git_commit(repo)
     assert any(issue["code"] == "build_info_git_commit_mismatch" for issue in data["issues"])
+
+
+def test_check_release_package_rejects_dirty_build_info_by_default(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    package = make_package(tmp_path)
+    write_build_info(package, repo, source_dirty=True)
+
+    result = run_tool(repo, "--package-dir", str(package), "--json")
+
+    assert result.returncode == 1
+    data = json.loads(result.stdout)
+    assert data["ok"] is False
+    assert data["build_info"]["ok"] is False
+    assert any(issue["code"] == "build_info_source_dirty" for issue in data["issues"])
+
+
+def test_check_release_package_allow_dirty_downgrades_dirty_build_info_to_warning(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    package = make_package(tmp_path)
+    write_build_info(package, repo, source_dirty=True)
+
+    result = run_tool(repo, "--package-dir", str(package), "--allow-dirty", "--json")
+
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    warning = next(issue for issue in data["issues"] if issue["code"] == "build_info_source_dirty")
+    assert warning["severity"] == "warning"
 
 
 def test_check_release_package_rejects_missing_asset(tmp_path):

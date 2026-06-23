@@ -94,7 +94,7 @@ def _current_git_commit() -> tuple[str, str]:
     return completed.stdout.strip(), ""
 
 
-def _validate_build_info(internal: Path) -> dict[str, Any]:
+def _validate_build_info(internal: Path, *, allow_dirty: bool = False) -> dict[str, Any]:
     path = internal / "build_info.json"
     result: dict[str, Any] = {
         "ok": False,
@@ -102,6 +102,7 @@ def _validate_build_info(internal: Path) -> dict[str, Any]:
         "data": None,
         "expected_app_version": APP_VERSION,
         "expected_git_commit": "",
+        "allow_dirty": allow_dirty,
         "errors": [],
         "warnings": [],
     }
@@ -130,8 +131,10 @@ def _validate_build_info(internal: Path) -> dict[str, Any]:
         result["errors"].append({"code": "app_version_mismatch", "message": "build_info app_version 與 app_info.APP_VERSION 不一致。"})
     if expected_commit and data.get("git_commit") != expected_commit:
         result["errors"].append({"code": "git_commit_mismatch", "message": "build_info git_commit 不是目前 HEAD。"})
-    if data.get("source_dirty") is True:
+    if data.get("source_dirty") is True and allow_dirty:
         result["warnings"].append({"code": "source_dirty", "message": "此 package 建置時工作樹不是完全乾淨。"})
+    elif data.get("source_dirty") is True:
+        result["errors"].append({"code": "source_dirty", "message": "此 package 建置時工作樹不是完全乾淨。正式交付請用乾淨工作樹重建。"})
 
     result["ok"] = not result["errors"]
     return result
@@ -311,6 +314,7 @@ def check_release_package(
     cli_smoke_folder: str = DEFAULT_CLI_SMOKE_FOLDER,
     cli_smoke_timeout: int = 180,
     cli_smoke_with_pdf: bool = False,
+    allow_dirty: bool = False,
 ) -> dict[str, Any]:
     package = Path(package_dir).resolve()
     exe_path = package / exe_name
@@ -348,7 +352,7 @@ def check_release_package(
         if not _check_asset(asset_path, kind):
             issues.append(_issue("error", "missing_internal_asset", f"缺少打包內嵌資產：{relative}", asset_path))
 
-    build_info = _validate_build_info(internal)
+    build_info = _validate_build_info(internal, allow_dirty=allow_dirty)
     for problem in build_info.get("errors") or []:
         issues.append(_issue("error", f"build_info_{problem.get('code')}", problem.get("message", "build_info 驗證失敗。"), build_info.get("path", "")))
     for problem in build_info.get("warnings") or []:
@@ -497,6 +501,7 @@ def main() -> int:
     parser.add_argument("--cli-smoke-folder", default=DEFAULT_CLI_SMOKE_FOLDER, help="CLI smoke 測試附件資料夾")
     parser.add_argument("--cli-smoke-timeout", type=int, default=180, help="CLI smoke 單一 exe 呼叫 timeout 秒數")
     parser.add_argument("--cli-smoke-with-pdf", action="store_true", help="CLI smoke 同時要求匯出 PDF")
+    parser.add_argument("--allow-dirty", action="store_true", help="允許 source_dirty=true 的 package 通過 gate；僅供除錯，不適合正式交付")
     parser.add_argument("--json", action="store_true", help="輸出 JSON")
     args = parser.parse_args()
 
@@ -511,6 +516,7 @@ def main() -> int:
         cli_smoke_folder=args.cli_smoke_folder,
         cli_smoke_timeout=args.cli_smoke_timeout,
         cli_smoke_with_pdf=args.cli_smoke_with_pdf,
+        allow_dirty=args.allow_dirty,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))

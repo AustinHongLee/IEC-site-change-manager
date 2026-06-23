@@ -11,6 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "control"))
 
 from app_info import APP_VERSION
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+
+from build_release import _source_dirty
+
 
 def current_git_commit(repo: Path) -> str:
     result = subprocess.run(
@@ -25,13 +29,13 @@ def current_git_commit(repo: Path) -> str:
     return result.stdout.strip()
 
 
-def write_build_info(package: Path, repo: Path):
+def write_build_info(package: Path, repo: Path, *, source_dirty: bool = False):
     info = {
         "schema_version": "build_info.v1",
         "app_version": APP_VERSION,
         "git_commit": current_git_commit(repo),
         "built_at": "2026-06-22T00:00:00Z",
-        "source_dirty": False,
+        "source_dirty": source_dirty,
     }
     (package / "_internal" / "build_info.json").write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
 
@@ -101,6 +105,39 @@ def test_build_release_skip_build_reports_package_failure(tmp_path):
     data = json.loads(result.stdout)
     assert data["ok"] is False
     assert data["reason"] == "package_check_failed"
+
+
+def test_build_release_skip_build_allow_dirty_passes_dirty_package(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    package = make_package(tmp_path)
+    write_build_info(package, repo, source_dirty=True)
+
+    result = run_tool(
+        repo,
+        "--skip-build",
+        "--no-health-check",
+        "--no-cli-smoke",
+        "--allow-dirty",
+        "--package-dir",
+        str(package),
+        "--json",
+    )
+
+    assert result.returncode == 0
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["allow_dirty"] is True
+    warning = next(issue for issue in data["package_check"]["issues"] if issue["code"] == "build_info_source_dirty")
+    assert warning["severity"] == "warning"
+
+
+def test_source_dirty_detects_untracked_files(tmp_path):
+    subprocess.run(["git", "init"], cwd=tmp_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    assert _source_dirty(tmp_path) is False
+
+    (tmp_path / "untracked.txt").write_text("new file", encoding="utf-8")
+
+    assert _source_dirty(tmp_path) is True
 
 
 def test_build_release_archive_writes_zip_and_checksum(tmp_path):
