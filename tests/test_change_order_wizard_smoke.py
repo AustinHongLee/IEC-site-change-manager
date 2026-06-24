@@ -76,12 +76,25 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
     before_path = tmp_path / "before.jpg"
     after_path = tmp_path / "after.JPG"
     drawing_path = tmp_path / "drawing-source.pdf"
+    staging_root = tmp_path / "staging"
+    staging_root.mkdir()
+    staging_before = staging_root / "stage-before.jpg"
+    staging_pdf = staging_root / "stage-drawing.pdf"
     before_path.write_bytes(b"before")
     after_path.write_bytes(b"after")
     drawing_path.write_bytes(b"%PDF")
+    staging_before.write_bytes(b"stage-before")
+    staging_pdf.write_bytes(b"%PDF-stage")
 
     dialog = ChangeOrderWizard(builder=_builder_for_fixture(tmp_path), attachments_root=attachments_root)
     try:
+        assert dialog.splitter.count() == 2
+        assert not dialog.sidebar.isHidden()
+        dialog.toggle_sidebar()
+        assert dialog.sidebar.isHidden()
+        dialog.toggle_sidebar()
+        assert not dialog.sidebar.isHidden()
+
         tabs = dialog.findChild(QTabWidget)
         assert tabs is not None
         assert [tabs.tabText(index) for index in range(tabs.count())] == [
@@ -93,6 +106,11 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         assert dialog.weld_table.horizontalHeaderItem(0).text() == "焊口碼"
         assert dialog.photo_table.horizontalHeaderItem(0).text() == "角色"
         assert dialog.material_table.horizontalHeaderItem(0).text() == "零件"
+        assert dialog.staging_table.rowCount() == 2
+        assert {
+            dialog.staging_table.item(row, 0).text()
+            for row in range(dialog.staging_table.rowCount())
+        } == {"stage-before.jpg", "stage-drawing.pdf"}
 
         dialog.series_edit.setText("088")
         dialog.date_edit.setText("20260624")
@@ -101,11 +119,19 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
 
         assert dialog.co.series == "88"
         assert dialog.co.dwg_no == "DWG-88"
+        assert dialog.source_weld_table.horizontalHeaderItem(0).text() == "現有焊口"
+        assert dialog.source_weld_table.rowCount() == 2
+        assert dialog.source_weld_table.item(0, 0).text() == "2"
+        assert dialog.source_weld_table.item(0, 1).text() == "2"
+        assert dialog.source_weld_table.item(1, 0).text() == "2a"
+        assert dialog.source_weld_table.item(1, 1).text() == "2"
 
         _set_combo_text(dialog.existing_op_combo, Op.EXTEND.value)
-        dialog.existing_base_edit.setText("2")
+        dialog.source_weld_table.selectRow(0)
+        assert dialog.existing_base_edit.text() == "2"
         first_existing = dialog.add_existing_request()
-        dialog.existing_base_edit.setText("2")
+        dialog.source_weld_table.selectRow(1)
+        assert dialog.existing_base_edit.text() == "2"
         second_existing = dialog.add_existing_request()
 
         assert first_existing.code == "2b"
@@ -158,6 +184,23 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         dialog.rebuild_change_order()
         assert dialog.co.status == Status.COMPLETE
         assert dialog.status_label.text() == "狀態：完整"
+        assert dialog.selected_preview_table.rowCount() >= 6
+
+        for row in range(dialog.staging_table.rowCount()):
+            if dialog.staging_table.item(row, 0).text() == "stage-before.jpg":
+                dialog.staging_table.selectRow(row)
+                break
+        assert dialog._add_selected_staging_photo("before") == str(staging_before)
+        assert str(staging_before) in dialog.before_files
+
+        for row in range(dialog.staging_table.rowCount()):
+            if dialog.staging_table.item(row, 0).text() == "stage-drawing.pdf":
+                dialog.staging_table.selectRow(row)
+                break
+        assert dialog._set_selected_staging_pdf() == str(staging_pdf)
+        assert dialog.drawing_pdf_file == str(staging_pdf)
+        dialog.before_files.remove(str(staging_before))
+        dialog.set_drawing_pdf_file(drawing_path)
 
         saved_path = dialog.save_draft()
         loaded = ChangeOrder.load_json(saved_path)
@@ -178,11 +221,14 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         assert loaded.materials[0].component == "Pipe"
         assert loaded.materials[0].schedule == "SCH40"
         assert loaded.materials[0].remark == "現場補料"
+        assert dialog.history_table.rowCount() == 1
+        assert dialog.history_table.item(0, 0).text() == "88_20260624_01"
 
         second_path = dialog.create_final()
         second_loaded = ChangeOrder.load_json(second_path)
         assert second_path == attachments_root / "88_20260624_02" / "change_order.json"
         assert second_loaded.status == Status.COMPLETE
+        assert dialog.history_table.rowCount() == 2
     finally:
         dialog.close()
         dialog.deleteLater()
