@@ -72,8 +72,15 @@ def _set_combo_text(combo, text):
 
 
 def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
-    records_root = tmp_path / "records"
-    dialog = ChangeOrderWizard(builder=_builder_for_fixture(tmp_path), records_root=records_root)
+    attachments_root = tmp_path / "records"
+    before_path = tmp_path / "before.jpg"
+    after_path = tmp_path / "after.JPG"
+    drawing_path = tmp_path / "drawing-source.pdf"
+    before_path.write_bytes(b"before")
+    after_path.write_bytes(b"after")
+    drawing_path.write_bytes(b"%PDF")
+
+    dialog = ChangeOrderWizard(builder=_builder_for_fixture(tmp_path), attachments_root=attachments_root)
     try:
         dialog.series_edit.setText("088")
         dialog.date_edit.setText("20260624")
@@ -117,16 +124,50 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         assert [w.code for w in dialog.co.welds] == ["2b", "2c", "1001"]
         assert dialog.weld_table.item(2, 0).text() == "1001"
 
+        assert dialog.create_final() is None
+        assert dialog.co.status == Status.PARTIAL
+        assert "正式建立被擋" in dialog.status_label.text()
+
+        dialog.add_photo_file("before", before_path)
+        dialog.add_photo_file("after", after_path)
+        dialog.set_drawing_pdf_file(drawing_path)
+        dialog.material_component_edit.setText("Pipe")
+        dialog.material_size_edit.setText('2"')
+        dialog.material_sch_edit.setText("SCH40")
+        dialog.material_material_edit.setText("SUS304")
+        dialog.material_qty_edit.setText("2")
+        dialog.material_unit_edit.setText("M")
+        dialog.material_remark_edit.setText("現場補料")
+        dialog.add_material_request()
+
+        dialog.rebuild_change_order()
+        assert dialog.co.status == Status.COMPLETE
+        assert dialog.status_label.text() == "狀態：完整"
+
         saved_path = dialog.save_draft()
         loaded = ChangeOrder.load_json(saved_path)
 
-        assert saved_path == records_root / "88_20260624_01" / "change_order.json"
+        assert saved_path == attachments_root / "88_20260624_01" / "change_order.json"
         assert saved_path.exists()
+        assert (saved_path.parent / "before_1.jpg").read_bytes() == b"before"
+        assert (saved_path.parent / "after_1.JPG").read_bytes() == b"after"
+        assert (saved_path.parent / "drawing.pdf").read_bytes() == b"%PDF"
         assert loaded.id == "88_20260624_01"
         assert loaded.series == "88"
-        assert loaded.status == Status.PARTIAL
+        assert loaded.status == Status.COMPLETE
         assert loaded.reason == "現場管線干涉"
         assert [w.code for w in loaded.welds] == ["2b", "2c", "1001"]
+        assert [photo.file for photo in loaded.photos] == ["before_1.jpg", "after_1.JPG"]
+        assert loaded.drawing_pdf.file == "drawing.pdf"
+        assert len(loaded.materials) == 1
+        assert loaded.materials[0].component == "Pipe"
+        assert loaded.materials[0].schedule == "SCH40"
+        assert loaded.materials[0].remark == "現場補料"
+
+        second_path = dialog.create_final()
+        second_loaded = ChangeOrder.load_json(second_path)
+        assert second_path == attachments_root / "88_20260624_02" / "change_order.json"
+        assert second_loaded.status == Status.COMPLETE
     finally:
         dialog.close()
         dialog.deleteLater()
