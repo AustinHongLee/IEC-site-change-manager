@@ -1364,7 +1364,7 @@ def _first_change_order_photo(folder: Path, co: ChangeOrder) -> str:
             continue
         raw_path = Path(str(photo.file))
         candidate = raw_path if raw_path.is_absolute() else folder / raw_path
-        if candidate.exists() and _is_image_path(candidate):
+        if _is_previewable_image_path(candidate):
             return str(candidate)
     return ""
 
@@ -1375,9 +1375,13 @@ def _first_image_in_folder(folder: Path) -> str:
     except OSError:
         return ""
     for path in children:
-        if path.is_file() and _is_image_path(path):
+        if path.is_file() and _is_previewable_image_path(path):
             return str(path)
     return ""
+
+
+def _is_previewable_image_path(path: Path) -> bool:
+    return path.exists() and _is_image_path(path) and not QPixmap(str(path)).isNull()
 
 
 def _is_image_path(path: Path) -> bool:

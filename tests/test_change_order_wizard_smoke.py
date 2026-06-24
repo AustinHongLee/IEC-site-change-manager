@@ -295,6 +295,11 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.history_table.rowCount() == 2
         assert dialog.history_table.item(0, 0).text() == "88_20260624_01"
         assert dialog.history_table.item(1, 0).text() == "088_OLD"
+        dialog.history_table.selectRow(0)
+        new_history_pixmap = dialog.history_preview_label.pixmap()
+        assert new_history_pixmap is not None
+        assert not new_history_pixmap.isNull()
+        assert "after_1.JPG" in dialog.history_detail_label.text()
 
         second_path = dialog.create_final()
         second_loaded = ChangeOrder.load_json(second_path)
