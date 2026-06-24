@@ -71,9 +71,10 @@ def _set_combo_text(combo, text):
     combo.setCurrentIndex(index)
 
 
-def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
+def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypatch):
     attachments_root = tmp_path / "records"
     before_path = tmp_path / "before.jpg"
+    annotated_before_path = tmp_path / "before-annotated.jpg"
     after_path = tmp_path / "after.JPG"
     drawing_path = tmp_path / "drawing-source.pdf"
     staging_root = tmp_path / "staging"
@@ -81,6 +82,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
     staging_before = staging_root / "stage-before.jpg"
     staging_pdf = staging_root / "stage-drawing.pdf"
     before_path.write_bytes(b"before")
+    annotated_before_path.write_bytes(b"annotated-before")
     after_path.write_bytes(b"after")
     drawing_path.write_bytes(b"%PDF")
     staging_before.write_bytes(b"stage-before")
@@ -186,6 +188,29 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         assert dialog.status_label.text() == "狀態：完整"
         assert dialog.selected_preview_table.rowCount() >= 6
 
+        class FakeAnnotationDialog:
+            def __init__(self, path, is_pdf=False, parent=None):
+                self.path = path
+                self.is_pdf = is_pdf
+                self.parent = parent
+                self.was_saved = False
+                self.saved_path = ""
+                self._load_ok = True
+
+            def exec(self):
+                self.was_saved = True
+                self.saved_path = str(annotated_before_path)
+                return 1
+
+        monkeypatch.setattr(dialog, "_annotation_dialog_class", lambda: FakeAnnotationDialog)
+        for row in range(dialog.selected_preview_table.rowCount()):
+            if "修改前" in dialog.selected_preview_table.item(row, 1).text():
+                dialog.selected_preview_table.selectRow(row)
+                break
+        assert dialog.annotate_selected_preview() == str(annotated_before_path)
+        assert dialog.before_files[0] == str(annotated_before_path)
+        assert "已更新標註檔" in dialog.status_label.text()
+
         for row in range(dialog.staging_table.rowCount()):
             if dialog.staging_table.item(row, 0).text() == "stage-before.jpg":
                 dialog.staging_table.selectRow(row)
@@ -207,7 +232,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
 
         assert saved_path == attachments_root / "88_20260624_01" / "change_order.json"
         assert saved_path.exists()
-        assert (saved_path.parent / "before_1.jpg").read_bytes() == b"before"
+        assert (saved_path.parent / "before_1.jpg").read_bytes() == b"annotated-before"
         assert (saved_path.parent / "after_1.JPG").read_bytes() == b"after"
         assert (saved_path.parent / "drawing.pdf").read_bytes() == b"%PDF"
         assert loaded.id == "88_20260624_01"

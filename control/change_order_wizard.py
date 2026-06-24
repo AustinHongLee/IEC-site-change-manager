@@ -359,6 +359,13 @@ class ChangeOrderWizard(QDialog):
         layout.addWidget(self.selected_preview_table)
         self.selected_preview_empty_label = make_hint_label("尚未選取焊口、照片、PDF 或材料")
         layout.addWidget(self.selected_preview_empty_label)
+        row = QHBoxLayout()
+        annotate_button = QPushButton("標註選取")
+        annotate_button.setObjectName("annotate_selected_button")
+        annotate_button.clicked.connect(self.annotate_selected_preview)
+        row.addWidget(annotate_button)
+        row.addStretch(1)
+        layout.addLayout(row)
         return group
 
     def _build_staging_group(self) -> QGroupBox:
@@ -752,31 +759,86 @@ class ChangeOrderWizard(QDialog):
     def _refresh_selected_preview(self):
         if not hasattr(self, "selected_preview_table"):
             return
-        rows: list[tuple[str, str, str]] = []
+        rows: list[tuple[str, str, str, tuple | None]] = []
         welds = self.co.welds if self.co is not None else []
         for weld in welds:
             spec_text = "/".join(filter(None, [weld.spec.size, weld.spec.sch, weld.spec.material, weld.spec.weld_type]))
-            rows.append(("焊口", f"{weld.code or ''}（{_enum_value(weld.op) or ''}）", spec_text or "-"))
-        for file in self.before_files:
-            rows.append(("照片", f"修改前：{Path(file).name}", "已選"))
-        for file in self.after_files:
-            rows.append(("照片", f"修改後：{Path(file).name}", "已選"))
+            rows.append(("焊口", f"{weld.code or ''}（{_enum_value(weld.op) or ''}）", spec_text or "-", None))
+        for index, file in enumerate(self.before_files):
+            rows.append(("照片", f"修改前：{Path(file).name}", "可標註", ("before", index, file)))
+        for index, file in enumerate(self.after_files):
+            rows.append(("照片", f"修改後：{Path(file).name}", "可標註", ("after", index, file)))
         if self.drawing_pdf_file:
-            rows.append(("圖面", Path(self.drawing_pdf_file).name, "已選"))
+            rows.append(("圖面", Path(self.drawing_pdf_file).name, "可標註", ("pdf", None, self.drawing_pdf_file)))
         for material in self.material_requests:
             component = material.get("component") or "未命名材料"
             qty = material.get("qty") or ""
             unit = material.get("unit") or ""
-            rows.append(("材料", str(component), f"{qty}{unit}".strip() or "-"))
+            rows.append(("材料", str(component), f"{qty}{unit}".strip() or "-", None))
 
         self.selected_preview_table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
-            for col, value in enumerate(row):
+            values = row[:3]
+            payload = row[3]
+            for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                if col == 0 and payload is not None:
+                    item.setData(Qt.ItemDataRole.UserRole, payload)
                 self.selected_preview_table.setItem(row_index, col, item)
         self.selected_preview_table.resizeColumnsToContents()
         self.selected_preview_empty_label.setVisible(len(rows) == 0)
+
+    def annotate_selected_preview(self):
+        payload = self._selected_preview_payload()
+        if payload is None:
+            self.status_label.setText("請先在已選預覽中選擇照片或 PDF")
+            return None
+
+        kind, _index, file = payload
+        is_pdf = kind == "pdf"
+        path = str(file)
+        if not Path(path).exists():
+            self.status_label.setText(f"無法標註，檔案不存在：{path}")
+            return None
+
+        dialog_cls = self._annotation_dialog_class()
+        dialog = dialog_cls(path, is_pdf=is_pdf, parent=self)
+        if not getattr(dialog, "_load_ok", True):
+            QMessageBox.warning(self, "無法載入", f"無法開啟標註工具：\n{path}")
+            return None
+        dialog.exec()
+        if not getattr(dialog, "was_saved", False):
+            return None
+
+        saved_path = str(getattr(dialog, "saved_path", "") or path)
+        self._replace_selected_preview_path(payload, saved_path)
+        self.status_label.setText(f"已更新標註檔：{Path(saved_path).name}")
+        return saved_path
+
+    def _selected_preview_payload(self):
+        row = self.selected_preview_table.currentRow()
+        if row < 0:
+            return None
+        item = self.selected_preview_table.item(row, 0)
+        if item is None:
+            return None
+        return item.data(Qt.ItemDataRole.UserRole)
+
+    def _replace_selected_preview_path(self, payload, path: str):
+        kind, index, _old_file = payload
+        if kind == "before" and isinstance(index, int) and 0 <= index < len(self.before_files):
+            self.before_files[index] = path
+        elif kind == "after" and isinstance(index, int) and 0 <= index < len(self.after_files):
+            self.after_files[index] = path
+        elif kind == "pdf":
+            self.drawing_pdf_file = path
+        self.rebuild_change_order()
+
+    def _annotation_dialog_class(self):
+        from gui_annotator import AnnotationDialog
+
+        return AnnotationDialog
 
     def _refresh_staging(self):
         if not hasattr(self, "staging_table"):
