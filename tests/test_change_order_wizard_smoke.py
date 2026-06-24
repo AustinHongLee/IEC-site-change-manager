@@ -82,7 +82,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
     staging_root.mkdir()
     legacy_folder = attachments_root / "20260620" / "088_OLD"
     legacy_folder.mkdir(parents=True)
-    (legacy_folder / "before.jpg").write_bytes(b"legacy")
+    Image.new("RGB", (18, 12), (180, 90, 50)).save(legacy_folder / "before.jpg", format="JPEG")
     staging_before = staging_root / "stage-before.jpg"
     staging_pdf = staging_root / "stage-drawing.pdf"
     before_path.write_bytes(b"before")
@@ -134,6 +134,10 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.history_table.rowCount() == 1
         assert dialog.history_table.item(0, 0).text() == "088_OLD"
         assert dialog.history_table.item(0, 3).text() == "舊資料"
+        history_pixmap = dialog.history_preview_label.pixmap()
+        assert history_pixmap is not None
+        assert not history_pixmap.isNull()
+        assert "088_OLD" in dialog.history_detail_label.text()
         opened_paths = []
         monkeypatch.setattr(dialog, "_open_path", lambda path: opened_paths.append(str(path)))
         dialog.history_table.selectRow(0)

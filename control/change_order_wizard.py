@@ -42,6 +42,10 @@ from staging_manager import scan_staging
 from theme import Colors, Fonts, build_stylesheet, make_hint_label, make_separator, set_button_role
 
 
+HISTORY_PREVIEW_ROLE = Qt.ItemDataRole.UserRole.value + 1
+IMAGE_SUFFIXES = {".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+
+
 @dataclass
 class WeldRequest:
     kind: str
@@ -342,9 +346,20 @@ class ChangeOrderWizard(QDialog):
         self.history_table.verticalHeader().setVisible(False)
         self.history_table.horizontalHeader().setStretchLastSection(True)
         self.history_table.setMaximumHeight(130)
+        self.history_table.itemSelectionChanged.connect(self._refresh_history_preview)
         layout.addWidget(self.history_table)
         self.history_empty_label = make_hint_label("填流水號後顯示新系統歷史")
         layout.addWidget(self.history_empty_label)
+        self.history_preview_label = QLabel("選擇一筆歷史")
+        self.history_preview_label.setObjectName("history_preview_label")
+        self.history_preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.history_preview_label.setFixedHeight(86)
+        self.history_preview_label.setFrameShape(QFrame.Shape.StyledPanel)
+        layout.addWidget(self.history_preview_label)
+        self.history_detail_label = make_hint_label("選取歷史後會顯示焊口、狀態與照片縮圖。")
+        self.history_detail_label.setObjectName("history_detail_label")
+        self.history_detail_label.setWordWrap(True)
+        layout.addWidget(self.history_detail_label)
         row = QHBoxLayout()
         open_button = QPushButton("開資料夾")
         open_button.setObjectName("open_history_folder_button")
@@ -780,12 +795,16 @@ class ChangeOrderWizard(QDialog):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 if col == 0:
                     item.setData(Qt.ItemDataRole.UserRole, record["folder"])
+                    item.setData(HISTORY_PREVIEW_ROLE, record.get("preview", ""))
                 self.history_table.setItem(row_index, col, item)
         self.history_table.resizeColumnsToContents()
         self.history_empty_label.setText(
             "填流水號後顯示新系統歷史" if not self.series_edit.text().strip() else "這張圖目前沒有新系統歷史"
         )
         self.history_empty_label.setVisible(len(records) == 0)
+        if records and self.history_table.currentRow() < 0:
+            self.history_table.selectRow(0)
+        self._refresh_history_preview()
 
     def _history_records(self) -> list[dict[str, str]]:
         series = normalize_series_raw(self.series_edit.text())
@@ -812,6 +831,7 @@ class ChangeOrderWizard(QDialog):
                 "welds": welds or "-",
                 "status": _status_text(co.status),
                 "folder": str(record_path.parent),
+                "preview": _first_change_order_photo(record_path.parent, co),
             })
         return records
 
@@ -832,8 +852,54 @@ class ChangeOrderWizard(QDialog):
                     "welds": suffix or "-",
                     "status": "舊資料",
                     "folder": str(folder),
+                    "preview": _first_image_in_folder(folder),
                 })
         return records
+
+    def _refresh_history_preview(self):
+        if not hasattr(self, "history_preview_label"):
+            return
+        row = self.history_table.currentRow()
+        if row < 0:
+            self._set_history_preview_text("選擇一筆歷史", "選取歷史後會顯示焊口、狀態與照片縮圖。")
+            return
+
+        id_item = self.history_table.item(row, 0)
+        date_item = self.history_table.item(row, 1)
+        weld_item = self.history_table.item(row, 2)
+        status_item = self.history_table.item(row, 3)
+        if id_item is None:
+            self._set_history_preview_text("選擇一筆歷史", "選取歷史後會顯示焊口、狀態與照片縮圖。")
+            return
+
+        preview = id_item.data(HISTORY_PREVIEW_ROLE)
+        detail = (
+            f"{id_item.text()}｜{date_item.text() if date_item else '-'}｜"
+            f"焊口：{weld_item.text() if weld_item else '-'}｜{status_item.text() if status_item else '-'}"
+        )
+        if not preview:
+            self._set_history_preview_text("無歷史照片", detail)
+            return
+
+        path = Path(str(preview))
+        pixmap = QPixmap(str(path))
+        if pixmap.isNull():
+            self._set_history_preview_text("無法載入歷史照片", f"{detail}｜{path.name}")
+            return
+
+        scaled = pixmap.scaled(
+            150,
+            76,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.history_preview_label.setPixmap(scaled)
+        self.history_detail_label.setText(f"{detail}｜{path.name}")
+
+    def _set_history_preview_text(self, title: str, detail: str):
+        self.history_preview_label.clear()
+        self.history_preview_label.setText(title)
+        self.history_detail_label.setText(detail)
 
     def _refresh_selected_preview(self):
         if not hasattr(self, "selected_preview_table"):
@@ -1200,6 +1266,32 @@ def _same_series(left, right) -> bool:
     if left_text.isdigit() and right_text.isdigit():
         return normalize_series_raw(left_text) == normalize_series_raw(right_text)
     return left_text == right_text
+
+
+def _first_change_order_photo(folder: Path, co: ChangeOrder) -> str:
+    for photo in co.photos:
+        if not photo.file:
+            continue
+        raw_path = Path(str(photo.file))
+        candidate = raw_path if raw_path.is_absolute() else folder / raw_path
+        if candidate.exists() and _is_image_path(candidate):
+            return str(candidate)
+    return ""
+
+
+def _first_image_in_folder(folder: Path) -> str:
+    try:
+        children = sorted(folder.iterdir(), key=lambda path: path.name.lower())
+    except OSError:
+        return ""
+    for path in children:
+        if path.is_file() and _is_image_path(path):
+            return str(path)
+    return ""
+
+
+def _is_image_path(path: Path) -> bool:
+    return path.suffix.lower() in IMAGE_SUFFIXES
 
 
 def _enum_value(value):
