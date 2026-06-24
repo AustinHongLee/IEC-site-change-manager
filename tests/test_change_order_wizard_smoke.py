@@ -133,6 +133,13 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.history_table.rowCount() == 1
         assert dialog.history_table.item(0, 0).text() == "088_OLD"
         assert dialog.history_table.item(0, 3).text() == "舊資料"
+        opened_paths = []
+        monkeypatch.setattr(dialog, "_open_path", lambda path: opened_paths.append(str(path)))
+        dialog.history_table.selectRow(0)
+        assert dialog.open_selected_history_folder() == str(legacy_folder)
+        assert opened_paths[-1] == str(legacy_folder)
+        assert dialog.open_staging_folder() == str(staging_root)
+        assert opened_paths[-1] == str(staging_root)
 
         _set_combo_text(dialog.existing_op_combo, Op.EXTEND.value)
         dialog.source_weld_table.selectRow(0)

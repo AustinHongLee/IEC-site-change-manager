@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -343,6 +344,13 @@ class ChangeOrderWizard(QDialog):
         layout.addWidget(self.history_table)
         self.history_empty_label = make_hint_label("填流水號後顯示新系統歷史")
         layout.addWidget(self.history_empty_label)
+        row = QHBoxLayout()
+        open_button = QPushButton("開資料夾")
+        open_button.setObjectName("open_history_folder_button")
+        open_button.clicked.connect(self.open_selected_history_folder)
+        row.addWidget(open_button)
+        row.addStretch(1)
+        layout.addLayout(row)
         return group
 
     def _build_selected_preview_group(self) -> QGroupBox:
@@ -389,7 +397,11 @@ class ChangeOrderWizard(QDialog):
         refresh_row = QHBoxLayout()
         refresh_button = QPushButton("重新整理")
         refresh_button.clicked.connect(self._refresh_staging)
+        open_staging_button = QPushButton("開 staging")
+        open_staging_button.setObjectName("open_staging_folder_button")
+        open_staging_button.clicked.connect(self.open_staging_folder)
         refresh_row.addWidget(refresh_button)
+        refresh_row.addWidget(open_staging_button)
         refresh_row.addStretch(1)
         layout.addLayout(refresh_row)
 
@@ -714,6 +726,33 @@ class ChangeOrderWizard(QDialog):
             return
         base = item.data(Qt.ItemDataRole.UserRole) or item.text()
         self.existing_base_edit.setText(str(base))
+
+    def open_selected_history_folder(self):
+        row = self.history_table.currentRow()
+        if row < 0:
+            self.status_label.setText("請先選擇一筆歷史")
+            return None
+        item = self.history_table.item(row, 0)
+        if item is None:
+            self.status_label.setText("請先選擇一筆歷史")
+            return None
+        folder = item.data(Qt.ItemDataRole.UserRole)
+        if not folder:
+            self.status_label.setText("這筆歷史沒有資料夾路徑")
+            return None
+        self._open_path(folder)
+        self.status_label.setText(f"已開啟歷史資料夾：{Path(str(folder)).name}")
+        return str(folder)
+
+    def open_staging_folder(self):
+        self.staging_root.mkdir(parents=True, exist_ok=True)
+        self._open_path(self.staging_root)
+        self.status_label.setText(f"已開啟 staging：{self.staging_root}")
+        self._refresh_staging()
+        return str(self.staging_root)
+
+    def _open_path(self, path):
+        os.startfile(str(path))
 
     def _refresh_history(self):
         if not hasattr(self, "history_table"):
