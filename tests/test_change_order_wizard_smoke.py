@@ -14,7 +14,7 @@ pytest.importorskip("PyQt6")
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
-from PyQt6.QtWidgets import QApplication  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QTabWidget  # noqa: E402
 
 from change_order import ChangeOrder, Op, SpecSource, Status  # noqa: E402
 from change_order_builder import ChangeOrderBuilder  # noqa: E402
@@ -82,6 +82,18 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
 
     dialog = ChangeOrderWizard(builder=_builder_for_fixture(tmp_path), attachments_root=attachments_root)
     try:
+        tabs = dialog.findChild(QTabWidget)
+        assert tabs is not None
+        assert [tabs.tabText(index) for index in range(tabs.count())] == [
+            "① 基本資料",
+            "② 焊口",
+            "③ 照片與圖面",
+            "④ 材料",
+        ]
+        assert dialog.weld_table.horizontalHeaderItem(0).text() == "焊口碼"
+        assert dialog.photo_table.horizontalHeaderItem(0).text() == "角色"
+        assert dialog.material_table.horizontalHeaderItem(0).text() == "零件"
+
         dialog.series_edit.setText("088")
         dialog.date_edit.setText("20260624")
         dialog.reason_edit.setPlainText("現場管線干涉")
@@ -127,6 +139,9 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path):
         assert dialog.create_final() is None
         assert dialog.co.status == Status.PARTIAL
         assert "正式建立被擋" in dialog.status_label.text()
+        assert "修改前照片" in dialog.status_label.text()
+        assert "修改後照片" in dialog.status_label.text()
+        assert "圖面 PDF" in dialog.status_label.text()
 
         dialog.add_photo_file("before", before_path)
         dialog.add_photo_file("after", after_path)

@@ -16,12 +16,15 @@ from PyQt6.QtWidgets import (
     QDialog,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTextEdit,
@@ -32,6 +35,7 @@ from PyQt6.QtWidgets import (
 from change_order import ChangeOrder, JointType, Op, Role, Scenario, Spec, Status
 from change_order_builder import ChangeOrderBuilder
 from change_order_store import export_change_order
+from theme import Colors, Fonts, build_stylesheet, make_hint_label, make_separator, set_button_role
 
 
 @dataclass
@@ -60,7 +64,10 @@ class ChangeOrderWizard(QDialog):
         self._current_builder = None
 
         self.setWindowTitle("新修改單精靈")
-        self.resize(900, 620)
+        self.setStyleSheet(build_stylesheet())
+        self.setFont(Fonts.body())
+        self.resize(760, 560)
+        self.setMinimumSize(700, 500)
         self._build_ui()
         self.rebuild_change_order()
 
@@ -199,7 +206,7 @@ class ChangeOrderWizard(QDialog):
         co = self.rebuild_change_order()
         issues = self._current_builder.validate(co)
         if issues:
-            self.status_label.setText("正式建立被擋：" + "；".join(issue["message"] for issue in issues))
+            self.status_label.setText("正式建立被擋：還缺：" + "、".join(_issue_text(issue) for issue in issues))
             return None
         self._current_builder.compute_status(co)
         self._current_builder.finalize_id(co, self._existing_record_ids())
@@ -210,53 +217,101 @@ class ChangeOrderWizard(QDialog):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.addWidget(self._build_basic_group())
-        root.addWidget(self._build_weld_input_group())
-        root.addWidget(self._build_attachment_group())
-        root.addWidget(self._build_material_group())
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(10)
 
+        tabs = QTabWidget()
+        tabs.addTab(self._make_tab(self._build_basic_group()), "① 基本資料")
+        tabs.addTab(self._make_tab(
+            _hint("從管制表挑既有焊口改（填原始焊口＋操作），或加全新焊口；編號系統自動算"),
+            self._build_weld_input_group(),
+            self._build_weld_table_group(),
+        ), "② 焊口")
+        tabs.addTab(self._make_tab(
+            _hint("修改前(問題)、修改後(完成)各至少 1 張，並附圖面 PDF"),
+            self._build_attachment_group(),
+        ), "③ 照片與圖面")
+        tabs.addTab(self._make_tab(
+            _hint("列出本次修改單要記錄的材料；沒有材料時可先留空存草稿"),
+            self._build_material_group(),
+        ), "④ 材料")
+        root.addWidget(tabs, 1)
+        root.addWidget(make_separator())
+        root.addWidget(self._build_action_bar())
+
+    def _build_weld_table_group(self) -> QGroupBox:
+        group = QGroupBox("焊口清單")
+        layout = QVBoxLayout(group)
         self.weld_table = QTableWidget(0, 6)
-        self.weld_table.setHorizontalHeaderLabels(["code", "base", "op", "spec", "source", "kind"])
+        self.weld_table.setHorizontalHeaderLabels(["焊口碼", "原始", "操作", "規格", "來源", "類型"])
         self.weld_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.weld_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        root.addWidget(self.weld_table)
+        self.weld_table.verticalHeader().setVisible(False)
+        self.weld_table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.weld_table)
+        self.weld_empty_label = make_hint_label("尚未加入焊口")
+        layout.addWidget(self.weld_empty_label)
 
-        button_row = QHBoxLayout()
+        row = QHBoxLayout()
         remove_button = QPushButton("移除選取焊口")
         remove_button.clicked.connect(self.remove_selected_request)
+        row.addWidget(remove_button)
+        row.addStretch(1)
+        layout.addLayout(row)
+        return group
+
+    def _build_action_bar(self) -> QFrame:
+        bar = QFrame()
+        bar.setStyleSheet(
+            f"QFrame {{ background: {Colors.BG_WHITE}; border: 1px solid {Colors.BORDER_LIGHT};"
+            " border-radius: 8px; padding: 6px; }}"
+        )
+        button_row = QHBoxLayout(bar)
+        button_row.setContentsMargins(8, 6, 8, 6)
+        button_row.setSpacing(8)
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("statusBar")
+        self.status_label.setWordWrap(True)
+        self.status_label.setFont(Fonts.small())
         self.save_button = QPushButton("存草稿")
         self.save_button.clicked.connect(self._save_clicked)
         self.final_button = QPushButton("正式建立")
+        set_button_role(self.final_button, "primary")
         self.final_button.clicked.connect(self._final_clicked)
-        self.status_label = QLabel("")
-        button_row.addWidget(remove_button)
+        button_row.addWidget(self.status_label, 1)
         button_row.addStretch(1)
         button_row.addWidget(self.save_button)
         button_row.addWidget(self.final_button)
-        root.addLayout(button_row)
-        root.addWidget(self.status_label)
+        return bar
 
     def _build_basic_group(self) -> QGroupBox:
         group = QGroupBox("基本資料")
         form = QFormLayout(group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
         self.series_edit = QLineEdit()
         self.series_edit.setObjectName("series_edit")
+        self.series_edit.setPlaceholderText("例如：88")
         self.series_edit.textChanged.connect(lambda _text: self.rebuild_change_order())
         self.date_edit = QLineEdit(datetime.now().strftime("%Y%m%d"))
         self.date_edit.setObjectName("date_edit")
+        self.date_edit.setPlaceholderText("YYYYMMDD")
         self.date_edit.textChanged.connect(lambda _text: self.rebuild_change_order())
         self.reason_edit = QTextEdit()
         self.reason_edit.setObjectName("reason_edit")
-        self.reason_edit.setFixedHeight(70)
+        self.reason_edit.setPlaceholderText("簡述現場修改原因")
+        self.reason_edit.setFixedHeight(96)
         self.reason_edit.textChanged.connect(self.rebuild_change_order)
         form.addRow("流水號", self.series_edit)
         form.addRow("日期", self.date_edit)
-        form.addRow("原因", self.reason_edit)
+        form.addRow("修改原因", self.reason_edit)
         return group
 
     def _build_weld_input_group(self) -> QWidget:
         panel = QWidget()
         layout = QHBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
         layout.addWidget(self._build_existing_group())
         layout.addWidget(self._build_new_group())
         return panel
@@ -264,12 +319,14 @@ class ChangeOrderWizard(QDialog):
     def _build_existing_group(self) -> QGroupBox:
         group = QGroupBox("既有焊口")
         form = QFormLayout(group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.existing_base_edit = QLineEdit()
         self.existing_base_edit.setObjectName("existing_base_edit")
+        self.existing_base_edit.setPlaceholderText("例如：2")
         self.existing_op_combo = _op_combo("existing_op_combo")
         add_button = QPushButton("新增既有焊口")
         add_button.clicked.connect(self.add_existing_request)
-        form.addRow("base", self.existing_base_edit)
+        form.addRow("原始焊口", self.existing_base_edit)
         form.addRow("操作", self.existing_op_combo)
         form.addRow(add_button)
         return group
@@ -279,9 +336,9 @@ class ChangeOrderWizard(QDialog):
         layout = QVBoxLayout(group)
 
         row = QHBoxLayout()
-        before_button = QPushButton("加入 before")
+        before_button = QPushButton("加入修改前")
         before_button.clicked.connect(lambda: self._choose_photo(Role.BEFORE))
-        after_button = QPushButton("加入 after")
+        after_button = QPushButton("加入修改後")
         after_button.clicked.connect(lambda: self._choose_photo(Role.AFTER))
         remove_button = QPushButton("移除選取照片")
         remove_button.clicked.connect(self.remove_selected_photo)
@@ -294,12 +351,18 @@ class ChangeOrderWizard(QDialog):
         layout.addLayout(row)
 
         self.photo_table = QTableWidget(0, 2)
-        self.photo_table.setHorizontalHeaderLabels(["role", "file"])
+        self.photo_table.setHorizontalHeaderLabels(["角色", "檔案"])
         self.photo_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.photo_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.photo_table.verticalHeader().setVisible(False)
+        self.photo_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.photo_table)
+        self.photo_empty_label = make_hint_label("尚未加入照片")
+        layout.addWidget(self.photo_empty_label)
 
         self.drawing_pdf_label = QLabel("圖面 PDF：未選")
+        self.drawing_pdf_label.setFont(Fonts.small())
+        self.drawing_pdf_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         layout.addWidget(self.drawing_pdf_label)
         return group
 
@@ -307,6 +370,7 @@ class ChangeOrderWizard(QDialog):
         group = QGroupBox("材料")
         layout = QVBoxLayout(group)
         form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.material_component_edit = QLineEdit()
         self.material_size_edit = QLineEdit()
         self.material_sch_edit = QLineEdit()
@@ -314,13 +378,20 @@ class ChangeOrderWizard(QDialog):
         self.material_qty_edit = QLineEdit()
         self.material_unit_edit = QLineEdit()
         self.material_remark_edit = QLineEdit()
-        form.addRow("component", self.material_component_edit)
-        form.addRow("size", self.material_size_edit)
-        form.addRow("sch", self.material_sch_edit)
-        form.addRow("material", self.material_material_edit)
-        form.addRow("qty", self.material_qty_edit)
-        form.addRow("unit", self.material_unit_edit)
-        form.addRow("remark", self.material_remark_edit)
+        self.material_component_edit.setPlaceholderText("例如：Pipe")
+        self.material_size_edit.setPlaceholderText('例如：2"')
+        self.material_sch_edit.setPlaceholderText("例如：SCH40")
+        self.material_material_edit.setPlaceholderText("例如：SUS304")
+        self.material_qty_edit.setPlaceholderText("例如：2")
+        self.material_unit_edit.setPlaceholderText("例如：M")
+        self.material_remark_edit.setPlaceholderText("補充說明")
+        form.addRow("零件", self.material_component_edit)
+        form.addRow("尺寸", self.material_size_edit)
+        form.addRow("SCH", self.material_sch_edit)
+        form.addRow("材質", self.material_material_edit)
+        form.addRow("數量", self.material_qty_edit)
+        form.addRow("單位", self.material_unit_edit)
+        form.addRow("備註", self.material_remark_edit)
         layout.addLayout(form)
 
         row = QHBoxLayout()
@@ -334,15 +405,20 @@ class ChangeOrderWizard(QDialog):
         layout.addLayout(row)
 
         self.material_table = QTableWidget(0, 7)
-        self.material_table.setHorizontalHeaderLabels(["component", "size", "sch", "material", "qty", "unit", "remark"])
+        self.material_table.setHorizontalHeaderLabels(["零件", "尺寸", "SCH", "材質", "數量", "單位", "備註"])
         self.material_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.material_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.material_table.verticalHeader().setVisible(False)
+        self.material_table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.material_table)
+        self.material_empty_label = make_hint_label("尚未加入材料")
+        layout.addWidget(self.material_empty_label)
         return group
 
     def _build_new_group(self) -> QGroupBox:
         group = QGroupBox("新焊口")
         form = QFormLayout(group)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.new_op_combo = _op_combo("new_op_combo")
         self.new_size_edit = QLineEdit()
         self.new_sch_edit = QLineEdit()
@@ -352,15 +428,34 @@ class ChangeOrderWizard(QDialog):
         self.new_sch_edit.setObjectName("new_sch_edit")
         self.new_material_edit.setObjectName("new_material_edit")
         self.new_weld_type_edit.setObjectName("new_weld_type_edit")
+        self.new_size_edit.setPlaceholderText('例如：2"')
+        self.new_sch_edit.setPlaceholderText("例如：SCH40")
+        self.new_material_edit.setPlaceholderText("例如：SUS304")
+        self.new_weld_type_edit.setPlaceholderText("例如：BW")
         add_button = QPushButton("新增新焊口")
         add_button.clicked.connect(self.add_new_request)
         form.addRow("操作", self.new_op_combo)
         form.addRow("尺寸", self.new_size_edit)
-        form.addRow("厚度", self.new_sch_edit)
+        form.addRow("SCH", self.new_sch_edit)
         form.addRow("材質", self.new_material_edit)
         form.addRow("銲接型式", self.new_weld_type_edit)
         form.addRow(add_button)
         return group
+
+    def _make_tab(self, *widgets: QWidget) -> QScrollArea:
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(10)
+        for widget in widgets:
+            layout.addWidget(widget)
+        layout.addStretch(1)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(content)
+        return scroll
 
     def _fresh_builder(self) -> ChangeOrderBuilder:
         template = self.builder_template
@@ -385,26 +480,28 @@ class ChangeOrderWizard(QDialog):
                 weld.base or "",
                 _enum_value(weld.op) or "",
                 spec_text,
-                _enum_value(weld.spec_source) or "",
-                request.kind if request is not None else "",
+                _spec_source_text(weld.spec_source),
+                _request_kind_text(request.kind if request is not None else ""),
             ]
             for col, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.weld_table.setItem(row, col, item)
         self.weld_table.resizeColumnsToContents()
+        self.weld_empty_label.setVisible(len(welds) == 0)
 
     def _refresh_attachments_preview(self):
         entries = self._photo_entries()
         self.photo_table.setRowCount(len(entries))
         for row, (role, index) in enumerate(entries):
             file = self.after_files[index] if role == Role.AFTER.value else self.before_files[index]
-            for col, value in enumerate([role, file]):
+            for col, value in enumerate([_role_text(role), file]):
                 item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.photo_table.setItem(row, col, item)
         self.photo_table.resizeColumnsToContents()
         self.drawing_pdf_label.setText(f"圖面 PDF：{self.drawing_pdf_file or '未選'}")
+        self.photo_empty_label.setVisible(len(entries) == 0)
 
     def _refresh_material_preview(self):
         self.material_table.setRowCount(len(self.material_requests))
@@ -415,15 +512,16 @@ class ChangeOrderWizard(QDialog):
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.material_table.setItem(row, col, item)
         self.material_table.resizeColumnsToContents()
+        self.material_empty_label.setVisible(len(self.material_requests) == 0)
 
     def _refresh_status(self):
         if self.co is None or self._current_builder is None:
             self.status_label.setText("")
             return
         issues = self._current_builder.validate(self.co)
-        status_text = _enum_value(self.co.status)
+        status_text = _status_text(self.co.status)
         if issues:
-            self.status_label.setText(f"狀態：{status_text}｜缺漏：" + "；".join(issue["message"] for issue in issues))
+            self.status_label.setText(f"狀態：{status_text} ｜ 還缺：" + "、".join(_issue_text(issue) for issue in issues))
         else:
             self.status_label.setText(f"狀態：{status_text}")
 
@@ -443,7 +541,8 @@ class ChangeOrderWizard(QDialog):
         return str(data if data is not None else combo.currentText())
 
     def _choose_photo(self, role):
-        path, _filter = QFileDialog.getOpenFileName(self, "選擇照片")
+        title = "選擇修改後照片" if _enum_value(role) == Role.AFTER.value else "選擇修改前照片"
+        path, _filter = QFileDialog.getOpenFileName(self, title)
         if path:
             self.add_photo_file(role, path)
 
@@ -478,6 +577,56 @@ def _op_combo(object_name: str) -> QComboBox:
     for op in (Op.CUT, Op.EXTEND, Op.SHORTEN):
         combo.addItem(op.value, op.value)
     return combo
+
+
+def _hint(text: str) -> QLabel:
+    label = make_hint_label(text)
+    label.setWordWrap(True)
+    return label
+
+
+def _status_text(status) -> str:
+    return str(_enum_value(status) or "")
+
+
+def _issue_text(issue: dict) -> str:
+    labels = {
+        "missing_before_photo": "修改前照片",
+        "missing_after_photo": "修改後照片",
+        "missing_drawing_pdf": "圖面 PDF",
+        "missing_materials": "材料",
+        "missing_authorization": "業主簽認",
+        "missing_reason": "修改原因",
+        "missing_welds": "焊口",
+    }
+    code = str(issue.get("code") or "")
+    return labels.get(code) or str(issue.get("message") or code or "未命名項目")
+
+
+def _role_text(role) -> str:
+    value = _enum_value(role)
+    if value == Role.AFTER.value:
+        return "修改後"
+    if value == Role.BEFORE.value:
+        return "修改前"
+    return str(value or "")
+
+
+def _spec_source_text(source) -> str:
+    value = _enum_value(source)
+    if value == "looked_up":
+        return "管制表"
+    if value == "manual":
+        return "手填"
+    return str(value or "")
+
+
+def _request_kind_text(kind) -> str:
+    if kind == "existing":
+        return "既有"
+    if kind == "new":
+        return "新焊口"
+    return str(kind or "")
 
 
 def _enum_value(value):
