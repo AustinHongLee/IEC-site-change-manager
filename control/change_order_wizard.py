@@ -105,6 +105,7 @@ class ChangeOrderWizard(QDialog):
         authorization = self._authorization_fields()
         if any(value for value in authorization.values()):
             builder.set_authorization(co, **authorization)
+        co.scenario = self._auto_scenario(co)
         self.co = co
         self._current_builder = builder
         self._current_builder.compute_status(co, required=self._required_keys())
@@ -304,6 +305,10 @@ class ChangeOrderWizard(QDialog):
         self.status_label.setObjectName("statusBar")
         self.status_label.setWordWrap(True)
         self.status_label.setFont(Fonts.small())
+        self.layout_mode_label = QLabel("自動版面：單張")
+        self.layout_mode_label.setObjectName("layout_mode_label")
+        self.layout_mode_label.setFont(Fonts.small())
+        self.layout_mode_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         self.sidebar_toggle_button = QPushButton("收合側欄")
         self.sidebar_toggle_button.setObjectName("sidebar_toggle_button")
         self.sidebar_toggle_button.clicked.connect(self.toggle_sidebar)
@@ -316,6 +321,7 @@ class ChangeOrderWizard(QDialog):
         button_row.addWidget(self.sidebar_toggle_button)
         button_row.addWidget(self.status_label, 1)
         button_row.addStretch(1)
+        button_row.addWidget(self.layout_mode_label)
         button_row.addWidget(self.save_button)
         button_row.addWidget(self.final_button)
         return bar
@@ -1173,6 +1179,22 @@ class ChangeOrderWizard(QDialog):
             self.status_label.setText(f"狀態：{status_text} ｜ 還缺：" + "、".join(_issue_text(issue) for issue in issues))
         else:
             self.status_label.setText(f"狀態：{status_text}")
+        self._refresh_layout_mode()
+
+    def _auto_scenario(self, co: ChangeOrder):
+        return Scenario.GROUP if len(co.welds) > 6 else Scenario.NORMAL
+
+    def _refresh_layout_mode(self):
+        if not hasattr(self, "layout_mode_label"):
+            return
+        if self.co is None:
+            self.layout_mode_label.setText("自動版面：單張")
+            return
+        count = len(self.co.welds)
+        if self.co.scenario == Scenario.GROUP or _enum_value(self.co.scenario) == Scenario.GROUP.value:
+            self.layout_mode_label.setText(f"自動版面：群組 / 多頁（{count}口）")
+        else:
+            self.layout_mode_label.setText(f"自動版面：單張（{count}口）")
 
     def _authorization_fields(self) -> dict[str, str | None]:
         if not hasattr(self, "authorization_name_edit"):

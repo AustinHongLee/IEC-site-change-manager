@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control")
 
 from PyQt6.QtWidgets import QApplication, QTabWidget  # noqa: E402
 
-from change_order import ChangeOrder, Op, SpecSource, Status  # noqa: E402
+from change_order import ChangeOrder, Op, Scenario, SpecSource, Status  # noqa: E402
 from change_order_builder import ChangeOrderBuilder  # noqa: E402
 from change_order_wizard import ChangeOrderWizard  # noqa: E402
 from weld_control import WeldControlManager  # noqa: E402
@@ -301,6 +301,35 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert second_path == attachments_root / "88_20260624_02" / "change_order.json"
         assert second_loaded.status == Status.COMPLETE
         assert dialog.history_table.rowCount() == 3
+    finally:
+        dialog.close()
+        dialog.deleteLater()
+
+
+def test_change_order_wizard_auto_group_scenario_after_six_welds(qapp, tmp_path):
+    dialog = ChangeOrderWizard(builder=_builder_for_fixture(tmp_path), attachments_root=tmp_path / "records")
+    try:
+        dialog.series_edit.setText("088")
+        dialog.date_edit.setText("20260624")
+        _set_combo_text(dialog.new_op_combo, Op.EXTEND.value)
+
+        for index in range(7):
+            dialog.new_size_edit.setText(f'{index + 1}"')
+            dialog.new_sch_edit.setText("SCH40")
+            dialog.new_material_edit.setText("SUS304")
+            dialog.new_weld_type_edit.setText("BW")
+            dialog.add_new_request()
+
+        assert len(dialog.co.welds) == 7
+        assert dialog.co.scenario == Scenario.GROUP
+        assert "群組" in dialog.layout_mode_label.text()
+
+        dialog.weld_table.selectRow(6)
+        dialog.remove_selected_request()
+
+        assert len(dialog.co.welds) == 6
+        assert dialog.co.scenario == Scenario.NORMAL
+        assert "單張" in dialog.layout_mode_label.text()
     finally:
         dialog.close()
         dialog.deleteLater()
