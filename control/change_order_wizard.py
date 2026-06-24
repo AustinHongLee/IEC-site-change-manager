@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -364,9 +365,22 @@ class ChangeOrderWizard(QDialog):
         self.selected_preview_table.verticalHeader().setVisible(False)
         self.selected_preview_table.horizontalHeader().setStretchLastSection(True)
         self.selected_preview_table.setMaximumHeight(160)
+        self.selected_preview_table.itemSelectionChanged.connect(self._refresh_selected_preview_detail)
         layout.addWidget(self.selected_preview_table)
         self.selected_preview_empty_label = make_hint_label("尚未選取焊口、照片、PDF 或材料")
         layout.addWidget(self.selected_preview_empty_label)
+
+        self.selected_preview_image_label = QLabel("選擇一筆照片、PDF 或材料")
+        self.selected_preview_image_label.setObjectName("selected_preview_image_label")
+        self.selected_preview_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.selected_preview_image_label.setFixedHeight(110)
+        self.selected_preview_image_label.setFrameShape(QFrame.Shape.StyledPanel)
+        layout.addWidget(self.selected_preview_image_label)
+        self.selected_preview_detail_label = make_hint_label("選取側欄項目後會顯示檔名、狀態與縮圖。")
+        self.selected_preview_detail_label.setObjectName("selected_preview_detail_label")
+        self.selected_preview_detail_label.setWordWrap(True)
+        layout.addWidget(self.selected_preview_detail_label)
+
         row = QHBoxLayout()
         annotate_button = QPushButton("標註選取")
         annotate_button.setObjectName("annotate_selected_button")
@@ -853,6 +867,54 @@ class ChangeOrderWizard(QDialog):
                 self.selected_preview_table.setItem(row_index, col, item)
         self.selected_preview_table.resizeColumnsToContents()
         self.selected_preview_empty_label.setVisible(len(rows) == 0)
+        if rows and self.selected_preview_table.currentRow() < 0:
+            self.selected_preview_table.selectRow(0)
+        self._refresh_selected_preview_detail()
+
+    def _refresh_selected_preview_detail(self):
+        if not hasattr(self, "selected_preview_image_label"):
+            return
+        row = self.selected_preview_table.currentRow()
+        if row < 0:
+            self._set_preview_detail_text("選擇一筆照片、PDF 或材料", "選取側欄項目後會顯示檔名、狀態與縮圖。")
+            return
+
+        type_item = self.selected_preview_table.item(row, 0)
+        content_item = self.selected_preview_table.item(row, 1)
+        status_item = self.selected_preview_table.item(row, 2)
+        kind = type_item.text() if type_item is not None else ""
+        content = content_item.text() if content_item is not None else ""
+        status = status_item.text() if status_item is not None else ""
+        payload = type_item.data(Qt.ItemDataRole.UserRole) if type_item is not None else None
+
+        if payload is None:
+            self._set_preview_detail_text(content or kind or "預覽", f"{kind}｜{status}".strip("｜"))
+            return
+
+        payload_kind, _index, file = payload
+        path = Path(str(file))
+        if payload_kind == "pdf":
+            self._set_preview_detail_text("PDF", f"{path.name}｜{status}")
+            return
+
+        pixmap = QPixmap(str(path))
+        if pixmap.isNull():
+            self._set_preview_detail_text("無法載入預覽", f"{path.name}｜{status}")
+            return
+
+        scaled = pixmap.scaled(
+            180,
+            100,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.selected_preview_image_label.setPixmap(scaled)
+        self.selected_preview_detail_label.setText(f"{content}｜{path.name}｜{status}")
+
+    def _set_preview_detail_text(self, title: str, detail: str):
+        self.selected_preview_image_label.clear()
+        self.selected_preview_image_label.setText(title)
+        self.selected_preview_detail_label.setText(detail)
 
     def annotate_selected_preview(self):
         payload = self._selected_preview_payload()

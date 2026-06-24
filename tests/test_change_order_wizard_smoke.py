@@ -6,6 +6,7 @@ from datetime import datetime
 
 import pytest
 from openpyxl import Workbook
+from PIL import Image
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -86,7 +87,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
     staging_pdf = staging_root / "stage-drawing.pdf"
     before_path.write_bytes(b"before")
     annotated_before_path.write_bytes(b"annotated-before")
-    after_path.write_bytes(b"after")
+    Image.new("RGB", (16, 10), (80, 160, 90)).save(after_path, format="JPEG")
     drawing_path.write_bytes(b"%PDF")
     staging_before.write_bytes(b"stage-before")
     staging_pdf.write_bytes(b"%PDF-stage")
@@ -200,6 +201,14 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.co.status == Status.COMPLETE
         assert dialog.status_label.text() == "狀態：完整"
         assert dialog.selected_preview_table.rowCount() >= 6
+        for row in range(dialog.selected_preview_table.rowCount()):
+            if "修改後" in dialog.selected_preview_table.item(row, 1).text():
+                dialog.selected_preview_table.selectRow(row)
+                break
+        pixmap = dialog.selected_preview_image_label.pixmap()
+        assert pixmap is not None
+        assert not pixmap.isNull()
+        assert "after.JPG" in dialog.selected_preview_detail_label.text()
 
         class FakeAnnotationDialog:
             def __init__(self, path, is_pdf=False, parent=None):
@@ -246,7 +255,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert saved_path == attachments_root / "88_20260624_01" / "change_order.json"
         assert saved_path.exists()
         assert (saved_path.parent / "before_1.jpg").read_bytes() == b"annotated-before"
-        assert (saved_path.parent / "after_1.JPG").read_bytes() == b"after"
+        assert (saved_path.parent / "after_1.JPG").read_bytes() == after_path.read_bytes()
         assert (saved_path.parent / "drawing.pdf").read_bytes() == b"%PDF"
         assert loaded.id == "88_20260624_01"
         assert loaded.series == "88"
