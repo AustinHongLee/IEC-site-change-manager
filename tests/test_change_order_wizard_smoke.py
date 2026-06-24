@@ -214,6 +214,24 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert not pixmap.isNull()
         assert "after.JPG" in dialog.selected_preview_detail_label.text()
 
+        dialog.require_authorization_checkbox.setChecked(True)
+        dialog.rebuild_change_order()
+        assert dialog.co.status == Status.PARTIAL
+        assert "業主簽認" in dialog.status_label.text()
+        assert dialog.create_final() is None
+        assert "業主簽認" in dialog.status_label.text()
+
+        dialog.authorization_name_edit.setText("王主任")
+        dialog.authorization_at_edit.setText("20260624")
+        dialog.authorization_evidence_edit.setText("現場簽認照片")
+        dialog.rebuild_change_order()
+        assert dialog.co.status == Status.COMPLETE
+        assert dialog.status_label.text() == "狀態：完整"
+        assert any(
+            dialog.selected_preview_table.item(row, 0).text() == "簽認"
+            for row in range(dialog.selected_preview_table.rowCount())
+        )
+
         class FakeAnnotationDialog:
             def __init__(self, path, is_pdf=False, parent=None):
                 self.path = path
@@ -272,6 +290,8 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert loaded.materials[0].component == "Pipe"
         assert loaded.materials[0].schedule == "SCH40"
         assert loaded.materials[0].remark == "現場補料"
+        assert loaded.authorization.approved_by == "王主任"
+        assert loaded.authorization.evidence == "現場簽認照片"
         assert dialog.history_table.rowCount() == 2
         assert dialog.history_table.item(0, 0).text() == "88_20260624_01"
         assert dialog.history_table.item(1, 0).text() == "088_OLD"

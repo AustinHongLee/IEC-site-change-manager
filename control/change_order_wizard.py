@@ -14,6 +14,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QFileDialog,
@@ -101,9 +102,12 @@ class ChangeOrderWizard(QDialog):
             builder.set_drawing_pdf(co, self.drawing_pdf_file)
         for material in self.material_requests:
             builder.add_material(co, **material)
+        authorization = self._authorization_fields()
+        if any(value for value in authorization.values()):
+            builder.set_authorization(co, **authorization)
         self.co = co
         self._current_builder = builder
-        self._current_builder.compute_status(co)
+        self._current_builder.compute_status(co, required=self._required_keys())
         self._refresh_source_welds()
         self._refresh_preview()
         self._refresh_attachments_preview()
@@ -216,11 +220,11 @@ class ChangeOrderWizard(QDialog):
 
     def create_final(self) -> Path | None:
         co = self.rebuild_change_order()
-        issues = self._current_builder.validate(co)
+        issues = self._current_builder.validate(co, required=self._required_keys())
         if issues:
             self.status_label.setText("正式建立被擋：還缺：" + "、".join(_issue_text(issue) for issue in issues))
             return None
-        self._current_builder.compute_status(co)
+        self._current_builder.compute_status(co, required=self._required_keys())
         self._current_builder.finalize_id(co, self._existing_record_ids())
         result = export_change_order(co, self.attachments_root, overwrite=False)
         self.last_saved_path = result.record_path
@@ -468,6 +472,42 @@ class ChangeOrderWizard(QDialog):
         form.addRow("流水號", self.series_edit)
         form.addRow("日期", self.date_edit)
         form.addRow("修改原因", self.reason_edit)
+
+        self.authorization_name_edit = QLineEdit()
+        self.authorization_name_edit.setObjectName("authorization_name_edit")
+        self.authorization_name_edit.setPlaceholderText("業主或代表姓名")
+        self.authorization_name_edit.textChanged.connect(lambda _text: self.rebuild_change_order())
+        self.authorization_at_edit = QLineEdit()
+        self.authorization_at_edit.setObjectName("authorization_at_edit")
+        self.authorization_at_edit.setPlaceholderText("簽認日期 / 時間")
+        self.authorization_at_edit.textChanged.connect(lambda _text: self.rebuild_change_order())
+        self.authorization_evidence_edit = QLineEdit()
+        self.authorization_evidence_edit.setObjectName("authorization_evidence_edit")
+        self.authorization_evidence_edit.setPlaceholderText("簽認表單、照片或備註")
+        self.authorization_evidence_edit.textChanged.connect(lambda _text: self.rebuild_change_order())
+        form.addRow("簽認人", self.authorization_name_edit)
+        form.addRow("簽認時間", self.authorization_at_edit)
+        form.addRow("簽認佐證", self.authorization_evidence_edit)
+
+        required_row = QHBoxLayout()
+        self.require_materials_checkbox = QCheckBox("材料必填")
+        self.require_materials_checkbox.setObjectName("require_materials_checkbox")
+        self.require_authorization_checkbox = QCheckBox("簽認必填")
+        self.require_authorization_checkbox.setObjectName("require_authorization_checkbox")
+        self.require_reason_checkbox = QCheckBox("原因必填")
+        self.require_reason_checkbox.setObjectName("require_reason_checkbox")
+        self.require_welds_checkbox = QCheckBox("焊口必填")
+        self.require_welds_checkbox.setObjectName("require_welds_checkbox")
+        for checkbox in (
+            self.require_materials_checkbox,
+            self.require_authorization_checkbox,
+            self.require_reason_checkbox,
+            self.require_welds_checkbox,
+        ):
+            checkbox.stateChanged.connect(lambda _state: self.rebuild_change_order())
+            required_row.addWidget(checkbox)
+        required_row.addStretch(1)
+        form.addRow("正式條件", required_row)
         return group
 
     def _build_weld_input_group(self) -> QWidget:
@@ -920,6 +960,11 @@ class ChangeOrderWizard(QDialog):
             qty = material.get("qty") or ""
             unit = material.get("unit") or ""
             rows.append(("材料", str(component), f"{qty}{unit}".strip() or "-", None))
+        if self.co is not None and self.co.authorization is not None:
+            authorization = self.co.authorization
+            approved_by = authorization.approved_by or "未填簽認人"
+            detail = " / ".join(filter(None, [authorization.approved_at, str(authorization.evidence or "")])) or "-"
+            rows.append(("簽認", approved_by, detail, None))
 
         self.selected_preview_table.setRowCount(len(rows))
         for row_index, row in enumerate(rows):
@@ -1122,12 +1167,35 @@ class ChangeOrderWizard(QDialog):
         if self.co is None or self._current_builder is None:
             self.status_label.setText("")
             return
-        issues = self._current_builder.validate(self.co)
+        issues = self._current_builder.validate(self.co, required=self._required_keys())
         status_text = _status_text(self.co.status)
         if issues:
             self.status_label.setText(f"狀態：{status_text} ｜ 還缺：" + "、".join(_issue_text(issue) for issue in issues))
         else:
             self.status_label.setText(f"狀態：{status_text}")
+
+    def _authorization_fields(self) -> dict[str, str | None]:
+        if not hasattr(self, "authorization_name_edit"):
+            return {"approved_by": None, "approved_at": None, "evidence": None}
+        return {
+            "approved_by": self.authorization_name_edit.text().strip() or None,
+            "approved_at": self.authorization_at_edit.text().strip() or None,
+            "evidence": self.authorization_evidence_edit.text().strip() or None,
+        }
+
+    def _required_keys(self) -> list[str]:
+        if not hasattr(self, "require_materials_checkbox"):
+            return []
+        keys: list[str] = []
+        if self.require_materials_checkbox.isChecked():
+            keys.append("materials")
+        if self.require_authorization_checkbox.isChecked():
+            keys.append("authorization")
+        if self.require_reason_checkbox.isChecked():
+            keys.append("reason")
+        if self.require_welds_checkbox.isChecked():
+            keys.append("welds")
+        return keys
 
     def _existing_record_ids(self) -> list[str]:
         if not self.attachments_root.exists():
