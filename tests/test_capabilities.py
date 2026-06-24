@@ -68,6 +68,8 @@ loaded = [
 assert loaded == [], loaded
 assert hasattr(excel_handler, "generate_report")
 assert hasattr(gui, "MainWindow")
+assert gui.CHANGE_ORDER_WIZARD_AVAILABLE is True
+assert hasattr(gui.MainWindow, "_launch_change_order_wizard")
 print("ok")
 """
 

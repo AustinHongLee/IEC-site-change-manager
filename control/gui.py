@@ -51,6 +51,12 @@ try:
 except ImportError:
     WIZARD_AVAILABLE = False
 
+try:
+    from change_order_wizard import ChangeOrderWizard  # noqa: F401
+    CHANGE_ORDER_WIZARD_AVAILABLE = True
+except ImportError:
+    CHANGE_ORDER_WIZARD_AVAILABLE = False
+
 from config import (
     BASE_DIR, ATTACHMENTS_ROOT, OUTPUT_ROOT, PDF_OUTPUT_DIR,
     RUNTIME, use_dual_images
@@ -349,6 +355,11 @@ class MainWindow(QMainWindow):
         btn_wizard.setToolTip("啟動資料夾建立精靈")
         btn_wizard.clicked.connect(self._launch_wizard)
         action_row.addWidget(btn_wizard)
+
+        btn_co_wizard = QPushButton("🆕 新修改單精靈 (Beta)")
+        btn_co_wizard.setToolTip("啟動新版源頭驅動修改單精靈")
+        btn_co_wizard.clicked.connect(self._launch_change_order_wizard)
+        action_row.addWidget(btn_co_wizard)
 
         # 資料夾捷徑（靠右）
         btn_open_output = QPushButton("📂 Output")
@@ -971,6 +982,14 @@ class MainWindow(QMainWindow):
         wiz = FolderWizard(self)
         wiz.show()
         self.log("✨ 已啟動資料夾建立精靈")
+
+    def _launch_change_order_wizard(self):
+        if not CHANGE_ORDER_WIZARD_AVAILABLE:
+            QMessageBox.warning(self, "功能不可用", "新修改單精靈模組未載入")
+            return
+        wiz = ChangeOrderWizard(attachments_root=ATTACHMENTS_ROOT)
+        wiz.exec()
+        self.log("🆕 已啟動新修改單精靈")
 
     def _supplement_info(self):
         selected_dates = self._get_selected_dates()
