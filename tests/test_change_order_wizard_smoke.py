@@ -79,6 +79,9 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
     drawing_path = tmp_path / "drawing-source.pdf"
     staging_root = tmp_path / "staging"
     staging_root.mkdir()
+    legacy_folder = attachments_root / "20260620" / "088_OLD"
+    legacy_folder.mkdir(parents=True)
+    (legacy_folder / "before.jpg").write_bytes(b"legacy")
     staging_before = staging_root / "stage-before.jpg"
     staging_pdf = staging_root / "stage-drawing.pdf"
     before_path.write_bytes(b"before")
@@ -127,6 +130,9 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.source_weld_table.item(0, 1).text() == "2"
         assert dialog.source_weld_table.item(1, 0).text() == "2a"
         assert dialog.source_weld_table.item(1, 1).text() == "2"
+        assert dialog.history_table.rowCount() == 1
+        assert dialog.history_table.item(0, 0).text() == "088_OLD"
+        assert dialog.history_table.item(0, 3).text() == "舊資料"
 
         _set_combo_text(dialog.existing_op_combo, Op.EXTEND.value)
         dialog.source_weld_table.selectRow(0)
@@ -246,14 +252,15 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert loaded.materials[0].component == "Pipe"
         assert loaded.materials[0].schedule == "SCH40"
         assert loaded.materials[0].remark == "現場補料"
-        assert dialog.history_table.rowCount() == 1
+        assert dialog.history_table.rowCount() == 2
         assert dialog.history_table.item(0, 0).text() == "88_20260624_01"
+        assert dialog.history_table.item(1, 0).text() == "088_OLD"
 
         second_path = dialog.create_final()
         second_loaded = ChangeOrder.load_json(second_path)
         assert second_path == attachments_root / "88_20260624_02" / "change_order.json"
         assert second_loaded.status == Status.COMPLETE
-        assert dialog.history_table.rowCount() == 2
+        assert dialog.history_table.rowCount() == 3
     finally:
         dialog.close()
         dialog.deleteLater()

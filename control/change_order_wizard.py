@@ -739,6 +739,12 @@ class ChangeOrderWizard(QDialog):
         if not self.series_edit.text().strip() or not self.attachments_root.exists():
             return []
         records: list[dict[str, str]] = []
+        records.extend(self._new_history_records(series))
+        records.extend(self._legacy_history_records(series))
+        return sorted(records, key=lambda row: (row["date"], row["id"]), reverse=True)
+
+    def _new_history_records(self, series: str) -> list[dict[str, str]]:
+        records: list[dict[str, str]] = []
         for record_path in self.attachments_root.glob("*/change_order.json"):
             try:
                 co = ChangeOrder.load_json(record_path)
@@ -754,7 +760,27 @@ class ChangeOrderWizard(QDialog):
                 "status": _status_text(co.status),
                 "folder": str(record_path.parent),
             })
-        return sorted(records, key=lambda row: (row["date"], row["id"]), reverse=True)
+        return records
+
+    def _legacy_history_records(self, series: str) -> list[dict[str, str]]:
+        records: list[dict[str, str]] = []
+        for date_dir in self.attachments_root.iterdir():
+            if not date_dir.is_dir() or not _looks_like_date_folder(date_dir.name):
+                continue
+            for folder in date_dir.iterdir():
+                if not folder.is_dir():
+                    continue
+                prefix, suffix = _split_legacy_folder_name(folder.name)
+                if not _same_series(prefix, series):
+                    continue
+                records.append({
+                    "id": folder.name,
+                    "date": date_dir.name,
+                    "welds": suffix or "-",
+                    "status": "舊資料",
+                    "folder": str(folder),
+                })
+        return records
 
     def _refresh_selected_preview(self):
         if not hasattr(self, "selected_preview_table"):
@@ -1056,6 +1082,23 @@ def _source_base_for_weld_id(weld_id) -> str:
     if body.isdigit():
         return body.lstrip("0") or "0"
     return text
+
+
+def _looks_like_date_folder(name: str) -> bool:
+    return len(name) == 8 and name.isdigit()
+
+
+def _split_legacy_folder_name(name: str) -> tuple[str, str]:
+    series, sep, suffix = name.partition("_")
+    return series, suffix if sep else ""
+
+
+def _same_series(left, right) -> bool:
+    left_text = "" if left is None else str(left).strip()
+    right_text = "" if right is None else str(right).strip()
+    if left_text.isdigit() and right_text.isdigit():
+        return normalize_series_raw(left_text) == normalize_series_raw(right_text)
+    return left_text == right_text
 
 
 def _enum_value(value):
