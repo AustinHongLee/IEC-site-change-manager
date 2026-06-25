@@ -17,7 +17,7 @@
     --shadow-sm:0 1px 3px rgba(20,40,80,.05), 0 14px 32px rgba(20,40,80,.10);
   }
   *{box-sizing:border-box;}
-  button,input,select,.nav-step,tr.pick,.sheet,.pill{transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .14s ease;}
+  button,input,select,.nav-step,tr.pick,.sheet,.pill,.history-panel{transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease,transform .14s ease,opacity .16s ease;}
   html,body{height:100%;}
   body{
     margin:0;
@@ -64,9 +64,10 @@
   .app{
     height:100vh;
     display:grid;
-    grid-template-columns:276px minmax(0,1fr);
+    grid-template-columns:276px minmax(0,1fr) 304px;
     overflow:hidden;
   }
+  .app.history-collapsed{grid-template-columns:276px minmax(0,1fr) 0;}
   .side{
     display:flex;
     flex-direction:column;
@@ -154,6 +155,11 @@
   }
   .topbar h1{margin:0;color:var(--ink);font-size:20px;font-weight:800;}
   .topbar small{display:block;margin-top:2px;color:var(--muted);font-size:12px;}
+  .topbar-actions{
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
   .connection{
     display:inline-flex;
     align-items:center;
@@ -267,6 +273,65 @@
   .pill.ok{color:var(--ok);background:rgba(22,135,80,.12);}
   .pill.warn{color:var(--warn);background:rgba(181,105,0,.12);}
   .missing{margin-left:10px;color:var(--warn);}
+  .history-panel{
+    min-width:0;
+    height:100vh;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    padding:18px;
+    background:#f8fbff;
+    border-left:1px solid var(--line);
+    box-shadow:-8px 0 26px rgba(20,45,80,.06);
+    overflow:hidden;
+  }
+  .history-collapsed .history-panel{
+    padding-left:0;
+    padding-right:0;
+    border-left:0;
+    opacity:0;
+    pointer-events:none;
+  }
+  .history-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .history-head h2{margin:0;color:var(--ink);font-size:18px;}
+  .history-head p{margin:4px 0 0;color:var(--muted);font-size:12px;}
+  .history-list{
+    min-height:0;
+    overflow:auto;
+    display:grid;
+    gap:10px;
+    padding-right:2px;
+  }
+  .history-card{
+    padding:14px;
+    background:#fff;
+    border:1px solid rgba(20,40,80,.06);
+    border-radius:16px;
+    box-shadow:var(--shadow-sm);
+  }
+  .history-date{
+    color:var(--brand-strong);
+    font-weight:800;
+    font-size:13px;
+  }
+  .history-welds{
+    margin-top:8px;
+    color:var(--ink);
+    font-family:"Cascadia Mono","Consolas",monospace;
+    font-weight:800;
+    overflow-wrap:anywhere;
+  }
+  .history-card p{
+    margin:8px 0 0;
+    color:var(--muted);
+    font-size:12px;
+    overflow-wrap:anywhere;
+  }
   @keyframes hintPulse{0%,100%{box-shadow:0 0 0 0 rgba(245,158,11,0);}50%{box-shadow:0 0 0 5px rgba(245,158,11,.32);}}
   .hint-pulse{animation:hintPulse 1.4s ease-in-out infinite;border-radius:11px;}
   #toast{
@@ -282,8 +347,31 @@
     border-radius:8px;
     box-shadow:0 14px 34px rgba(0,0,0,.22);
   }
+  @media (max-width:1100px){
+    .app{grid-template-columns:276px minmax(0,1fr);}
+    .app.history-collapsed{grid-template-columns:276px minmax(0,1fr);}
+    .history-panel{
+      position:fixed;
+      top:0;
+      right:0;
+      bottom:0;
+      z-index:6;
+      width:320px;
+      max-width:88vw;
+      box-shadow:-18px 0 46px rgba(8,28,58,.22);
+      transform:translateX(0);
+    }
+    .history-collapsed .history-panel{
+      width:320px;
+      max-width:88vw;
+      padding:18px;
+      border-left:1px solid var(--line);
+      transform:translateX(100%);
+    }
+  }
   @media (max-width:900px){
     .app{grid-template-columns:1fr;}
+    .app.history-collapsed{grid-template-columns:1fr;}
     .side{height:auto;padding:14px 16px;}
     .brand{margin-bottom:12px;}
     .step-nav{grid-template-columns:repeat(4,minmax(0,1fr));}
@@ -291,7 +379,8 @@
     .side-meta{display:none;}
     .workspace{height:calc(100vh - 154px);}
     .topbar{padding:0 18px;}
+    .topbar-actions{gap:8px;}
     .content{padding:18px;}
-  .grid-2,.grid-3,.field-row{grid-template-columns:1fr;}
-  .statusbar{flex-wrap:wrap;}
+    .grid-2,.grid-3,.field-row{grid-template-columns:1fr;}
+    .statusbar{flex-wrap:wrap;}
   }

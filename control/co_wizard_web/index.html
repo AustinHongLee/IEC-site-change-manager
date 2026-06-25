@@ -34,7 +34,10 @@
         <h1 id="pageTitle">基本資料</h1>
         <small id="pageHint">建立修改單的圖號、日期與原因</small>
       </div>
-      <div class="connection"><span class="dot" id="connDot"></span><span id="connectionText">連線中</span></div>
+      <div class="topbar-actions">
+        <button class="ghost sm" type="button" id="historyTopToggle" onclick="toggleHistory()">收合歷史</button>
+        <div class="connection"><span class="dot" id="connDot"></span><span id="connectionText">連線中</span></div>
+      </div>
     </header>
 
     <main class="content">
@@ -266,6 +269,19 @@
       <button class="primary" type="button" onclick="doExport(true)">正式建立</button>
     </footer>
   </section>
+
+  <aside class="history-panel" aria-label="歷史修改單">
+    <div class="history-head">
+      <div>
+        <h2>歷史</h2>
+        <p id="historySubtitle">輸入流水號後顯示紀錄</p>
+      </div>
+      <button class="sm" type="button" onclick="toggleHistory(true)">收合</button>
+    </div>
+    <div class="history-list" id="historyRows">
+      <div class="empty">輸入流水號後顯示歷史修改單</div>
+    </div>
+  </aside>
 </div>
 <div id="toast"></div>
 
@@ -295,6 +311,7 @@ window.addEventListener('pywebviewready', async ()=>{
   byId('date').value = today;
   wireInputs();
   wireNav();
+  setHistoryCollapsed(window.matchMedia('(max-width: 1100px)').matches);
   try{
     const info = await call('info');
     connected = true;
@@ -305,6 +322,7 @@ window.addEventListener('pywebviewready', async ()=>{
     byId('connectionText').textContent = '連線失敗';
   }
   syncNavStatus();
+  await refreshHistory();
   await rebuild();
 });
 
@@ -322,6 +340,7 @@ function wireInputs(){
     byId(id).addEventListener('input', ()=>{
       state[id==='series'?'series':id] = val(id);
       syncNavStatus();
+      if(id === 'series'){ refreshHistory(); }
       rebuild();
     });
   });
@@ -338,6 +357,17 @@ function showPage(name){
   document.querySelectorAll('.nav-step').forEach(btn=>btn.classList.toggle('active', btn.dataset.page === name));
   byId('pageTitle').textContent = pageMeta[name][0];
   byId('pageHint').textContent = pageMeta[name][1];
+}
+
+function setHistoryCollapsed(collapsed){
+  document.querySelector('.app').classList.toggle('history-collapsed', !!collapsed);
+  byId('historyTopToggle').textContent = collapsed ? '歷史' : '收合歷史';
+}
+
+function toggleHistory(forceCollapsed){
+  const app = document.querySelector('.app');
+  const collapsed = typeof forceCollapsed === 'boolean' ? forceCollapsed : !app.classList.contains('history-collapsed');
+  setHistoryCollapsed(collapsed);
 }
 
 async function call(method, ...args){
@@ -388,8 +418,48 @@ async function loadWelds(){
   const result = await call('existing_welds', state.series);
   picked = null;
   renderPickList(result.welds || []);
+  await refreshHistory();
   showPage('welds');
   await rebuild();
+}
+
+async function refreshHistory(){
+  if(!api){ return; }
+  const series = val('series');
+  if(!series){
+    renderHistory(null);
+    return;
+  }
+  try{
+    const rows = await call('history', series);
+    renderHistory(rows || []);
+  }catch(e){
+    renderHistory([]);
+  }
+}
+
+function renderHistory(rows){
+  const list = byId('historyRows');
+  const series = val('series');
+  byId('historySubtitle').textContent = series ? `圖號 ${series}` : '輸入流水號後顯示紀錄';
+  if(rows === null){
+    list.innerHTML = '<div class="empty">輸入流水號後顯示歷史修改單</div>';
+    return;
+  }
+  if(!rows.length){
+    list.innerHTML = '<div class="empty">這張圖號還沒有歷史修改單</div>';
+    return;
+  }
+  list.innerHTML = '';
+  rows.forEach(row=>{
+    const welds = (row.welds || []).length ? row.welds.join('、') : '無焊口碼';
+    const card = document.createElement('article');
+    card.className = 'history-card';
+    card.innerHTML = `<div class="history-date">${escapeHtml(row.date || row.id)}</div>
+      <div class="history-welds">${escapeHtml(welds)}</div>
+      <p>${escapeHtml(row.reason || '未填原因')}</p>`;
+    list.appendChild(card);
+  });
 }
 
 function renderPickList(welds){
@@ -592,6 +662,7 @@ async function doExport(finalize){
     }
     toast(`${finalize ? '已正式建立' : '已存草稿'}：${result.id}`);
     byId('status').innerHTML = `已出單 <code>${escapeHtml(result.id)}</code>　${escapeHtml(result.folder)}`;
+    await refreshHistory();
   }catch(e){}
 }
 </script>
