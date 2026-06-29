@@ -35,7 +35,7 @@
         <small id="pageHint">建立修改單的圖號、日期與原因</small>
       </div>
       <div class="topbar-actions">
-        <button class="ghost sm" type="button" id="historyTopToggle" onclick="toggleHistory()">收合歷史</button>
+        <button class="ghost sm" type="button" id="historyTopToggle" onclick="toggleHistory()">收合側欄</button>
         <div class="connection"><span class="dot" id="connDot"></span><span id="connectionText">連線中</span></div>
       </div>
     </header>
@@ -270,18 +270,74 @@
     </footer>
   </section>
 
-  <aside class="history-panel" aria-label="歷史修改單">
-    <div class="history-head">
-      <div>
-        <h2>歷史</h2>
-        <p id="historySubtitle">輸入流水號後顯示紀錄</p>
+  <aside class="history-panel" aria-label="側欄工具">
+    <div class="side-panel-section">
+      <div class="history-head">
+        <div>
+          <h2>歷史</h2>
+          <p id="historySubtitle">輸入流水號後顯示紀錄</p>
+        </div>
+        <button class="sm" type="button" onclick="toggleHistory(true)">收合</button>
       </div>
-      <button class="sm" type="button" onclick="toggleHistory(true)">收合</button>
+      <div class="history-list" id="historyRows">
+        <div class="empty">輸入流水號後顯示歷史修改單</div>
+      </div>
     </div>
-    <div class="history-list" id="historyRows">
-      <div class="empty">輸入流水號後顯示歷史修改單</div>
+
+    <div class="side-panel-section">
+      <div class="history-head">
+        <div>
+          <h2>收件匣</h2>
+          <p>從 staging 快速加入照片</p>
+        </div>
+        <button class="sm" type="button" onclick="refreshStaging()">刷新</button>
+      </div>
+      <div class="role-toggle" aria-label="staging 加入角色">
+        <button class="sm active" type="button" data-stage-role="before" onclick="setStagingRole('before')">修改前</button>
+        <button class="sm" type="button" data-stage-role="after" onclick="setStagingRole('after')">修改後</button>
+      </div>
+      <div class="staging-list" id="stagingRows">
+        <div class="empty">尚未讀取 staging</div>
+      </div>
+    </div>
+
+    <div class="side-panel-section">
+      <div class="history-head">
+        <div>
+          <h2>標註</h2>
+          <p>照片版，PDF 下一刀</p>
+        </div>
+      </div>
+      <div class="annotation-list" id="annotationRows">
+        <div class="empty">先加入照片，再從這裡標註</div>
+      </div>
     </div>
   </aside>
+</div>
+
+<div class="annotation-modal" id="annotationModal" aria-hidden="true">
+  <div class="annotation-dialog">
+    <div class="history-head">
+      <div>
+        <h2>照片標註</h2>
+        <p id="annotationTitle">—</p>
+      </div>
+      <button class="sm" type="button" onclick="closeAnnotation()">關閉</button>
+    </div>
+    <div class="annotation-tools">
+      <button class="sm active" type="button" data-annotation-tool="pen" onclick="setAnnotationTool('pen')">畫筆</button>
+      <button class="sm" type="button" data-annotation-tool="arrow" onclick="setAnnotationTool('arrow')">箭頭</button>
+      <button class="sm" type="button" data-annotation-tool="text" onclick="setAnnotationTool('text')">文字</button>
+      <input id="annotationText" autocomplete="off" placeholder="文字內容">
+      <button class="sm" type="button" onclick="undoAnnotation()">復原</button>
+      <button class="sm" type="button" onclick="clearAnnotation()">清除</button>
+      <button class="primary sm" type="button" onclick="saveAnnotation()">儲存標註</button>
+    </div>
+    <div class="annotation-stage" id="annotationStage">
+      <img id="annotationImage" alt="">
+      <canvas id="annotationCanvas"></canvas>
+    </div>
+  </div>
 </div>
 <div id="toast"></div>
 
@@ -305,13 +361,20 @@ const missingLabels = {
 let api=null;
 let picked=null;
 let connected=false;
+let stagingRole='before';
+let annotatingIndex=-1;
+let annotationTool='pen';
+let annotationDrawing=false;
+let annotationStart=null;
+let annotationUndo=[];
 
 window.addEventListener('pywebviewready', async ()=>{
   api = window.pywebview.api;
   byId('date').value = today;
   wireInputs();
   wireNav();
-  setHistoryCollapsed(window.matchMedia('(max-width: 1100px)').matches);
+  wireAnnotationCanvas();
+  setHistoryCollapsed(false);
   try{
     const info = await call('info');
     connected = true;
@@ -323,6 +386,7 @@ window.addEventListener('pywebviewready', async ()=>{
   }
   syncNavStatus();
   await refreshHistory();
+  await refreshStaging();
   await rebuild();
 });
 
@@ -333,6 +397,14 @@ function escapeHtml(value){
 }
 function fileName(path){
   return String(path ?? '').split(/[\\/]/).pop() || '';
+}
+function fileUrl(path){
+  const text = String(path ?? '');
+  if(!text || /^(data|file):/i.test(text)){ return text; }
+  return 'file:///' + text.replace(/\\/g,'/').replace(/^\/+/, '');
+}
+function isImageFile(path){
+  return /\.(jpe?g|png|bmp|gif|webp)$/i.test(String(path ?? ''));
 }
 
 function wireInputs(){
@@ -361,7 +433,7 @@ function showPage(name){
 
 function setHistoryCollapsed(collapsed){
   document.querySelector('.app').classList.toggle('history-collapsed', !!collapsed);
-  byId('historyTopToggle').textContent = collapsed ? '歷史' : '收合歷史';
+  byId('historyTopToggle').textContent = collapsed ? '側欄' : '收合側欄';
 }
 
 function toggleHistory(forceCollapsed){
@@ -460,6 +532,48 @@ function renderHistory(rows){
       <p>${escapeHtml(row.reason || '未填原因')}</p>`;
     list.appendChild(card);
   });
+}
+
+async function refreshStaging(){
+  if(!api){ return; }
+  try{
+    const rows = await call('list_staging');
+    renderStaging(rows || []);
+  }catch(e){
+    renderStaging([]);
+  }
+}
+
+function setStagingRole(role){
+  stagingRole = role === 'after' ? 'after' : 'before';
+  document.querySelectorAll('[data-stage-role]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.stageRole === stagingRole);
+  });
+}
+
+function renderStaging(rows){
+  const list = byId('stagingRows');
+  if(!rows.length){
+    list.innerHTML = '<div class="empty">staging 目前沒有圖片</div>';
+    return;
+  }
+  list.innerHTML = '';
+  rows.forEach(item=>{
+    const card = document.createElement('button');
+    card.className = 'staging-card';
+    card.type = 'button';
+    card.innerHTML = `<img src="${escapeHtml(fileUrl(item.path))}" alt="">
+      <span>${escapeHtml(item.name)}</span>`;
+    card.addEventListener('click', ()=>addStagingPhoto(item.path));
+    list.appendChild(card);
+  });
+}
+
+async function addStagingPhoto(path){
+  state.photos.push({role:stagingRole, file:path});
+  toast(`已加入${stagingRole === 'after' ? '修改後' : '修改前'}照片：${fileName(path)}`);
+  showPage('files');
+  await rebuild();
 }
 
 function renderPickList(welds){
@@ -580,7 +694,7 @@ function renderFiles(){
     photoRows.innerHTML = '';
     state.photos.forEach((photo,index)=>{
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${photo.role === 'after' ? '修改後' : '修改前'}</td><td>${escapeHtml(fileName(photo.file))}</td><td><button class="sm" type="button" onclick="removePhoto(${index})">移除</button></td>`;
+      tr.innerHTML = `<td>${photo.role === 'after' ? '修改後' : '修改前'}</td><td>${escapeHtml(fileName(photo.file))}</td><td><button class="sm" type="button" onclick="openAnnotation(${index})">標註</button> <button class="sm" type="button" onclick="removePhoto(${index})">移除</button></td>`;
       photoRows.appendChild(tr);
     });
   }
@@ -588,9 +702,200 @@ function renderFiles(){
   const pdfRows = byId('pdfRows');
   if(!state.drawing_pdf){
     pdfRows.innerHTML = '<tr><td colspan="3" class="empty">尚未選擇 PDF</td></tr>';
+    renderAnnotationRows();
     return;
   }
   pdfRows.innerHTML = `<tr><td>圖面 PDF</td><td>${escapeHtml(fileName(state.drawing_pdf))}</td><td><button class="sm" type="button" onclick="clearPdf()">清除</button></td></tr>`;
+  renderAnnotationRows();
+}
+
+function renderAnnotationRows(){
+  const list = byId('annotationRows');
+  const photos = state.photos
+    .map((photo,index)=>({photo,index}))
+    .filter(item=>isImageFile(item.photo.file));
+  if(!photos.length){
+    list.innerHTML = '<div class="empty">先加入照片，再從這裡標註</div>';
+    return;
+  }
+  list.innerHTML = '';
+  photos.forEach(({photo,index})=>{
+    const card = document.createElement('button');
+    card.className = 'annotation-card';
+    card.type = 'button';
+    card.innerHTML = `<span>${photo.role === 'after' ? '修改後' : '修改前'}</span>
+      <strong>${escapeHtml(fileName(photo.file))}</strong>`;
+    card.addEventListener('click', ()=>openAnnotation(index));
+    list.appendChild(card);
+  });
+}
+
+function wireAnnotationCanvas(){
+  const canvas = byId('annotationCanvas');
+  canvas.addEventListener('pointerdown', startAnnotation);
+  canvas.addEventListener('pointermove', moveAnnotation);
+  canvas.addEventListener('pointerup', endAnnotation);
+  canvas.addEventListener('pointerleave', endAnnotation);
+}
+
+function setAnnotationTool(tool){
+  annotationTool = tool;
+  document.querySelectorAll('[data-annotation-tool]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.annotationTool === tool);
+  });
+}
+
+function openAnnotation(index){
+  const photo = state.photos[index];
+  if(!photo || !isImageFile(photo.file)){
+    toast('目前只支援照片標註，PDF 下一刀補', true);
+    return;
+  }
+  annotatingIndex = index;
+  annotationUndo = [];
+  byId('annotationTitle').textContent = fileName(photo.file);
+  byId('annotationModal').classList.add('open');
+  byId('annotationModal').setAttribute('aria-hidden','false');
+  const img = byId('annotationImage');
+  img.onload = setupAnnotationCanvas;
+  img.onerror = ()=>toast('照片載入失敗，無法標註', true);
+  img.src = fileUrl(photo.file);
+}
+
+function closeAnnotation(){
+  byId('annotationModal').classList.remove('open');
+  byId('annotationModal').setAttribute('aria-hidden','true');
+  annotatingIndex = -1;
+}
+
+function setupAnnotationCanvas(){
+  const img = byId('annotationImage');
+  const canvas = byId('annotationCanvas');
+  canvas.width = img.naturalWidth || img.clientWidth;
+  canvas.height = img.naturalHeight || img.clientHeight;
+  clearAnnotation(false);
+}
+
+function annotationPoint(event){
+  const canvas = byId('annotationCanvas');
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x:(event.clientX - rect.left) * (canvas.width / rect.width),
+    y:(event.clientY - rect.top) * (canvas.height / rect.height)
+  };
+}
+
+function annotationContext(){
+  const ctx = byId('annotationCanvas').getContext('2d');
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#f59e0b';
+  ctx.fillStyle = '#f59e0b';
+  ctx.font = '32px Microsoft JhengHei, Segoe UI, sans-serif';
+  return ctx;
+}
+
+function pushAnnotationUndo(){
+  const canvas = byId('annotationCanvas');
+  annotationUndo.push(canvas.toDataURL('image/png'));
+  if(annotationUndo.length > 20){ annotationUndo.shift(); }
+}
+
+function startAnnotation(event){
+  if(annotatingIndex < 0){ return; }
+  event.preventDefault();
+  const point = annotationPoint(event);
+  const ctx = annotationContext();
+  pushAnnotationUndo();
+  if(annotationTool === 'text'){
+    const text = val('annotationText') || '標註';
+    ctx.fillText(text, point.x, point.y);
+    return;
+  }
+  annotationDrawing = true;
+  annotationStart = point;
+  if(annotationTool === 'pen'){
+    ctx.beginPath();
+    ctx.moveTo(point.x, point.y);
+  }
+}
+
+function moveAnnotation(event){
+  if(!annotationDrawing || annotationTool !== 'pen'){ return; }
+  event.preventDefault();
+  const point = annotationPoint(event);
+  const ctx = annotationContext();
+  ctx.lineTo(point.x, point.y);
+  ctx.stroke();
+}
+
+function endAnnotation(event){
+  if(!annotationDrawing){ return; }
+  event.preventDefault();
+  const point = annotationPoint(event);
+  if(annotationTool === 'arrow'){
+    drawArrow(annotationStart, point);
+  }
+  annotationDrawing = false;
+  annotationStart = null;
+}
+
+function drawArrow(start, end){
+  const ctx = annotationContext();
+  const angle = Math.atan2(end.y - start.y, end.x - start.x);
+  const head = 28;
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.lineTo(end.x, end.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(end.x, end.y);
+  ctx.lineTo(end.x - head * Math.cos(angle - Math.PI / 6), end.y - head * Math.sin(angle - Math.PI / 6));
+  ctx.lineTo(end.x - head * Math.cos(angle + Math.PI / 6), end.y - head * Math.sin(angle + Math.PI / 6));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function clearAnnotation(track=true){
+  const canvas = byId('annotationCanvas');
+  if(track){ pushAnnotationUndo(); }
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function undoAnnotation(){
+  if(!annotationUndo.length){ return; }
+  const snapshot = annotationUndo.pop();
+  const canvas = byId('annotationCanvas');
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  img.onload = ()=>{
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  };
+  img.src = snapshot;
+}
+
+async function saveAnnotation(){
+  if(annotatingIndex < 0){ return; }
+  const photo = state.photos[annotatingIndex];
+  const base = byId('annotationImage');
+  const marks = byId('annotationCanvas');
+  const merged = document.createElement('canvas');
+  merged.width = marks.width;
+  merged.height = marks.height;
+  const ctx = merged.getContext('2d');
+  try{
+    ctx.drawImage(base, 0, 0, merged.width, merged.height);
+    ctx.drawImage(marks, 0, 0);
+    const result = await call('save_annotated', merged.toDataURL('image/png'), fileName(photo.file));
+    state.photos[annotatingIndex].file = result.path;
+    toast('已更新標註照片');
+    closeAnnotation();
+    await rebuild();
+  }catch(e){
+    toast('標註儲存失敗，可能是圖片來源不允許 canvas 合成', true);
+  }
 }
 
 function renderMaterials(){
