@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工務修改單 · 資料流程圖</title>
+<style>
+  :root{
+    --brand:#1860ab; --brand-deep:#0c2f5e; --brand-soft:#eef4fc;
+    --ink:#101a2e; --text:#33425c; --muted:#6b7a92;
+    --line:#e6ecf5; --page:#eceef3; --surface:#fff;
+    --ok:#157a47; --warn:#a85d00; --danger:#b42318;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--page); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft JhengHei",system-ui,sans-serif;
+    line-height:1.6; padding:0 0 60px;
+  }
+  .bar{
+    padding:18px 28px; color:#fff;
+    background:linear-gradient(110deg,#2575c6,#14548f 55%,var(--brand-deep));
+    box-shadow:0 8px 26px rgba(8,28,58,.20);
+  }
+  .bar h1{margin:0; font-size:20px; font-weight:800;}
+  .bar p{margin:3px 0 0; font-size:13px; color:rgba(255,255,255,.8);}
+  .wrap{max-width:1000px; margin:0 auto; padding:24px;}
+  .card{
+    background:var(--surface); border:1px solid rgba(20,40,80,.06);
+    border-radius:16px; box-shadow:0 1px 3px rgba(20,40,80,.05),0 14px 32px rgba(20,40,80,.08);
+    padding:22px 26px; margin-bottom:20px;
+  }
+  h2{margin:0 0 14px; font-size:17px; color:var(--ink);}
+  .mermaid{display:flex; justify-content:center; text-align:center;}
+  .hier{
+    font-family:"Cascadia Mono","Consolas","Microsoft JhengHei",monospace;
+    background:var(--brand-soft); border:1px solid #d6e4f6; border-radius:12px;
+    padding:16px 18px; color:var(--brand-deep); font-size:14px; white-space:pre; overflow:auto;
+  }
+  .one-liner{
+    margin:0; padding:14px 18px; border-radius:12px;
+    background:rgba(21,122,71,.08); border:1px solid rgba(21,122,71,.18);
+    color:var(--brand-deep); font-weight:600;
+  }
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top;}
+  th{color:var(--muted); font-size:12px; font-weight:700; background:#f5f8fd;}
+  td strong{color:var(--ink);}
+  .tag{display:inline-block; font-size:12px; font-weight:700; padding:1px 9px; border-radius:999px;}
+  .tag.do{color:var(--brand); background:var(--brand-soft);}
+  .tag.see{color:var(--ok); background:rgba(21,122,71,.10);}
+  .flow{font-family:"Cascadia Mono","Consolas",monospace; color:var(--ink); font-weight:700;}
+  .muted{color:var(--muted); font-size:13px;}
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>工務修改單 · 資料流程圖</h1>
+  <p>所有來源最後都匯進「ChangeOrder 記錄」這個唯一真相 — 精靈寫它，分頁讀它 / 改它 / 拿它產出</p>
+</div>
+
+<div class="wrap">
+
+  <div class="card">
+    <pre class="mermaid">
+flowchart TD
+  S1["DWG LIST / 焊口管制表<br/>焊口規格來源"]:::src
+  S4["材料價目表<br/>單價"]:::src
+  S3["staging 收件匣 + 現場照片 / 圖面"]:::src
+
+  W["修改單精靈 → 橋 co_bridge → builder<br/>挑焊口 · 自動編碼 · 驗證"]:::act
+
+  C[("ChangeOrder 記錄 · change_order.json<br/>每流水號一份 · 按日期分組<br/>＝ 唯一真相 · 未來 SQLite")]:::core
+
+  U1["產出報告<br/>挑日期 / 圖號 → 產出"]:::act
+  U2["紀錄管理<br/>看 / 改 / 重產"]:::act
+  U4["請款追蹤<br/>金額彙總"]:::act
+  U5["健康<br/>一致性檢查"]:::act
+
+  O1["Output 報告"]:::out
+  O2["PDF"]:::out
+
+  S1 -->|查規格| W
+  S3 -->|照片| W
+  W --> C
+
+  S1 -->|查規格| U1
+  C --> U1
+  U1 --> O1
+  U1 --> O2
+  U1 -.回寫狀態.-> C
+
+  C <-->|讀 / 寫| U2
+  S4 -->|單價算金額| U2
+  C -->|焊口 + 材料金額| U4
+  S4 --> U4
+  C -.檢查.-> U5
+
+  classDef src fill:#eef4fc,stroke:#1860ab,color:#0c2f5e;
+  classDef act fill:#ffffff,stroke:#1860ab,color:#101a2e;
+  classDef core fill:#1860ab,stroke:#0c2f5e,color:#ffffff;
+  classDef out fill:#eaf5ee,stroke:#157a47,color:#0c3a22;
+    </pre>
+  </div>
+
+  <div class="card">
+    <h2>資料層級（誰裝在誰裡面）</h2>
+    <div class="hier">日期資料夾        ← 只是「記錄按日期分組」的視圖，不是另一份輸入
+   └ 流水號 = 圖號 = 一張修改單（ChangeOrder）
+        └ 焊口（碼 + 尺寸 / 材質 / 厚度）
+        └ 照片（修改前 / 修改後）
+        └ 圖面 PDF
+        └ 材料
+        └ 狀態</div>
+    <p class="muted" style="margin:12px 0 0">關鍵：<b>狀態住在「流水號」這層</b>，不是日期。一個日期可能 3 張圖號只產了 1 張 → 日期顯示聚合「已產 1/3」。</p>
+  </div>
+
+  <div class="card">
+    <h2>分頁職責（產出 vs 管理）</h2>
+    <table>
+      <thead><tr><th>分頁</th><th>角色</th><th>做什麼</th></tr></thead>
+      <tbody>
+        <tr><td><strong>產出報告</strong></td><td><span class="tag do">做</span></td><td>挑日期 / 圖號 → 開始執行 → 產出 報告 / PDF；跑完回寫狀態</td></tr>
+        <tr><td><strong>紀錄管理</strong></td><td><span class="tag see">看 &amp; 改</span></td><td>瀏覽每個流水號的焊口明細 / 材料 / 狀態，編輯、重產、開資料夾</td></tr>
+        <tr><td><strong>材料價目</strong></td><td><span class="tag see">單價庫</span></td><td>提供單價 → 算金額，餵給 紀錄管理 / 請款</td></tr>
+        <tr><td><strong>請款追蹤</strong></td><td><span class="tag see">彙總</span></td><td>焊口金額 + 材料金額 → 請款</td></tr>
+        <tr><td><strong>健康</strong></td><td><span class="tag see">檢查</span></td><td>來源 ↔ 記錄 一致性檢測</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>狀態流轉</h2>
+    <p class="flow">草稿 → 待補（缺照片 / PDF）→ 完整 → ＜產出報告跑完＞ → 已產出　/　有錯</p>
+    <p class="one-liner" style="margin-top:14px">一句話：建立靠「修改單精靈」，真相存在「ChangeOrder 記錄」，其餘分頁都圍著這份記錄打轉。</p>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad:true,
+    theme:'base',
+    themeVariables:{
+      fontFamily:'-apple-system,Segoe UI,Microsoft JhengHei,sans-serif',
+      fontSize:'14px',
+      lineColor:'#6b7a92',
+      primaryColor:'#eef4fc',
+      primaryBorderColor:'#1860ab',
+      primaryTextColor:'#0c2f5e'
+    },
+    flowchart:{ htmlLabels:true, curve:'basis', nodeSpacing:45, rankSpacing:55 }
+  });
+</script>
+</body>
+</html>
