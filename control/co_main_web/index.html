@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工務修改單 · IEC Site Change Manager</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- 品牌列 -->
+  <header class="appbar">
+    <img class="brand-logo" src="../co_wizard_web/img/brand-logo.png" alt=""
+         onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
+    <div class="brand-mark-fallback">智</div>
+    <div class="brand-text">
+      <strong>工務修改單</strong>
+      <span>智源工程 · IEC Site Change Manager</span>
+    </div>
+    <div class="spacer"></div>
+    <span class="version-pill">0.1.0-alpha</span>
+  </header>
+
+  <!-- 分頁列 -->
+  <nav class="tabstrip" aria-label="主功能分頁">
+    <button class="tab active" type="button" data-tab="report" onclick="showTab('report')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 13h6M9 17h4"/></svg>產出報告
+    </button>
+    <button class="tab" type="button" data-tab="records" onclick="showTab('records')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></svg>紀錄管理
+    </button>
+    <button class="tab" type="button" data-tab="material" onclick="showTab('material')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4v5.59A2 2 0 0 0 4.83 11l9.58 9.59a2 2 0 0 0 2.83 0l3.35-3.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>材料價目
+    </button>
+    <button class="tab" type="button" data-tab="billing" onclick="showTab('billing')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2Z"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>請款追蹤
+    </button>
+    <button class="tab" type="button" data-tab="settings" onclick="showTab('settings')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>設定
+    </button>
+    <button class="tab" type="button" data-tab="health" onclick="showTab('health')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2 6 4-12 2 6h6"/></svg>健康
+    </button>
+  </nav>
+
+  <!-- 分頁內容 -->
+  <div class="body">
+
+    <!-- ① 產出報告 -->
+    <section class="page active" id="tab-report">
+      <div class="report-grid">
+
+        <!-- 日期面板 -->
+        <aside class="sheet datepanel">
+          <div class="ph">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
+              日期資料夾
+            </h2>
+          </div>
+          <div class="datelist" id="dateList"></div>
+          <div class="datefoot">
+            <button class="linkbtn" type="button" onclick="selectAll(true)">全選</button>
+            <button class="linkbtn" type="button" onclick="selectAll(false)">取消</button>
+            <span class="grow"></span>
+            <span id="dateSummary">—</span>
+          </div>
+        </aside>
+
+        <!-- 工作區 -->
+        <div class="work">
+
+          <div class="sheet dwg-bar">
+            <span class="dwg-ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+            </span>
+            <div class="dwg-info">
+              <span class="dwg-label">DWG LIST</span>
+              <span class="dwg-file" id="dwgFile">已自動載入 · DWG_LIST.xlsx</span>
+            </div>
+            <span class="ok-chip" id="dwgStatus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已載入</span>
+            <button class="ghost sm" type="button" onclick="pickDwg()">更換</button>
+          </div>
+
+          <div class="sheet pad">
+            <div class="actions">
+              <button class="primary" type="button" onclick="runStart()">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5Z"/></svg>開始執行
+              </button>
+              <button class="danger" type="button" onclick="runStop()">
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>停止
+              </button>
+              <button type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>重試失敗
+              </button>
+              <span class="sep"></span>
+              <button type="button" onclick="toast('（皮）建立精靈 — 之後接')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="m6.3 6.3 2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8"/></svg>建立精靈
+              </button>
+              <button type="button" onclick="openWizard()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>修改單精靈
+              </button>
+              <span class="sep"></span>
+              <button class="ghost" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg>Output
+              </button>
+              <button class="ghost" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/></svg>PDF
+              </button>
+            </div>
+
+            <div class="progress-row" style="margin-top:16px">
+              <div class="progress"><i id="progFill"></i></div>
+              <span class="progress-pct" id="progPct">0%</span>
+            </div>
+          </div>
+
+          <div class="sheet console">
+            <div class="ph">
+              <h3>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>
+                執行日誌
+              </h3>
+            </div>
+            <div class="log" id="log">
+              <div class="logline info"><time>[15:40:29]</time><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span><span class="msg">已載入 2 個日期資料夾</span></div>
+              <div class="logline ok"><time>[15:40:29]</time><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span class="msg">系統啟動完成</span></div>
+              <div class="logline dir"><time>[15:40:29]</time><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg></span><span class="msg">基準目錄：C:\Users\a0976\Documents\GitHub\工務修改單</span></div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- 其餘分頁（佔位） -->
+    <section class="page" id="tab-records">
+      <div class="rec-shell">
+
+        <div class="sheet rec-filter">
+          <div class="rec-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="recSearch" placeholder="搜尋 報告編號 / 流水號 / 說明…">
+          </div>
+          <select id="recStatus">
+            <option>全部狀態</option><option>已產出</option><option>未產出</option><option>需重產</option><option>已歸檔</option>
+          </select>
+          <input class="rec-date" placeholder="起 YYYYMMDD">
+          <span class="rec-dash">–</span>
+          <input class="rec-date" placeholder="迄 YYYYMMDD">
+          <button class="ghost sm" type="button">刷新</button>
+        </div>
+
+        <div class="rec-main">
+          <div class="sheet rec-list">
+            <table>
+              <thead><tr><th>報告編號</th><th>日期</th><th>流水號</th><th>焊口</th><th>狀態</th></tr></thead>
+              <tbody id="recRows"><tr><td colspan="5" class="empty">尚無紀錄</td></tr></tbody>
+            </table>
+          </div>
+
+          <div class="sheet rec-detail">
+            <div class="rec-detail-head">
+              <div class="rec-detail-title">
+                <strong id="recTitle">—</strong>
+                <span class="rec-meta" id="recMeta">選一筆紀錄</span>
+              </div>
+              <div class="rec-detail-actions">
+                <button class="ghost sm" type="button" onclick="logLine('info','（皮）編輯紀錄')">編輯</button>
+                <button class="ghost sm" type="button" onclick="logLine('info','（皮）開資料夾')">開資料夾</button>
+                <button class="ghost sm" type="button" onclick="logLine('info','（皮）開 PDF')">PDF</button>
+              </div>
+            </div>
+            <div class="rec-summary" id="recSummary"></div>
+            <div class="rec-body" id="recBody"></div>
+          </div>
+        </div>
+
+        <div class="sheet rec-foot">
+          <span id="recCount">共 0 筆</span>
+          <span class="grow"></span>
+          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存變更')">儲存變更</button>
+          <span class="rec-sep"></span>
+          <button class="ghost sm" type="button">匯出 Excel</button>
+          <span class="menu-wrap">
+            <button class="ghost sm" type="button" onclick="toggleMenu(this)">輸出中心 ▾</button>
+            <div class="menu-pop">
+              <button type="button" onclick="menuPick('現場統計單 (xlsx)')">現場統計單 (xlsx)</button>
+              <button type="button" onclick="menuPick('統計 PDF')">統計 PDF</button>
+              <button type="button" onclick="menuPick('before / after 照片 PDF')">照片 PDF</button>
+            </div>
+          </span>
+        </div>
+
+      </div>
+    </section>
+    <section class="page" id="tab-material">
+      <div class="rec-shell">
+        <div class="sheet rec-filter">
+          <div class="rec-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="pbSearch" placeholder="搜尋 料號 / 零件 / 尺寸 / 材質…" oninput="renderPricebook()">
+          </div>
+          <label class="check"><input type="checkbox" id="pbUnpriced" onchange="renderPricebook()"> 只看未定價</label>
+          <select id="pbPart" onchange="renderPricebook()"></select>
+          <select id="pbMat" onchange="renderPricebook()"></select>
+          <button class="ghost sm" type="button" onclick="renderPricebook()">刷新</button>
+        </div>
+
+        <div class="sheet rec-body" id="pbScroll">
+          <div id="pbTable"></div>
+        </div>
+
+        <div class="sheet rec-foot">
+          <span id="pbCount">共 0 筆</span>
+          <span class="grow"></span>
+          <button class="sm" type="button" onclick="pbAddRow()">＋ 新增</button>
+          <button class="sm" type="button" onclick="logLine('info','（皮）複製選取料號')">複製</button>
+          <span class="rec-sep"></span>
+          <span class="menu-wrap">
+            <button class="ghost sm" type="button" onclick="toggleMenu(this)">匯入匯出 ▾</button>
+            <div class="menu-pop">
+              <button type="button" onclick="menuPick('匯入骨架')">匯入骨架</button>
+              <button type="button" onclick="menuPick('匯入價格表')">匯入價格表</button>
+              <button type="button" onclick="menuPick('匯出補價表')">匯出補價表</button>
+            </div>
+          </span>
+          <span class="menu-wrap">
+            <button class="ghost sm" type="button" onclick="toggleMenu(this)">批次填價 ▾</button>
+            <div class="menu-pop">
+              <button type="button" onclick="menuPick('選取顯示的料號')">選取顯示的料號</button>
+              <button type="button" onclick="menuPick('批次填入單價')">批次填入單價</button>
+              <button type="button" onclick="menuPick('套用補價到記錄')">套用補價到記錄</button>
+            </div>
+          </span>
+          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存價目表')">儲存</button>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="tab-billing">
+      <div class="rec-shell">
+        <div class="sheet pad bill-stats" id="billStats"></div>
+
+        <div class="sheet rec-filter">
+          <div class="rec-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="billSearch" placeholder="搜尋 報告編號 / 流水號 / 說明…" oninput="renderBilling()">
+          </div>
+          <select id="billStatus" onchange="renderBilling()"></select>
+          <input class="rec-date" placeholder="起 YYYYMMDD">
+          <span class="rec-dash">–</span>
+          <input class="rec-date" placeholder="迄 YYYYMMDD">
+          <button class="ghost sm" type="button" onclick="renderBilling()">刷新</button>
+        </div>
+
+        <div class="sheet rec-body" id="billScroll"><div id="billTable"></div></div>
+
+        <div class="sheet rec-foot">
+          <span id="billCount">共 0 筆</span>
+          <span class="grow"></span>
+          <button class="sm" type="button" onclick="logLine('info','（皮）建立請款批次')">建立批次</button>
+          <span class="menu-wrap">
+            <button class="ghost sm" type="button" onclick="toggleMenu(this)">請款批次 ▾</button>
+            <div class="menu-pop">
+              <button type="button" onclick="openBatch()">查看批次清單</button>
+              <button type="button" onclick="menuPick('更新批次狀態')">更新批次狀態</button>
+            </div>
+          </span>
+          <span class="rec-sep"></span>
+          <button class="ghost sm" type="button">匯出報表</button>
+          <button class="sm" type="button">請款單</button>
+          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存請款狀態')">儲存</button>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="tab-settings">
+      <div class="settings-wrap2">
+        <div class="set-section">
+          <div class="set-sec-head"><h3>產出選項</h3><span>程式預設值，通常不用動</span></div>
+          <div class="set-grid">
+            <label class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/><path d="M9 13h2M9 17h4"/></svg></span>
+              <span class="body"><strong>匯出 PDF</strong><span>輸出時同時產生 PDF</span></span>
+              <span class="ctrl"><span class="switch"><input type="checkbox" checked><span class="track"></span></span></span>
+            </label>
+            <label class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 19 9-7-9-7v14Z"/><path d="m2 19 9-7-9-7v14Z"/></svg></span>
+              <span class="body"><strong>略過未變更</strong><span>跳過沒變動的項目（增量產出）</span></span>
+              <span class="ctrl"><span class="switch"><input type="checkbox" checked><span class="track"></span></span></span>
+            </label>
+            <label class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></span>
+              <span class="body"><strong>自動處理圖片</strong><span>自動裁切與處理照片</span></span>
+              <span class="ctrl"><span class="switch"><input type="checkbox" checked><span class="track"></span></span></span>
+            </label>
+            <label class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 2 1.5 1.5M16 2l-1.5 1.5"/><path d="M12 20a6 6 0 0 0 6-6v-3a6 6 0 0 0-12 0v3a6 6 0 0 0 6 6Z"/><path d="M12 14v6M3 13h3M18 13h3M3.5 8l2.5 1M20.5 8 18 9M3.5 18 6 17M20.5 18 18 17"/></svg></span>
+              <span class="body"><strong>Debug 模式</strong><span>輸出詳細除錯訊息</span></span>
+              <span class="ctrl"><span class="switch"><input type="checkbox"><span class="track"></span></span></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="set-section">
+          <div class="set-sec-head"><h3>路徑</h3><span>自動偵測，需要時覆蓋</span></div>
+          <div class="set-grid">
+            <div class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
+              <span class="body"><strong>DWG LIST</strong><span id="setDwgPath">已自動載入 · DWG_LIST.xlsx</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickDwg()">更換</button></span>
+            </div>
+            <div class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg></span>
+              <span class="body"><strong>Output 資料夾</strong><span>…\工務修改單\output</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button">更換</button></span>
+            </div>
+            <div class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/></svg></span>
+              <span class="body"><strong>PDF 資料夾</strong><span>…\工務修改單\pdf</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button">更換</button></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="page" id="tab-health">
+      <div class="health-wrap">
+        <div class="sheet hbanner">
+          <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.42 0Z"/></svg></span>
+          <div class="htext">
+            <strong>可使用，有 2 個提醒</strong>
+            <span>專案：…\GitHub\工務修改單　·　records 4 · details 12 · materials 10 · 附件 3　·　錯誤 0 / 提醒 2 / 資訊 1</span>
+          </div>
+          <div class="hactions">
+            <button class="primary sm" type="button" onclick="logLine('info','（皮）重新檢查健康')">重新檢查</button>
+            <button class="sm" type="button" onclick="logLine('ok','（皮）修復可自動修復項')">修復</button>
+            <span class="menu-wrap">
+              <button class="ghost sm" type="button" onclick="toggleMenu(this)">診斷包 ▾</button>
+              <div class="menu-pop down">
+                <button type="button" onclick="menuPick('支援診斷包')">支援診斷包</button>
+                <button type="button" onclick="menuPick('深度診斷包')">深度診斷包</button>
+              </div>
+            </span>
+            <button class="ghost sm" type="button" onclick="logLine('info','工務修改單 · IEC Site Change Manager 0.1.0-alpha')">版本資訊</button>
+          </div>
+        </div>
+
+        <div class="sheet pad" style="display:flex;gap:10px;flex-wrap:wrap;">
+          <div class="metric"><span class="k">records</span><span class="v">4</span></div>
+          <div class="metric"><span class="k">details</span><span class="v">12</span></div>
+          <div class="metric"><span class="k">materials</span><span class="v">10</span></div>
+          <div class="metric"><span class="k">附件資料夾</span><span class="v">3</span></div>
+        </div>
+
+        <div class="sheet rec-body health-issues">
+          <table>
+            <thead><tr><th>來源</th><th>等級</th><th>項目</th><th>內容</th><th>參考</th></tr></thead>
+            <tbody>
+              <tr><td>啟動守門</td><td><span class="lvl warning">提醒</span></td><td>缺少輸出資料夾</td><td>output/ 不存在，將於按下「修復」時自動建立</td><td><code>output</code></td></tr>
+              <tr><td>資料稽核</td><td><span class="lvl warning">提醒</span></td><td>孤兒附件</td><td>attachments 有 1 個資料夾找不到對應記錄</td><td><code>100_20260301_03</code></td></tr>
+              <tr><td>資料稽核</td><td><span class="lvl info">資訊</span></td><td>未定價材料</td><td>材料價目有 2 筆未定價（閘閥 / 球閥）</td><td><code>GV-2-304</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p class="health-hint">健康檢查只會「讀取」資料；只有按下「修復」時，才會建立缺少的必要資料夾或預設設定。</p>
+      </div>
+    </section>
+
+  </div>
+
+  <footer class="statusbar">
+    <span class="dot"></span><span id="statusText">就緒</span>
+  </footer>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="if(event.target===this)closeLightbox()">
+  <div class="lb-dialog">
+    <div class="lb-head">
+      <strong id="lbTitle">—</strong>
+      <div class="lb-actions">
+        <button class="ghost sm" type="button" onclick="enterAnnotate()">標註</button>
+        <button class="ghost sm" type="button" onclick="lbAct('取代')">取代</button>
+        <button class="ghost sm" type="button" onclick="lbAct('刪除')">刪除</button>
+        <button class="sm" type="button" onclick="closeLightbox()">關閉</button>
+      </div>
+    </div>
+    <div class="lb-stage">
+      <button class="lb-nav prev" type="button" onclick="lbNav(-1)" aria-label="上一張"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+      <img id="lbImg" src="" alt="">
+      <canvas id="lbCanvas"></canvas>
+      <button class="lb-nav next" type="button" onclick="lbNav(1)" aria-label="下一張"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+    </div>
+    <div class="lb-tools" id="lbTools">
+      <button class="sm lb-tool active" type="button" data-tool="pen" onclick="annoTool('pen')">畫筆</button>
+      <button class="sm lb-tool" type="button" data-tool="arrow" onclick="annoTool('arrow')">箭頭</button>
+      <button class="sm" type="button" onclick="annoUndo()">復原</button>
+      <button class="sm" type="button" onclick="annoClear()">清除</button>
+      <span class="grow"></span>
+      <button class="sm" type="button" onclick="exitAnnotate()">取消</button>
+      <button class="primary sm" type="button" onclick="annoSave()">儲存標註</button>
+    </div>
+    <div class="lb-foot" id="lbFoot"></div>
+  </div>
+</div>
+
+<div class="modal" id="batchModal" onclick="if(event.target===this)closeBatch()">
+  <div class="modal-dialog">
+    <div class="modal-head">
+      <strong>請款批次</strong>
+      <button class="sm" type="button" onclick="closeBatch()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <table>
+        <thead><tr><th>批次編號</th><th>狀態</th><th>期數</th><th>業主</th><th>張數</th><th>建立時間</th><th>更新時間</th></tr></thead>
+        <tbody id="batchRows"></tbody>
+      </table>
+    </div>
+    <div class="modal-foot">
+      <span class="grow"></span>
+      <button class="sm" type="button" onclick="toast('（皮）建立新批次');closeBatch()">建立批次</button>
+      <button class="primary sm" type="button" onclick="toast('（皮）更新批次狀態','ok');closeBatch()">更新狀態</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+function showTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+}
+const statusMeta = {
+  done:    {cls:'done',    label:'已產出'},
+  pending: {cls:'pending', label:'未產出'},
+  error:   {cls:'error',   label:'有錯'}
+};
+const dateFolders = [
+  {date:'20250820', open:true, items:[
+    {series:'P-1820-01', welds:3, status:'done',    sel:true},
+    {series:'P-1820-02', welds:2, status:'done',    sel:true},
+    {series:'P-1820-05', welds:5, status:'pending', sel:false}
+  ]},
+  {date:'20260112', open:false, items:[
+    {series:'P-2601-03', welds:1, status:'pending', sel:false}
+  ]}
+];
+const ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
+function fmtDate(s){
+  const dt = new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8));
+  const wd = '週' + '日一二三四五六'[dt.getDay()];
+  return {d:`${s.slice(0,4)}-${s.slice(4,6)}-${s.slice(6,8)}`, wd};
+}
+function aggStatus(f){
+  const total = f.items.length;
+  const done = f.items.filter(it=>it.status==='done').length;
+  let cls = 'pending';
+  if(total>0 && done===total) cls='done';
+  else if(done>0) cls='partial';
+  return {cls, label:`已產 ${done}/${total}`, total};
+}
+function renderDates(){
+  const list = document.getElementById('dateList');
+  list.innerHTML = '';
+  dateFolders.forEach(f=>{
+    const {d, wd} = fmtDate(f.date);
+    const ag = aggStatus(f);
+    const allSel = f.items.length>0 && f.items.every(it=>it.sel);
+
+    const group = document.createElement('div');
+    group.className = 'date-group' + (f.open ? ' open' : '');
+
+    const head = document.createElement('div');
+    head.className = 'date-item' + (allSel ? ' selected' : '');
+    head.innerHTML =
+      `<span class="date-check">${ICON_CHECK}</span>`
+      + `<span class="date-main">`
+      +   `<span class="date-top"><span class="d">${d}</span><span class="wd">${wd}</span></span>`
+      +   `<span class="date-sub"><span class="st ${ag.cls}">${ag.label}</span></span>`
+      + `</span>`
+      + `<span class="date-count" title="圖號數"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/></svg>${ag.total}</span>`
+      + `<span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>`;
+    head.querySelector('.date-check').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const target = !allSel;
+      f.items.forEach(it=>it.sel = target);
+      renderDates();
+    });
+    head.addEventListener('click', ()=>{ f.open = !f.open; renderDates(); });
+    group.appendChild(head);
+
+    const kids = document.createElement('div');
+    kids.className = 'date-children';
+    f.items.forEach(it=>{
+      const sm = statusMeta[it.status] || statusMeta.pending;
+      const ci = document.createElement('div');
+      ci.className = 'child-item' + (it.sel ? ' sel' : '');
+      ci.innerHTML =
+        `<span class="child-check">${ICON_CHECK}</span>`
+        + `<span class="child-series">${it.series}</span>`
+        + `<span class="weld-chip">${it.welds} 焊口</span>`
+        + `<span class="st ${sm.cls}">${sm.label}</span>`
+        + `<button class="child-open" type="button" title="在紀錄管理開啟此圖號" onclick="event.stopPropagation();openRecordBySeries('${it.series}')">↗</button>`;
+      ci.addEventListener('click', ()=>{ it.sel = !it.sel; renderDates(); });
+      kids.appendChild(ci);
+    });
+    group.appendChild(kids);
+
+    list.appendChild(group);
+  });
+  updateDateSummary();
+}
+function selectAll(on){ dateFolders.forEach(f=>f.items.forEach(it=>it.sel=on)); renderDates(); }
+function updateDateSummary(){
+  let sel=0, total=0;
+  dateFolders.forEach(f=>f.items.forEach(it=>{ total++; if(it.sel) sel++; }));
+  document.getElementById('dateSummary').textContent = `已選 ${sel} · 共 ${total} 張圖號`;
+}
+renderDates();
+/* ── 紀錄管理（皮，示意資料） ── */
+const PB = 'file:///C:/Users/a0976/Downloads/Testing_form/attachments_media/20260317/0107_17r4_18r4_19a4/before.jpg';
+const PA = 'file:///C:/Users/a0976/Downloads/Testing_form/attachments_media/20260317/0107_17r4_18r4_19a4/after.jpg';
+function mkPhotos(n){
+  const out = [];
+  for(let i=0;i<n;i++){ out.push(i%2===0 ? {label:'修改前 '+(Math.floor(i/2)+1), src:PB} : {label:'修改後 '+(Math.floor(i/2)+1), src:PA}); }
+  return out;
+}
+const WELD_POOL = [
+  {code:'17r4',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0',price:1200,amount:1200},
+  {code:'18r4',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0',price:1200,amount:1200},
+  {code:'19a4',mark:'新焊',size:'1"',mat:'SUS304',sch:'SCH10',coef:'1.0',price:800,amount:800},
+  {code:'1001',mark:'新焊',size:'3"',mat:'SUS316',sch:'SCH10',coef:'1.2',price:1800,amount:2160}
+];
+const MAT_POOL = [
+  {part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:2,price:300,amount:600},
+  {part:'45° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:1,price:280,amount:280},
+  {part:'同心異徑',size:'3"x2"',sch:'SCH40',mat:'SUS304',qty:1,price:450,amount:450},
+  {part:'法蘭',size:'2"',sch:'150#',mat:'SUS304',qty:2,price:520,amount:1040},
+  {part:'墊片',size:'2"',sch:'150#',mat:'PTFE',qty:2,price:60,amount:120},
+  {part:'直管',size:'2"',sch:'SCH40',mat:'SUS304',qty:3,price:240,amount:720},
+  {part:'三通',size:'2"',sch:'SCH40',mat:'SUS304',qty:1,price:680,amount:680},
+  {part:'閘閥',size:'2"',sch:'150#',mat:'CF8',qty:1,price:2400,amount:2400}
+];
+function randInt(a,b){ return a + Math.floor(Math.random()*(b-a+1)); }
+function mkMats(){ return MAT_POOL.slice(0, randInt(4,8)); }
+const records = [
+  {id:'CO-250820-01', date:'2025-08-20', series:'P-1820-01', status:'done',    reason:'現場管線干涉', welds:WELD_POOL.slice(), mats:mkMats(), photos:mkPhotos(2)},
+  {id:'CO-250820-02', date:'2025-08-20', series:'P-1820-02', status:'done',    reason:'閥件位置調整', welds:WELD_POOL.slice(), mats:mkMats(), photos:mkPhotos(4)},
+  {id:'CO-250820-05', date:'2025-08-20', series:'P-1820-05', status:'pending', reason:'新增排水支管', welds:WELD_POOL.slice(), mats:mkMats(), photos:mkPhotos(8)},
+  {id:'CO-260112-03', date:'2026-01-12', series:'P-2601-03', status:'pending', reason:'管線干涉避讓', welds:WELD_POOL.slice(), mats:mkMats(), photos:mkPhotos(4)}
+];
+let recSel = 0;
+let recSub = 'welds';
+function renderRecords(){
+  const body = document.getElementById('recRows');
+  if(!body){ return; }
+  body.innerHTML = '';
+  records.forEach((r,i)=>{
+    const sm = statusMeta[r.status] || statusMeta.pending;
+    const bad = recordBad(r);
+    const tr = document.createElement('tr');
+    tr.className = 'rec-row' + (i===recSel ? ' selected' : '') + (bad ? ' bad' : '');
+    tr.innerHTML = `<td><code>${r.id}</code></td><td>${r.date.slice(5)}</td><td>${r.series}</td><td>${r.welds.length} 口</td><td><span class="st ${sm.cls}">${sm.label}</span>${bad ? ' <span class="warn-chip" title="有欄位需檢查">⚠</span>' : ''}</td>`;
+    tr.addEventListener('click', ()=>{ recSel=i; renderRecords(); renderRecDetail(); });
+    body.appendChild(tr);
+  });
+  document.getElementById('recCount').textContent = `共 ${records.length} 筆`;
+}
+function metric(k,v){ return `<div class="metric"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+function section(title, count, html, emptyMsg){
+  const head = `<div class="rec-sec-head"><h4>${title}</h4><span class="cnt">${count}</span></div>`;
+  return `<div class="rec-sec">${head}${html || `<div class="rec-none">${emptyMsg}</div>`}</div>`;
+}
+function updateRecSummary(){
+  const r = records[recSel];
+  if(!r){ return; }
+  const weldAmt = r.welds.reduce((s,w)=>s+(+w.amount||0),0);
+  const matAmt = r.mats.reduce((s,m)=>s+(+m.amount||0),0);
+  document.getElementById('recSummary').innerHTML =
+    metric('焊口', r.welds.length+' 口') + metric('材料', r.mats.length+' 項')
+    + metric('照片', r.photos.length+' 張') + metric('金額', money(weldAmt+matAmt));
+}
+function renderRecDetail(){
+  const r = records[recSel];
+  if(!r){ return; }
+  const sm = statusMeta[r.status] || statusMeta.pending;
+  document.getElementById('recTitle').textContent = r.series;
+  document.getElementById('recMeta').innerHTML = `<code>${r.id}</code> · ${r.date} · <span class="st ${sm.cls}">${sm.label}</span> · ${r.reason}`;
+  updateRecSummary();
+  document.getElementById('recBody').innerHTML =
+      section('焊口明細', r.welds.length, recWeldTable(r.welds))
+    + section('材料明細', r.mats.length, recMatTable(r.mats))
+    + section('圖片明細', r.photos.length, r.photos.length ? recPhotoStrip(r.photos) : null, '尚無照片');
+}
+function money(n){ return n ? 'NT$ ' + Number(n).toLocaleString() : '—'; }
+function esc(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+const OPT = {
+  mark: ['重焊','新焊'],
+  size: ['1/2"','3/4"','1"','1.5"','2"','2.5"','3"','4"','6"','8"','2"x1"','3"x2"','4"x3"'],
+  mat:  ['SUS304','SUS316','SUS316L','A106-B','CS','PTFE'],
+  sch:  ['SCH10','SCH20','SCH40','SCH80','SCH160','150#','300#'],
+  part: ['90° 彎頭','45° 彎頭','同心異徑','偏心異徑','法蘭','墊片','直管','三通','閘閥','球閥']
+};
+function codeValid(v){ return /^\d+[A-Za-z]?\d*$/.test(String(v ?? '').trim()); }
+function qtyValid(v){ const n = parseFloat(v); return !isNaN(n) && n > 0; }
+function fieldValid(field,value){
+  if(field==='code'){ return codeValid(value); }
+  if(field==='qty'){ return qtyValid(value); }
+  if(OPT[field]){ return OPT[field].includes(String(value)); }
+  return true;
+}
+function weldBad(w){ return !codeValid(w.code) || !fieldValid('mark',w.mark) || !fieldValid('size',w.size) || !fieldValid('mat',w.mat) || !fieldValid('sch',w.sch); }
+function matBad(m){ return !fieldValid('part',m.part) || !fieldValid('size',m.size) || !fieldValid('sch',m.sch) || !fieldValid('mat',m.mat) || !qtyValid(m.qty); }
+function recordBad(r){ return r.welds.some(weldBad) || r.mats.some(matBad); }
+
+function cellSelect(kind,i,field,value,optKey){
+  const opts = OPT[optKey];
+  const val = String(value ?? '');
+  const bad = !opts.includes(val);
+  let html = opts.map(o=>`<option value="${esc(o)}"${o===val?' selected':''}>${esc(o)}</option>`).join('');
+  if(bad){ html = `<option value="${esc(val)}" selected>${esc(val||'（空白）')}</option>` + html; }
+  return `<td class="cell"><select class="edit sel${bad?' bad':''}" onchange="editCell('${kind}',${i},'${field}',this.value,this)">${html}</select></td>`;
+}
+function cellText(kind,i,field,value,valid){
+  return `<td class="cell"><input class="edit${valid(value)?'':' bad'}" value="${esc(value)}" oninput="editCell('${kind}',${i},'${field}',this.value,this)"></td>`;
+}
+function cellNum(kind,i,field,value,valid){
+  return `<td class="cell num"><input class="edit${valid(value)?'':' bad'}" value="${esc(value)}" oninput="editCell('${kind}',${i},'${field}',this.value,this)"></td>`;
+}
+function cellRO(content){
+  return `<td class="cell ro" title="由中央（材料價目 / 係數表）帶入，不在此修改">${content}</td>`;
+}
+function delCell(kind,i){
+  return `<td class="rowdel"><button type="button" class="xbtn" title="刪除此列" onclick="delRow('${kind}',${i})">×</button></td>`;
+}
+function recWeldTable(ws){
+  const cols = `<colgroup><col style="width:12%"><col style="width:10%"><col style="width:9%"><col style="width:13%"><col style="width:11%"><col style="width:8%"><col style="width:15%"><col style="width:16%"><col style="width:6%"></colgroup>`;
+  const rows = ws.map((w,i)=>`<tr>`
+    + cellText('weld',i,'code',w.code,codeValid)
+    + cellSelect('weld',i,'mark',w.mark,'mark')
+    + cellSelect('weld',i,'size',w.size,'size')
+    + cellSelect('weld',i,'mat',w.mat,'mat')
+    + cellSelect('weld',i,'sch',w.sch,'sch')
+    + cellRO(w.coef) + cellRO(money(w.price))
+    + `<td class="amt" id="amt-weld-${i}">${money(w.amount)}</td>` + delCell('weld',i)
+    + `</tr>`).join('');
+  return `<table class="edit-table">${cols}<thead><tr><th>焊口碼</th><th>標記</th><th>尺寸</th><th>材質</th><th>厚度</th><th>係數</th><th>單價</th><th>金額</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    + `<button type="button" class="addrow" onclick="addRow('weld')">＋ 新增焊口</button>`;
+}
+function editCell(kind,i,field,value,el){
+  const r = records[recSel];
+  const row = (kind==='weld' ? r.welds : r.mats)[i];
+  if(!row){ return; }
+  row[field] = value;
+  if(kind==='mat' && field==='qty'){
+    row.amount = Math.round((parseFloat(row.qty)||0) * (parseFloat(row.price)||0));
+    const c = document.getElementById(`amt-mat-${i}`); if(c){ c.textContent = money(row.amount); }
+    updateRecSummary();
+  }
+  if(el){ el.classList.toggle('bad', !fieldValid(field, value)); }
+  renderRecords();
+}
+function addRow(kind){
+  const r = records[recSel];
+  if(kind==='weld'){ r.welds.push({code:'',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0',price:0,amount:0}); }
+  else { r.mats.push({part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:1,price:0,amount:0}); }
+  renderRecords(); renderRecDetail();
+}
+function delRow(kind,i){
+  const r = records[recSel];
+  (kind==='weld' ? r.welds : r.mats).splice(i,1);
+  renderRecords(); renderRecDetail();
+}
+function recMatTable(ms){
+  const cols = `<colgroup><col style="width:19%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:14%"><col style="width:16%"><col style="width:7%"></colgroup>`;
+  const rows = ms.map((m,i)=>`<tr>`
+    + cellSelect('mat',i,'part',m.part,'part')
+    + cellSelect('mat',i,'size',m.size,'size')
+    + cellSelect('mat',i,'sch',m.sch,'sch')
+    + cellSelect('mat',i,'mat',m.mat,'mat')
+    + cellNum('mat',i,'qty',m.qty,qtyValid)
+    + cellRO(money(m.price))
+    + `<td class="amt" id="amt-mat-${i}">${money(m.amount)}</td>` + delCell('mat',i)
+    + `</tr>`).join('');
+  return `<table class="edit-table">${cols}<thead><tr><th>零件</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th>單價</th><th>金額</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    + `<button type="button" class="addrow" onclick="addRow('mat')">＋ 新增材料</button>`;
+}
+function recPhotoStrip(ps){
+  const cards = ps.map((p,i)=>`<div class="thumb" onclick="openLightbox(recSel, ${i})"><div class="thumb-img"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg><img src="${p.src}" alt="${p.label}" loading="lazy" onerror="this.remove()"><span class="zoom-cue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8.5v5M8.5 11h5"/></svg></span></div><span>${p.label}</span></div>`).join('');
+  return `<div class="thumb-row">${cards}</div>`;
+}
+let lbPhotos = [];
+let lbIndex = 0;
+function openLightbox(recIndex, photoIndex){
+  const r = records[recIndex];
+  if(!r || !r.photos.length){ return; }
+  lbPhotos = r.photos;
+  lbIndex = photoIndex;
+  document.getElementById('lightbox').classList.add('open');
+  renderLightbox();
+}
+function renderLightbox(){
+  const p = lbPhotos[lbIndex];
+  if(!p){ return; }
+  document.getElementById('lbImg').src = p.src;
+  document.getElementById('lbTitle').textContent = p.label;
+  document.getElementById('lbFoot').textContent = `${lbIndex+1} / ${lbPhotos.length}　·　← → 切換，Esc 關閉`;
+}
+function lbNav(d){
+  if(!lbPhotos.length){ return; }
+  lbIndex = (lbIndex + d + lbPhotos.length) % lbPhotos.length;
+  renderLightbox();
+}
+function closeLightbox(){ exitAnnotate(); document.getElementById('lightbox').classList.remove('open'); }
+function lbAct(name){ toast('（皮）' + name + '：' + ((lbPhotos[lbIndex]||{}).label||'') + ' — 之後接後端'); }
+document.addEventListener('keydown', e=>{
+  if(!document.getElementById('lightbox').classList.contains('open')){ return; }
+  if(e.key==='Escape'){ if(annoOn){ exitAnnotate(); } else { closeLightbox(); } return; }
+  if(annoOn){ return; }
+  if(e.key==='ArrowLeft'){ lbNav(-1); }
+  else if(e.key==='ArrowRight'){ lbNav(1); }
+});
+
+/* ── 燈箱標註（畫筆 / 箭頭） ── */
+let annoOn=false, annoToolName='pen', annoDrawing=false, annoStart=null, annoStack=[];
+function enterAnnotate(){
+  const img=document.getElementById('lbImg');
+  if(!img.complete || !img.naturalWidth){ toast('圖片尚未載入','warn'); return; }
+  const cv=document.getElementById('lbCanvas');
+  const ir=img.getBoundingClientRect();
+  const sr=img.parentElement.getBoundingClientRect();
+  cv.width=img.clientWidth; cv.height=img.clientHeight;
+  cv.style.width=img.clientWidth+'px'; cv.style.height=img.clientHeight+'px';
+  cv.style.left=(ir.left-sr.left)+'px'; cv.style.top=(ir.top-sr.top)+'px';
+  cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+  annoStack=[]; annoOn=true; annoToolName='pen';
+  document.querySelectorAll('.lb-tool').forEach(b=>b.classList.toggle('active', b.dataset.tool==='pen'));
+  document.getElementById('lightbox').classList.add('anno');
+}
+function exitAnnotate(){ annoOn=false; annoDrawing=false; const lb=document.getElementById('lightbox'); if(lb){ lb.classList.remove('anno'); } }
+function annoTool(t){ annoToolName=t; document.querySelectorAll('.lb-tool').forEach(b=>b.classList.toggle('active', b.dataset.tool===t)); }
+function annoContext(){ const ctx=document.getElementById('lbCanvas').getContext('2d'); ctx.lineWidth=4; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#e0202a'; ctx.fillStyle='#e0202a'; return ctx; }
+function annoPoint(e){ const cv=document.getElementById('lbCanvas'); const r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left)*(cv.width/r.width), y:(e.clientY-r.top)*(cv.height/r.height)}; }
+function annoPush(){ const cv=document.getElementById('lbCanvas'); try{ annoStack.push(cv.getContext('2d').getImageData(0,0,cv.width,cv.height)); if(annoStack.length>15){ annoStack.shift(); } }catch(err){} }
+function annoClear(){ annoPush(); const cv=document.getElementById('lbCanvas'); cv.getContext('2d').clearRect(0,0,cv.width,cv.height); }
+function annoUndo(){ if(!annoStack.length){ return; } const cv=document.getElementById('lbCanvas'); cv.getContext('2d').putImageData(annoStack.pop(),0,0); }
+function annoArrow(a,b){
+  const ctx=annoContext(); const ang=Math.atan2(b.y-a.y,b.x-a.x); const h=16;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(b.x,b.y);
+  ctx.lineTo(b.x-h*Math.cos(ang-Math.PI/6), b.y-h*Math.sin(ang-Math.PI/6));
+  ctx.lineTo(b.x-h*Math.cos(ang+Math.PI/6), b.y-h*Math.sin(ang+Math.PI/6));
+  ctx.closePath(); ctx.fill();
+}
+function annoSave(){
+  const img=document.getElementById('lbImg');
+  const cv=document.getElementById('lbCanvas');
+  const out=document.createElement('canvas');
+  out.width=img.naturalWidth || cv.width; out.height=img.naturalHeight || cv.height;
+  const ctx=out.getContext('2d');
+  try{
+    ctx.drawImage(img,0,0,out.width,out.height);
+    ctx.drawImage(cv,0,0,out.width,out.height);
+    const url=out.toDataURL('image/png');
+    if(lbPhotos[lbIndex]){ lbPhotos[lbIndex].src=url; }
+    img.src=url;
+    renderRecDetail();
+    toast('已套用標註','ok');
+    exitAnnotate();
+  }catch(err){
+    toast('此圖片來源不允許 canvas 合成（檔案版照片常見）；正式接後端後可存','warn');
+  }
+}
+(function wireLbCanvas(){
+  const cv=document.getElementById('lbCanvas');
+  if(!cv){ return; }
+  cv.addEventListener('pointerdown', e=>{ if(!annoOn){ return; } e.preventDefault(); annoPush(); const p=annoPoint(e); const ctx=annoContext(); annoDrawing=true; annoStart=p; if(annoToolName==='pen'){ ctx.beginPath(); ctx.moveTo(p.x,p.y); } });
+  cv.addEventListener('pointermove', e=>{ if(!annoOn||!annoDrawing||annoToolName!=='pen'){ return; } const p=annoPoint(e); const ctx=annoContext(); ctx.lineTo(p.x,p.y); ctx.stroke(); });
+  cv.addEventListener('pointerup', e=>{ if(!annoOn||!annoDrawing){ return; } const p=annoPoint(e); if(annoToolName==='arrow'){ annoArrow(annoStart,p); } annoDrawing=false; });
+  cv.addEventListener('pointerleave', ()=>{ annoDrawing=false; });
+})();
+
+/* ── 請款批次彈窗 ── */
+const BATCHES = [
+  {id:'BATCH-202509-01', status:'已送出', period:'第 1 期', owner:'台積電 F18', count:2, created:'2025-09-01 10:20', updated:'2025-09-05 14:30'},
+  {id:'BATCH-202510-01', status:'草稿',   period:'第 2 期', owner:'台積電 F18', count:1, created:'2025-10-01 09:00', updated:'2025-10-01 09:00'}
+];
+function openBatch(){
+  const cls={'已送出':'done','已收款':'done','草稿':'pending','已退回':'error'};
+  document.getElementById('batchRows').innerHTML = BATCHES.map(b=>
+    `<tr><td><code>${esc(b.id)}</code></td><td><span class="st ${cls[b.status]||'pending'}">${esc(b.status)}</span></td><td>${esc(b.period)}</td><td>${esc(b.owner)}</td><td>${b.count}</td><td>${esc(b.created)}</td><td>${esc(b.updated)}</td></tr>`
+  ).join('');
+  closeMenus();
+  document.getElementById('batchModal').classList.add('open');
+}
+function closeBatch(){ document.getElementById('batchModal').classList.remove('open'); }
+renderRecords();
+renderRecDetail();
+
+/* ── 材料價目（皮，示意資料；正式接後端＝中央價目表） ── */
+Object.assign(OPT, {
+  cat:  ['配管','閥件','墊料','支架','其他'],
+  unit: ['個','支','組','才','m','kg','式'],
+  src:  ['合約','報價','手動','參考']
+});
+const PRICE = [
+  {id:'EL90-2-304', part:'90° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:300, src:'合約', date:'2025-06-01', remark:''},
+  {id:'EL45-2-304', part:'45° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:280, src:'合約', date:'2025-06-01', remark:''},
+  {id:'RED-32-304', part:'同心異徑', size:'3"x2"', sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:450, src:'報價', date:'2025-06-01', remark:''},
+  {id:'FLG-2-150',  part:'法蘭',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'配管', unit:'組', price:520, src:'合約', date:'2025-06-01', remark:'含螺絲墊片'},
+  {id:'GSK-2-PTFE', part:'墊片',     size:'2"',   sch:'150#',  mat:'PTFE',   cat:'墊料', unit:'個', price:60,  src:'參考', date:'2025-06-01', remark:''},
+  {id:'PIPE-2-304', part:'直管',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'m',  price:240, src:'合約', date:'2025-06-01', remark:''},
+  {id:'TEE-2-304',  part:'三通',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:680, src:'報價', date:'2025-06-01', remark:''},
+  {id:'EL90-3-316', part:'90° 彎頭', size:'3"',   sch:'SCH10', mat:'SUS316', cat:'配管', unit:'個', price:540, src:'合約', date:'2025-06-01', remark:''},
+  {id:'GV-2-304',   part:'閘閥',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'},
+  {id:'BV-3-316',   part:'球閥',     size:'3"',   sch:'150#',  mat:'SUS316', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'}
+];
+function pbRow(p,i){
+  const sel = (field,optKey,blank)=>{
+    const val = String(p[field] ?? '');
+    const o = (blank?['']:[]).concat(OPT[optKey]);
+    const bad = !o.includes(val);
+    let h = o.map(x=>`<option value="${esc(x)}"${x===val?' selected':''}>${esc(x||'—')}</option>`).join('');
+    if(bad){ h = `<option value="${esc(val)}" selected>${esc(val)}</option>` + h; }
+    return `<td class="cell"><select class="edit${bad?' bad':''}" onchange="pbEdit(${i},'${field}',this.value,this)">${h}</select></td>`;
+  };
+  const txt = (field)=>`<td class="cell"><input class="edit" value="${esc(p[field])}" oninput="pbEdit(${i},'${field}',this.value,this)"></td>`;
+  const un = !(parseFloat(p.price) > 0);
+  const price = `<td class="cell num${un?' pb-unpriced':''}" id="pbprice-${i}"><input class="edit" value="${esc(p.price)}" oninput="pbEdit(${i},'price',this.value,this)"></td>`;
+  return `<tr>` + txt('id') + sel('part','part') + sel('size','size') + sel('sch','sch') + sel('mat','mat')
+    + sel('cat','cat') + sel('unit','unit') + price + sel('src','src',true) + txt('date') + txt('remark')
+    + `<td class="rowdel"><button type="button" class="xbtn" title="刪除此列" onclick="pbDel(${i})">×</button></td></tr>`;
+}
+function pbEdit(i,field,value,el){
+  PRICE[i][field] = value;
+  if(field==='price'){
+    const cell = document.getElementById(`pbprice-${i}`);
+    if(cell){ cell.classList.toggle('pb-unpriced', !(parseFloat(value) > 0)); }
+  }
+}
+function pbDel(i){ PRICE.splice(i,1); renderPricebook(); }
+function pbAddRow(){
+  PRICE.unshift({id:'',part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',cat:'配管',unit:'個',price:0,src:'',date:'',remark:''});
+  renderPricebook();
+}
+function renderPricebook(){
+  const q = (document.getElementById('pbSearch').value || '').toLowerCase().trim();
+  const onlyUn = document.getElementById('pbUnpriced').checked;
+  const fpart = document.getElementById('pbPart').value;
+  const fmat = document.getElementById('pbMat').value;
+  const cols = `<colgroup><col style="width:10%"><col style="width:11%"><col style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:17%"><col style="width:5%"></colgroup>`;
+  const head = `<thead><tr><th>料號</th><th>零件類型</th><th>尺寸</th><th>SCH</th><th>材質</th><th>類別</th><th>單位</th><th class="r">單價</th><th>來源</th><th>生效日</th><th>備註</th><th></th></tr></thead>`;
+  let shown = 0;
+  const body = PRICE.map((p,i)=>({p,i})).filter(({p})=>{
+    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat}`.toLowerCase().includes(q)){ return false; }
+    if(onlyUn && parseFloat(p.price) > 0){ return false; }
+    if(fpart && fpart!=='全部零件' && p.part!==fpart){ return false; }
+    if(fmat && fmat!=='全部材質' && p.mat!==fmat){ return false; }
+    return true;
+  }).map(({p,i})=>{ shown++; return pbRow(p,i); }).join('');
+  document.getElementById('pbTable').innerHTML = `<table class="edit-table">${cols}${head}<tbody>${body || '<tr><td colspan="12" class="empty">查無符合的料號</td></tr>'}</tbody></table>`;
+  document.getElementById('pbCount').textContent = `顯示 ${shown} / 共 ${PRICE.length} 筆`;
+}
+(function pbInit(){
+  const part = document.getElementById('pbPart');
+  if(part){ part.innerHTML = '<option>全部零件</option>' + OPT.part.map(x=>`<option>${esc(x)}</option>`).join(''); }
+  const mat = document.getElementById('pbMat');
+  if(mat){ mat.innerHTML = '<option>全部材質</option>' + OPT.mat.map(x=>`<option>${esc(x)}</option>`).join(''); }
+  renderPricebook();
+})();
+
+/* ── 請款追蹤（皮；金額讀自記錄，狀態/日期/備註可編輯） ── */
+Object.assign(OPT, { bill: ['未請款','已請款','已結案','部分請款','保留'] });
+const BILL = [
+  {rec:0, status:'已請款', billDate:'2025-09-05', remark:''},
+  {rec:1, status:'未請款', billDate:'',           remark:''},
+  {rec:2, status:'未請款', billDate:'',           remark:'待補照片'},
+  {rec:3, status:'保留',   billDate:'',           remark:''}
+];
+function recMoney(r){
+  const weld = r.welds.reduce((s,w)=>s+(+w.amount||0),0);
+  const mat  = r.mats.reduce((s,m)=>s+(+m.amount||0),0);
+  const untaxed = weld + mat;
+  const tax = Math.round(untaxed * 0.05);
+  return {weld, mat, untaxed, tax, total: untaxed + tax};
+}
+function billEdit(i,field,value){ BILL[i][field] = value; renderBillStats(); }
+function billRow(b,i){
+  const r = records[b.rec];
+  const m = recMoney(r);
+  const opts = OPT.bill.map(x=>`<option${x===b.status?' selected':''}>${esc(x)}</option>`).join('');
+  return `<tr>`
+    + `<td><code>${esc(r.id)}</code></td>`
+    + `<td>${esc(r.date.slice(5))}</td>`
+    + `<td>${esc(r.series)}</td>`
+    + `<td>${esc(r.reason)}</td>`
+    + `<td class="cell"><select class="edit" onchange="billEdit(${i},'status',this.value)">${opts}</select></td>`
+    + `<td class="cell"><input class="edit" value="${esc(b.billDate)}" placeholder="YYYY-MM-DD" oninput="billEdit(${i},'billDate',this.value)"></td>`
+    + `<td class="num">${money(m.weld)}</td>`
+    + `<td class="num">${money(m.mat)}</td>`
+    + `<td class="num">${money(m.untaxed)}</td>`
+    + `<td class="num">${money(m.tax)}</td>`
+    + `<td class="num"><strong>${money(m.total)}</strong></td>`
+    + `<td class="cell"><input class="edit" value="${esc(b.remark)}" oninput="billEdit(${i},'remark',this.value)"></td>`
+    + `</tr>`;
+}
+function renderBilling(){
+  const q  = (document.getElementById('billSearch').value || '').toLowerCase().trim();
+  const fs = document.getElementById('billStatus').value;
+  const cols = `<colgroup><col style="width:10%"><col style="width:7%"><col style="width:9%"><col style="width:15%"><col style="width:9%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:11%"></colgroup>`;
+  const head = `<thead><tr><th>報告編號</th><th>日期</th><th>流水號</th><th>說明</th><th>請款狀態</th><th>請款日期</th><th class="r">焊口金額</th><th class="r">材料金額</th><th class="r">未稅小計</th><th class="r">稅額5%</th><th class="r">含稅總額</th><th>備註</th></tr></thead>`;
+  let shown = 0;
+  const body = BILL.map((b,i)=>({b,i})).filter(({b})=>{
+    const r = records[b.rec];
+    if(q && !`${r.id} ${r.series} ${r.reason}`.toLowerCase().includes(q)){ return false; }
+    if(fs && fs!=='全部狀態' && b.status!==fs){ return false; }
+    return true;
+  }).map(({b,i})=>{ shown++; return billRow(b,i); }).join('');
+  document.getElementById('billTable').innerHTML = `<table class="edit-table">${cols}${head}<tbody>${body || '<tr><td colspan="12" class="empty">查無符合的請款</td></tr>'}</tbody></table>`;
+  document.getElementById('billCount').textContent = `顯示 ${shown} / 共 ${BILL.length} 筆`;
+  renderBillStats();
+}
+function renderBillStats(){
+  const cnt = s => BILL.filter(b=>b.status===s).length;
+  let weldT=0, matT=0, pendAmt=0, billAmt=0;
+  BILL.forEach(b=>{
+    const m = recMoney(records[b.rec]);
+    weldT += m.weld; matT += m.mat;
+    if(b.status==='未請款'){ pendAmt += m.total; }
+    if(b.status==='已請款' || b.status==='已結案'){ billAmt += m.total; }
+  });
+  document.getElementById('billStats').innerHTML =
+      metric('總筆數', BILL.length) + metric('未請款', cnt('未請款')) + metric('已請款', cnt('已請款')) + metric('已結案', cnt('已結案'))
+    + metric('焊口總額', money(weldT)) + metric('材料總額', money(matT)) + metric('未請款額', money(pendAmt)) + metric('已請款額', money(billAmt));
+}
+(function billInit(){
+  const sel = document.getElementById('billStatus');
+  if(sel){ sel.innerHTML = '<option>全部狀態</option>' + OPT.bill.map(x=>`<option>${esc(x)}</option>`).join(''); }
+  renderBilling();
+})();
+
+/* ── 共用：Toast / 下拉選單 / 跨分頁串接 ── */
+let _toastTimer;
+function toast(msg, type){
+  const el = document.getElementById('toast');
+  if(!el){ return; }
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' '+type : '');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>{ el.className = el.className.replace('show','').trim(); }, 2600);
+}
+function toggleMenu(btn){
+  const wrap = btn.closest('.menu-wrap');
+  const isOpen = wrap.classList.contains('open');
+  closeMenus();
+  if(!isOpen){ wrap.classList.add('open'); }
+}
+function closeMenus(){ document.querySelectorAll('.menu-wrap.open').forEach(w=>w.classList.remove('open')); }
+function menuPick(label){ toast('（皮）' + label); closeMenus(); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.menu-wrap')){ closeMenus(); } });
+
+function openRecordBySeries(series){
+  const idx = records.findIndex(r=>r.series===series);
+  if(idx < 0){ toast('找不到對應記錄：' + series, 'warn'); return; }
+  recSel = idx;
+  showTab('records');
+  renderRecords();
+  renderRecDetail();
+  toast('已開啟 ' + series + ' 的記錄');
+}
+function openWizard(){
+  toast('開啟修改單精靈…');
+  window.open('../co_wizard_web/index.html', '_blank');
+}
+
+/* 以下為皮的占位互動；之後接後端橋 */
+function pickDwg(){ toast('（皮）選擇 DWG LIST — 待接後端'); }
+function runStart(){ toast('開始執行 — 待接後端', 'ok'); logLine('ok','（皮）開始執行 — 待接後端'); }
+function runStop(){ toast('已要求停止', 'warn'); logLine('err','（皮）已要求停止'); }
+function logLine(kind,msg){
+  const icons={
+    info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+    ok:'<path d="M20 6 9 17l-5-5"/>',
+    dir:'<path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/>',
+    err:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'
+  };
+  const t = new Date().toTimeString().slice(0,8);
+  const el = document.createElement('div');
+  el.className = 'logline '+kind;
+  el.innerHTML = `<time>[${t}]</time><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${icons[kind]||icons.info}</svg></span><span class="msg">${msg}</span>`;
+  const log = document.getElementById('log');
+  log.appendChild(el);
+  log.scrollTop = log.scrollHeight;
+}
+</script>
+</body>
+</html>
