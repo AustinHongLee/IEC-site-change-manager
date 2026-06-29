@@ -21,10 +21,13 @@
 """
 from __future__ import annotations
 
+import base64
 import dataclasses
 import functools
 import json
+import re
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -78,6 +81,7 @@ def _as_op(value: Any) -> Any:
 
 
 _MATERIAL_FIELDS = {f.name for f in dataclasses.fields(Material)}
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 
 
 # --------------------------------------------------------------------------- #
@@ -195,6 +199,42 @@ class ChangeOrderBridge:
             raise RuntimeError("檔案對話框未注入（此環境不支援選檔）")
         return {"path": self._pick_file_fn(kind)}
 
+    @_enveloped
+    def list_staging(self) -> list[dict]:
+        """列出 staging 收件匣中的圖片檔；只讀、不搬檔、不刪檔。"""
+        root = self._staging_root()
+        if not root.exists():
+            return []
+        items = []
+        for path in root.iterdir():
+            if not path.is_file() or path.suffix.lower() not in _IMAGE_EXTS:
+                continue
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            items.append({"name": path.name, "path": str(path), "mtime": stat.st_mtime})
+        items.sort(key=lambda item: (item["mtime"], item["name"]), reverse=True)
+        return [{"name": item["name"], "path": item["path"]} for item in items]
+
+    @_enveloped
+    def save_annotated(self, data_url: str, base_name: str = "annotated") -> dict:
+        """儲存前端 canvas 合成後的 PNG，回傳可放進 state.photos 的本機路徑。"""
+        payload = str(data_url or "")
+        if "," in payload:
+            header, payload = payload.split(",", 1)
+            if "base64" not in header.lower():
+                raise ValueError("標註資料必須是 base64 data URL")
+        raw = base64.b64decode(payload, validate=True)
+        out_dir = self.attachments_root.parent / "_annotated"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(str(base_name or "annotated")).stem).strip("._")
+        if not stem:
+            stem = "annotated"
+        out_path = out_dir / f"{stem}_{uuid.uuid4().hex[:8]}.png"
+        out_path.write_bytes(raw)
+        return {"name": out_path.name, "path": str(out_path)}
+
     # ---- 內部（不對外、不包信封） ---------------------------------------- #
     def _build_co(self, payload: Any):
         p = payload or {}
@@ -231,6 +271,12 @@ class ChangeOrderBridge:
         if not root.exists():
             return []
         return [x.name for x in root.iterdir() if x.is_dir()]
+
+    def _staging_root(self) -> Path:
+        nearby = self.attachments_root.parent / "staging"
+        if nearby.exists():
+            return nearby
+        return Path(__file__).resolve().parent.parent / "staging"
 
 
 __all__ = ["ChangeOrderBridge", "API_VERSION"]

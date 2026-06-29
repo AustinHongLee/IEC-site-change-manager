@@ -1,5 +1,6 @@
 import os
 import sys
+import base64
 import json
 from datetime import datetime
 
@@ -142,3 +143,34 @@ def test_export_blocks_when_not_complete_then_succeeds(tmp_path):
 def test_pick_file_without_injection_returns_error_envelope(tmp_path):
     res = _bridge(tmp_path).pick_file("pdf")
     assert res["ok"] is False and "未注入" in res["error"]   # 不崩，給明確錯
+
+
+def test_list_staging_returns_image_files_only(tmp_path):
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    photo = staging / "photo.jpg"
+    diagram = staging / "diagram.PNG"
+    photo.write_bytes(b"jpg")
+    diagram.write_bytes(b"png")
+    (staging / "notes.txt").write_text("skip", encoding="utf-8")
+    (staging / "nested").mkdir()
+
+    res = _bridge(tmp_path).list_staging()
+    assert res["ok"] is True
+    rows = res["data"]
+    assert {row["name"] for row in rows} == {"photo.jpg", "diagram.PNG"}
+    assert {row["path"] for row in rows} == {str(photo), str(diagram)}
+
+
+def test_save_annotated_writes_png_and_returns_path(tmp_path):
+    raw = b"\x89PNG\r\n\x1a\nannotated"
+    data_url = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
+
+    res = _bridge(tmp_path).save_annotated(data_url, "before photo.jpg")
+
+    assert res["ok"] is True
+    saved = res["data"]["path"]
+    assert saved.endswith(".png")
+    assert os.path.basename(saved).startswith("before_photo_")
+    assert os.path.dirname(saved).endswith("_annotated")
+    assert open(saved, "rb").read() == raw
