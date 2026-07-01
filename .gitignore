@@ -45,6 +45,12 @@ logs/*
 
 # 備份
 backups/
+records/material_pricebook.*.bak.json
+records/material_pricebook.backup.json
+records/material_pricebook.303.json
+
+# 執行期狀態
+records/project_parts.json
 
 # 前置區（照片暫存）
 staging/*
