@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>工務修改單 · IEC Site Change Manager</title>
+<link rel="icon" href="img/app-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,7 +12,7 @@
 
   <!-- 品牌列 -->
   <header class="appbar">
-    <img class="brand-logo" src="../co_wizard_web/img/brand-logo.png" alt=""
+    <img class="brand-logo" src="img/brand-logo.png" alt=""
          onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
     <div class="brand-mark-fallback">智</div>
     <div class="brand-text">
@@ -76,11 +77,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
             </span>
             <div class="dwg-info">
-              <span class="dwg-label">DWG LIST</span>
-              <span class="dwg-file" id="dwgFile">已自動載入 · DWG_LIST.xlsx</span>
+              <span class="dwg-label">DWG LIST（自動載入 · 於設定變更）</span>
+              <span class="dwg-file" id="dwgFile">C:\Users\a0976\Documents\GitHub\工務修改單\DWG_LIST.xlsx</span>
             </div>
             <span class="ok-chip" id="dwgStatus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>已載入</span>
-            <button class="ghost sm" type="button" onclick="pickDwg()">更換</button>
+            <button class="ghost sm" type="button" onclick="showTab('settings')">在設定變更</button>
           </div>
 
           <div class="sheet pad">
@@ -95,19 +96,19 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>重試失敗
               </button>
               <span class="sep"></span>
-              <button type="button" onclick="toast('（皮）建立精靈 — 之後接')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="m6.3 6.3 2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8"/></svg>建立精靈
-              </button>
               <button type="button" onclick="openWizard()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>修改單精靈
               </button>
               <span class="sep"></span>
-              <button class="ghost" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg>Output
-              </button>
-              <button class="ghost" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/></svg>PDF
-              </button>
+              <span class="menu-wrap">
+                <button class="ghost" type="button" onclick="toggleMenu(this)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg>開啟產出資料夾 ▾
+                </button>
+                <div class="menu-pop down">
+                  <button type="button" onclick="menuPick('開啟 Output 資料夾')">Output 資料夾</button>
+                  <button type="button" onclick="menuPick('開啟 PDF 資料夾')">PDF 資料夾</button>
+                </div>
+              </span>
             </div>
 
             <div class="progress-row" style="margin-top:16px">
@@ -141,9 +142,9 @@
         <div class="sheet rec-filter">
           <div class="rec-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="recSearch" placeholder="搜尋 報告編號 / 流水號 / 說明…">
+            <input id="recSearch" placeholder="搜尋 報告編號 / 流水號 / 說明…" oninput="renderRecords()">
           </div>
-          <select id="recStatus">
+          <select id="recStatus" onchange="renderRecords()">
             <option>全部狀態</option><option>已產出</option><option>未產出</option><option>需重產</option><option>已歸檔</option>
           </select>
           <input class="rec-date" placeholder="起 YYYYMMDD">
@@ -182,7 +183,8 @@
           <span class="grow"></span>
           <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存變更')">儲存變更</button>
           <span class="rec-sep"></span>
-          <button class="ghost sm" type="button">匯出 Excel</button>
+          <button class="ghost sm" type="button" onclick="toast('（皮）匯出紀錄清單 Excel')">匯出紀錄</button>
+          <button class="ghost sm" type="button" onclick="toast('（皮）匯出材料彙總 — 彙總各修改單用料 → Excel，貼回外部採購收料表')">匯出材料彙總</button>
           <span class="menu-wrap">
             <button class="ghost sm" type="button" onclick="toggleMenu(this)">輸出中心 ▾</button>
             <div class="menu-pop">
@@ -198,15 +200,23 @@
     <section class="page" id="tab-material">
       <div class="rec-shell">
         <div class="sheet rec-filter">
+          <div class="pbseg">
+            <button type="button" class="pbseg-btn" id="pbvMaster" onclick="pbSetView('master')">總庫 <b id="pbcMaster">0</b></button>
+            <button type="button" class="pbseg-btn on" id="pbvProject" onclick="pbSetView('project')">本案配件 <b id="pbcProject">0</b></button>
+          </div>
           <div class="rec-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input id="pbSearch" placeholder="搜尋 料號 / 零件 / 尺寸 / 材質…" oninput="renderPricebook()">
           </div>
-          <label class="check"><input type="checkbox" id="pbUnpriced" onchange="renderPricebook()"> 只看未定價</label>
           <select id="pbPart" onchange="renderPricebook()"></select>
+          <select id="pbSize" onchange="renderPricebook()"></select>
+          <select id="pbSch" onchange="renderPricebook()"></select>
           <select id="pbMat" onchange="renderPricebook()"></select>
+          <select id="pbCat" onchange="renderPricebook()"></select>
           <button class="ghost sm" type="button" onclick="renderPricebook()">刷新</button>
         </div>
+
+        <div id="pbChips" class="pbchips"></div>
 
         <div class="sheet rec-body" id="pbScroll">
           <div id="pbTable"></div>
@@ -215,29 +225,22 @@
         <div class="sheet rec-foot">
           <span id="pbCount">共 0 筆</span>
           <span class="grow"></span>
-          <button class="sm" type="button" onclick="pbAddRow()">＋ 新增</button>
+          <button class="primary sm" type="button" onclick="openRegModal()">＋ 登記材料</button>
           <button class="sm" type="button" onclick="logLine('info','（皮）複製選取料號')">複製</button>
           <span class="rec-sep"></span>
           <span class="menu-wrap">
             <button class="ghost sm" type="button" onclick="toggleMenu(this)">匯入匯出 ▾</button>
             <div class="menu-pop">
-              <button type="button" onclick="menuPick('匯入骨架')">匯入骨架</button>
-              <button type="button" onclick="menuPick('匯入價格表')">匯入價格表</button>
-              <button type="button" onclick="menuPick('匯出補價表')">匯出補價表</button>
+              <button type="button" onclick="importMaterialExcel()">匯入材料 Excel（FITTING / 管制單）</button>
+              <button type="button" onclick="exportMaterials('master')">匯出總庫 Excel</button>
+              <button type="button" onclick="exportMaterials('project')">匯出本案配件 Excel</button>
             </div>
           </span>
-          <span class="menu-wrap">
-            <button class="ghost sm" type="button" onclick="toggleMenu(this)">批次填價 ▾</button>
-            <div class="menu-pop">
-              <button type="button" onclick="menuPick('選取顯示的料號')">選取顯示的料號</button>
-              <button type="button" onclick="menuPick('批次填入單價')">批次填入單價</button>
-              <button type="button" onclick="menuPick('套用補價到記錄')">套用補價到記錄</button>
-            </div>
-          </span>
-          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存價目表')">儲存</button>
+          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存總庫')">儲存</button>
         </div>
       </div>
     </section>
+
     <section class="page" id="tab-billing">
       <div class="rec-shell">
         <div class="sheet pad bill-stats" id="billStats"></div>
@@ -326,11 +329,11 @@
     </section>
     <section class="page" id="tab-health">
       <div class="health-wrap">
-        <div class="sheet hbanner">
+        <div class="sheet hbanner" id="hbanner">
           <span class="hicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.42 0Z"/></svg></span>
           <div class="htext">
-            <strong>可使用，有 2 個提醒</strong>
-            <span>專案：…\GitHub\工務修改單　·　records 4 · details 12 · materials 10 · 附件 3　·　錯誤 0 / 提醒 2 / 資訊 1</span>
+            <strong id="hStatus">可使用，有 2 個提醒</strong>
+            <span id="hCounts">專案：…\GitHub\工務修改單　·　records 4 · details 12 · materials 10 · 附件 3　·　錯誤 0 / 提醒 2 / 資訊 1</span>
           </div>
           <div class="hactions">
             <button class="primary sm" type="button" onclick="logLine('info','（皮）重新檢查健康')">重新檢查</button>
@@ -346,7 +349,7 @@
           </div>
         </div>
 
-        <div class="sheet pad" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="sheet pad" id="hMetrics" style="display:flex;gap:10px;flex-wrap:wrap;">
           <div class="metric"><span class="k">records</span><span class="v">4</span></div>
           <div class="metric"><span class="k">details</span><span class="v">12</span></div>
           <div class="metric"><span class="k">materials</span><span class="v">10</span></div>
@@ -356,7 +359,7 @@
         <div class="sheet rec-body health-issues">
           <table>
             <thead><tr><th>來源</th><th>等級</th><th>項目</th><th>內容</th><th>參考</th></tr></thead>
-            <tbody>
+            <tbody id="hIssues">
               <tr><td>啟動守門</td><td><span class="lvl warning">提醒</span></td><td>缺少輸出資料夾</td><td>output/ 不存在，將於按下「修復」時自動建立</td><td><code>output</code></td></tr>
               <tr><td>資料稽核</td><td><span class="lvl warning">提醒</span></td><td>孤兒附件</td><td>attachments 有 1 個資料夾找不到對應記錄</td><td><code>100_20260301_03</code></td></tr>
               <tr><td>資料稽核</td><td><span class="lvl info">資訊</span></td><td>未定價材料</td><td>材料價目有 2 筆未定價（閘閥 / 球閥）</td><td><code>GV-2-304</code></td></tr>
@@ -421,6 +424,35 @@
       <span class="grow"></span>
       <button class="sm" type="button" onclick="toast('（皮）建立新批次');closeBatch()">建立批次</button>
       <button class="primary sm" type="button" onclick="toast('（皮）更新批次狀態','ok');closeBatch()">更新狀態</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="regModal" onclick="if(event.target===this)closeRegModal()">
+  <div class="modal-dialog reg-dialog">
+    <div class="modal-head">
+      <strong>登記材料到本案</strong>
+      <button class="sm" type="button" onclick="closeRegModal()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <p id="regHint" class="reg-hint">先選一個材料類型：</p>
+      <div id="regStep1" class="reg-cats"></div>
+      <div id="regStep2" style="display:none">
+        <div class="reg-sub-bar">
+          <button class="ghost sm" type="button" onclick="regBack()">← 選其他類型</button>
+          <strong id="regCatName"></strong>
+          <span class="grow"></span>
+          <input id="regSearch" placeholder="搜尋 尺寸 / 材質…" oninput="regRenderList()">
+          <select id="regSize" onchange="regRenderList()"></select>
+          <select id="regMat" onchange="regRenderList()"></select>
+        </div>
+        <div id="regList" class="reg-list"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span id="regFootCount">本案已登記 0 項</span>
+      <span class="grow"></span>
+      <button class="primary sm" type="button" onclick="closeRegModal()">完成</button>
     </div>
   </div>
 </div>
@@ -499,10 +531,11 @@ function renderDates(){
       ci.className = 'child-item' + (it.sel ? ' sel' : '');
       ci.innerHTML =
         `<span class="child-check">${ICON_CHECK}</span>`
-        + `<span class="child-series">${it.series}</span>`
-        + `<span class="weld-chip">${it.welds} 焊口</span>`
-        + `<span class="st ${sm.cls}">${sm.label}</span>`
-        + `<button class="child-open" type="button" title="在紀錄管理開啟此圖號" onclick="event.stopPropagation();openRecordBySeries('${it.series}')">↗</button>`;
+        + `<div class="child-main">`
+        +   `<div class="child-top"><span class="child-series">${it.series}</span>`
+        +     `<button class="child-open" type="button" title="在紀錄管理開啟此圖號" onclick="event.stopPropagation();openRecordBySeries('${it.series}')">↗</button></div>`
+        +   `<div class="child-sub"><span class="weld-chip">${it.welds} 焊口</span><span class="st ${sm.cls}">${sm.label}</span></div>`
+        + `</div>`;
       ci.addEventListener('click', ()=>{ it.sel = !it.sel; renderDates(); });
       kids.appendChild(ci);
     });
@@ -556,9 +589,15 @@ let recSub = 'welds';
 function renderRecords(){
   const body = document.getElementById('recRows');
   if(!body){ return; }
+  const q = (document.getElementById('recSearch')?.value || '').toLowerCase().trim();
+  const fs = document.getElementById('recStatus')?.value || '';
   body.innerHTML = '';
+  let shown = 0;
   records.forEach((r,i)=>{
+    if(q && !`${r.id} ${r.series} ${r.reason}`.toLowerCase().includes(q)){ return; }
     const sm = statusMeta[r.status] || statusMeta.pending;
+    if(fs && fs!=='全部狀態' && sm.label!==fs){ return; }
+    shown++;
     const bad = recordBad(r);
     const tr = document.createElement('tr');
     tr.className = 'rec-row' + (i===recSel ? ' selected' : '') + (bad ? ' bad' : '');
@@ -566,6 +605,10 @@ function renderRecords(){
     tr.addEventListener('click', ()=>{ recSel=i; renderRecords(); renderRecDetail(); });
     body.appendChild(tr);
   });
+  if(shown===0){
+    const searching = !!(q || (fs && fs!=='全部狀態'));
+    body.innerHTML = `<tr><td colspan="5" class="empty">${emptyBlock(searching?'查無符合的紀錄':'尚無紀錄', searching?'illus-search-empty.png':'illus-empty.png')}</td></tr>`;
+  }
   document.getElementById('recCount').textContent = `共 ${records.length} 筆`;
 }
 function metric(k,v){ return `<div class="metric"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
@@ -576,15 +619,19 @@ function section(title, count, html, emptyMsg){
 function updateRecSummary(){
   const r = records[recSel];
   if(!r){ return; }
-  const weldAmt = r.welds.reduce((s,w)=>s+(+w.amount||0),0);
-  const matAmt = r.mats.reduce((s,m)=>s+(+m.amount||0),0);
   document.getElementById('recSummary').innerHTML =
     metric('焊口', r.welds.length+' 口') + metric('材料', r.mats.length+' 項')
-    + metric('照片', r.photos.length+' 張') + metric('金額', money(weldAmt+matAmt));
+    + metric('照片', r.photos.length+' 張');
 }
 function renderRecDetail(){
   const r = records[recSel];
-  if(!r){ return; }
+  if(!r){
+    document.getElementById('recTitle').textContent = '—';
+    document.getElementById('recMeta').textContent = '尚無紀錄';
+    document.getElementById('recSummary').innerHTML = '';
+    document.getElementById('recBody').innerHTML = '';
+    return;
+  }
   const sm = statusMeta[r.status] || statusMeta.pending;
   document.getElementById('recTitle').textContent = r.series;
   document.getElementById('recMeta').innerHTML = `<code>${r.id}</code> · ${r.date} · <span class="st ${sm.cls}">${sm.label}</span> · ${r.reason}`;
@@ -596,6 +643,9 @@ function renderRecDetail(){
 }
 function money(n){ return n ? 'NT$ ' + Number(n).toLocaleString() : '—'; }
 function esc(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function emptyBlock(msg, illus){
+  return (illus ? `<img class="empty-illus" src="img/${illus}" alt="" onerror="this.remove()">` : '') + `<div>${msg}</div>`;
+}
 const OPT = {
   mark: ['重焊','新焊'],
   size: ['1/2"','3/4"','1"','1.5"','2"','2.5"','3"','4"','6"','8"','2"x1"','3"x2"','4"x3"'],
@@ -636,17 +686,16 @@ function delCell(kind,i){
   return `<td class="rowdel"><button type="button" class="xbtn" title="刪除此列" onclick="delRow('${kind}',${i})">×</button></td>`;
 }
 function recWeldTable(ws){
-  const cols = `<colgroup><col style="width:12%"><col style="width:10%"><col style="width:9%"><col style="width:13%"><col style="width:11%"><col style="width:8%"><col style="width:15%"><col style="width:16%"><col style="width:6%"></colgroup>`;
+  const cols = `<colgroup><col style="width:18%"><col style="width:12%"><col style="width:11%"><col style="width:16%"><col style="width:13%"><col style="width:22%"><col style="width:8%"></colgroup>`;
   const rows = ws.map((w,i)=>`<tr>`
     + cellText('weld',i,'code',w.code,codeValid)
     + cellSelect('weld',i,'mark',w.mark,'mark')
     + cellSelect('weld',i,'size',w.size,'size')
     + cellSelect('weld',i,'mat',w.mat,'mat')
     + cellSelect('weld',i,'sch',w.sch,'sch')
-    + cellRO(w.coef) + cellRO(money(w.price))
-    + `<td class="amt" id="amt-weld-${i}">${money(w.amount)}</td>` + delCell('weld',i)
+    + cellRO(w.coef) + delCell('weld',i)
     + `</tr>`).join('');
-  return `<table class="edit-table">${cols}<thead><tr><th>焊口碼</th><th>標記</th><th>尺寸</th><th>材質</th><th>厚度</th><th>係數</th><th>單價</th><th>金額</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+  return `<table class="edit-table">${cols}<thead><tr><th>焊口碼</th><th>標記</th><th>尺寸</th><th>材質</th><th>厚度</th><th>係數</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     + `<button type="button" class="addrow" onclick="addRow('weld')">＋ 新增焊口</button>`;
 }
 function editCell(kind,i,field,value,el){
@@ -654,18 +703,14 @@ function editCell(kind,i,field,value,el){
   const row = (kind==='weld' ? r.welds : r.mats)[i];
   if(!row){ return; }
   row[field] = value;
-  if(kind==='mat' && field==='qty'){
-    row.amount = Math.round((parseFloat(row.qty)||0) * (parseFloat(row.price)||0));
-    const c = document.getElementById(`amt-mat-${i}`); if(c){ c.textContent = money(row.amount); }
-    updateRecSummary();
-  }
+  if(kind==='mat' && field==='qty'){ updateRecSummary(); }
   if(el){ el.classList.toggle('bad', !fieldValid(field, value)); }
   renderRecords();
 }
 function addRow(kind){
   const r = records[recSel];
-  if(kind==='weld'){ r.welds.push({code:'',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0',price:0,amount:0}); }
-  else { r.mats.push({part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:1,price:0,amount:0}); }
+  if(kind==='weld'){ r.welds.push({code:'',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0'}); }
+  else { r.mats.push({part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:1}); }
   renderRecords(); renderRecDetail();
 }
 function delRow(kind,i){
@@ -674,17 +719,16 @@ function delRow(kind,i){
   renderRecords(); renderRecDetail();
 }
 function recMatTable(ms){
-  const cols = `<colgroup><col style="width:19%"><col style="width:11%"><col style="width:10%"><col style="width:13%"><col style="width:10%"><col style="width:14%"><col style="width:16%"><col style="width:7%"></colgroup>`;
+  const cols = `<colgroup><col style="width:28%"><col style="width:14%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:10%"></colgroup>`;
   const rows = ms.map((m,i)=>`<tr>`
     + cellSelect('mat',i,'part',m.part,'part')
     + cellSelect('mat',i,'size',m.size,'size')
     + cellSelect('mat',i,'sch',m.sch,'sch')
     + cellSelect('mat',i,'mat',m.mat,'mat')
     + cellNum('mat',i,'qty',m.qty,qtyValid)
-    + cellRO(money(m.price))
-    + `<td class="amt" id="amt-mat-${i}">${money(m.amount)}</td>` + delCell('mat',i)
+    + delCell('mat',i)
     + `</tr>`).join('');
-  return `<table class="edit-table">${cols}<thead><tr><th>零件</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th>單價</th><th>金額</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+  return `<table class="edit-table">${cols}<thead><tr><th>零件</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     + `<button type="button" class="addrow" onclick="addRow('mat')">＋ 新增材料</button>`;
 }
 function recPhotoStrip(ps){
@@ -796,6 +840,73 @@ function openBatch(){
   document.getElementById('batchModal').classList.add('open');
 }
 function closeBatch(){ document.getElementById('batchModal').classList.remove('open'); }
+
+/* ── 接後端：pywebview 就緒時用真資料覆蓋假資料 ── */
+let mainApi = null;
+function mergePricebookOptions(){
+  ['part','size','sch','mat','cat','unit','src'].forEach(f=>{
+    const set = new Set(OPT[f] || []);
+    PRICE.forEach(p=>{ if(p[f]) set.add(p[f]); });
+    OPT[f] = [...set];
+  });
+}
+async function importMaterialExcel(){
+  closeMenus();
+  if(!mainApi){ toast('桌面版才能匯入 Excel（瀏覽器預覽不行）','warn'); return; }
+  try{
+    const f = await mainApi.pick_file('excel');
+    if(!f || !f.ok || !f.data || !f.data.path){ return; }
+    const r = await mainApi.import_material_excel(f.data.path);
+    if(r && r.ok){
+      const pr = await mainApi.pricebook();
+      if(pr && pr.ok){ PRICE.length=0; pr.data.forEach(p=>PRICE.push(p)); mergePricebookOptions(); pbFillFilters(); renderPricebook(); }
+      toast(`已併入 ${r.data.added} 筆新品項（總庫共 ${r.data.total}）`, 'ok');
+    } else {
+      toast('匯入失敗：' + ((r && r.error) || '格式不符'), 'err');
+    }
+  }catch(e){ toast('匯入失敗', 'err'); }
+}
+async function exportMaterials(which){
+  closeMenus();
+  if(!mainApi){ toast('桌面版才能匯出 Excel（瀏覽器預覽不行）','warn'); return; }
+  try{
+    const r = which==='project' ? await mainApi.export_project_parts() : await mainApi.export_master();
+    if(r && r.ok){
+      if(r.data && r.data.cancelled){ return; }
+      toast(`已匯出 ${r.data.count} 筆 → ${r.data.path}`, 'ok');
+    } else {
+      toast('匯出失敗：' + ((r && r.error) || ''), 'err');
+    }
+  }catch(e){ toast('匯出失敗', 'err'); }
+}
+window.addEventListener('pywebviewready', async ()=>{
+  mainApi = window.pywebview.api;
+  await loadFromBackend();
+});
+async function loadFromBackend(){
+  const got = [];
+  try{ const r = await mainApi.pricebook(); if(r && r.ok && Array.isArray(r.data)){ PRICE.length=0; r.data.forEach(p=>PRICE.push(p)); mergePricebookOptions(); pbFillFilters(); renderPricebook(); if(r.data.length) got.push('總庫 '+r.data.length); } }catch(e){}
+  try{ const r = await mainApi.project_parts(); if(r && r.ok && r.data){ REGISTERED.clear(); (r.data.registered||[]).forEach(x=>REGISTERED.add(String(x))); renderPricebook(); if(REGISTERED.size) got.push('本案配件 '+REGISTERED.size); } }catch(e){}
+  try{ const r = await mainApi.dates(); if(r && r.ok && Array.isArray(r.data)){ dateFolders.length=0; r.data.forEach(d=>dateFolders.push(d)); renderDates(); if(r.data.length) got.push('日期 '+r.data.length); } }catch(e){}
+  try{ const r = await mainApi.records(); if(r && r.ok && Array.isArray(r.data)){ records.length=0; r.data.forEach(x=>records.push(x)); recSel=0; renderRecords(); renderRecDetail(); } }catch(e){}
+  try{ const r = await mainApi.billing(); if(r && r.ok && r.data){ BILL.length=0; (r.data.rows||[]).forEach(x=>BILL.push(x)); if(Array.isArray(r.data.batches)){ BATCHES.length=0; r.data.batches.forEach(x=>BATCHES.push(x)); } renderBilling(); } }catch(e){}
+  try{ const r = await mainApi.health(); if(r && r.ok && r.data){ renderHealth(r.data); } }catch(e){}
+  toast('已連線後端' + (got.length ? '：'+got.join('、') : ''), 'ok');
+}
+function renderHealth(d){
+  const b = document.getElementById('hbanner');
+  if(b){ b.className = 'sheet hbanner' + (d.status==='ok' ? ' ok' : d.status==='err' ? ' err' : ''); }
+  const st = document.getElementById('hStatus'); if(st){ st.textContent = d.label || ''; }
+  const hc = document.getElementById('hCounts'); if(hc){ hc.textContent = `專案：${d.root||''}　·　錯誤 ${d.errors||0} / 提醒 ${d.warnings||0} / 資訊 ${d.infos||0}`; }
+  const c = d.counts || {};
+  const hm = document.getElementById('hMetrics');
+  if(hm){ hm.innerHTML = metric('records', c.records||0) + metric('details', c.details||0) + metric('materials', c.materials||0) + metric('附件資料夾', c.attachment_folders||0) + metric('焊口快照', c.snapshot_welds||0); }
+  const lvCls = {error:'error',warning:'warning',info:'info'};
+  const lvTxt = {error:'錯誤',warning:'提醒',info:'資訊'};
+  const rows = (d.issues||[]).map(i=>`<tr><td>${esc(i.source)}</td><td><span class="lvl ${lvCls[i.level]||'info'}">${lvTxt[i.level]||'資訊'}</span></td><td>${esc(i.title)}</td><td>${esc(i.message)}</td><td><code>${esc(i.ref)}</code></td></tr>`).join('');
+  const hi = document.getElementById('hIssues');
+  if(hi){ hi.innerHTML = rows || `<tr><td colspan="5" class="empty">${emptyBlock('一切正常，未發現問題','illus-done.png')}</td></tr>`; }
+}
 renderRecords();
 renderRecDetail();
 
@@ -817,61 +928,216 @@ const PRICE = [
   {id:'GV-2-304',   part:'閘閥',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'},
   {id:'BV-3-316',   part:'球閥',     size:'3"',   sch:'150#',  mat:'SUS316', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'}
 ];
+function partImg(name){
+  const n = String(name||'').replace(/\s+/g,'').toUpperCase();
+  const h = s => n.includes(s);
+  if(h('彎頭')||h('ELBOW')) return 'Elbow';
+  if(h('四通')||h('十字')||h('CROSS')) return 'Cross';
+  if(h('三通')||h('TEE')) return 'Tee';
+  if(h('大小頭')||h('REDUCER')) return 'Reducer';
+  if(h('法蘭')||h('FLANGE')) return 'Flange';
+  if(h('GASKET')||h('墊')) return 'Gasket';
+  if(h('OLET')) return 'Olet';
+  if(h('過濾')||h('濾器')||h('STRAINER')) return 'Strainer';
+  if(h('控制閥')||h('調節閥')||h('CONTROLVALVE')) return 'ControlValve';
+  if(h('VALVE')||h('閥')) return 'Valve';
+  if(h('螺栓')||h('螺絲')||h('螺帽')||h('BOLT')||h('NUT')||h('STUD')||/^M\d/.test(n)) return 'BoltNut';
+  if(h('鋼管')||(h('PIPE')&&!h('SUPPORT'))) return 'Pipe';
+  if(h('COUPLING')||h('快速接頭')) return 'Coupling';
+  if(h('NIPPLE')) return 'Nipple';
+  if(h('SIGHTGLASS')||h('視鏡')||h('窺視')) return 'SightGlass';
+  if(h('UNION')||h('由令')) return 'Union';
+  if(h('BUSHING')||h('補心')) return 'Bushing';
+  if(h('管帽')||h('CAP')||h('封頭')) return 'Cap';
+  if(h('膨脹')||h('EXPANSION')) return 'ExpansionJoint';
+  if(h('軟管')||h('HOSE')||h('撓性')) return 'FlexHose';
+  if(h('支撐')||h('管架')||h('SUPPORT')) return 'PipeSupport';
+  if(h('PLUG')||h('管塞')) return 'plug';
+  return 'Other';
+}
+function pbCatClass(cat){
+  return {'配管':'pipe','閥件':'valve','墊料':'gasket','螺栓':'bolt','法蘭':'flange'}[cat] || 'other';
+}
 function pbRow(p,i){
-  const sel = (field,optKey,blank)=>{
-    const val = String(p[field] ?? '');
-    const o = (blank?['']:[]).concat(OPT[optKey]);
-    const bad = !o.includes(val);
-    let h = o.map(x=>`<option value="${esc(x)}"${x===val?' selected':''}>${esc(x||'—')}</option>`).join('');
-    if(bad){ h = `<option value="${esc(val)}" selected>${esc(val)}</option>` + h; }
-    return `<td class="cell"><select class="edit${bad?' bad':''}" onchange="pbEdit(${i},'${field}',this.value,this)">${h}</select></td>`;
-  };
-  const txt = (field)=>`<td class="cell"><input class="edit" value="${esc(p[field])}" oninput="pbEdit(${i},'${field}',this.value,this)"></td>`;
-  const un = !(parseFloat(p.price) > 0);
-  const price = `<td class="cell num${un?' pb-unpriced':''}" id="pbprice-${i}"><input class="edit" value="${esc(p.price)}" oninput="pbEdit(${i},'price',this.value,this)"></td>`;
-  return `<tr>` + txt('id') + sel('part','part') + sel('size','size') + sel('sch','sch') + sel('mat','mat')
-    + sel('cat','cat') + sel('unit','unit') + price + sel('src','src',true) + txt('date') + txt('remark')
-    + `<td class="rowdel"><button type="button" class="xbtn" title="刪除此列" onclick="pbDel(${i})">×</button></td></tr>`;
+  const on = REGISTERED.has(String(p.id));
+  const td = v => `<td>${esc(v==null?'':v)}</td>`;
+  const regCell = `<td class="pb-reg-cell"><input type="checkbox" class="pb-reg"${on?' checked':''} title="登記到本案配件" onchange="toggleReg('${esc(String(p.id))}',this.checked,this)"></td>`;
+  const thumb = `<td class="pb-thumb-cell"><img class="pb-thumb" src="img/parts/${partImg(p.part)}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>`;
+  return `<tr class="${on?'pb-on':''}">` + regCell + thumb
+    + `<td class="mono">${esc(p.id)}</td>`
+    + `<td class="pb-nm">${esc(p.part)}</td>`
+    + td(p.size) + td(p.sch) + td(p.mat)
+    + `<td><span class="cat-tag cat-${pbCatClass(p.cat)}">${esc(p.cat||'')}</span></td>`
+    + td(p.unit) + td(p.src) + td(p.remark) + `</tr>`;
 }
 function pbEdit(i,field,value,el){
   PRICE[i][field] = value;
-  if(field==='price'){
-    const cell = document.getElementById(`pbprice-${i}`);
-    if(cell){ cell.classList.toggle('pb-unpriced', !(parseFloat(value) > 0)); }
-  }
 }
 function pbDel(i){ PRICE.splice(i,1); renderPricebook(); }
 function pbAddRow(){
-  PRICE.unshift({id:'',part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',cat:'配管',unit:'個',price:0,src:'',date:'',remark:''});
+  const id='N'+Date.now();
+  PRICE.unshift({id:id,part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',cat:'配管',unit:'個',src:'本案新增',remark:''});
+  REGISTERED.add(id);
   renderPricebook();
+}
+let PBVIEW='project';
+const REGISTERED=new Set();
+function pbSetView(v){
+  PBVIEW=v;
+  const m=document.getElementById('pbvMaster'), p=document.getElementById('pbvProject');
+  if(m){ m.classList.toggle('on', v==='master'); }
+  if(p){ p.classList.toggle('on', v==='project'); }
+  renderPricebook();
+}
+function updatePbCounts(){
+  const pc=document.getElementById('pbcProject'); if(pc){ pc.textContent=REGISTERED.size; }
+  const mc=document.getElementById('pbcMaster'); if(mc){ mc.textContent=PRICE.length; }
+}
+async function toggleReg(id,on,el){
+  id=String(id);
+  if(on){ REGISTERED.add(id); } else { REGISTERED.delete(id); }
+  if(el){ const row=el.closest('tr')||el.closest('.reg-item'); if(row){ row.classList.toggle('pb-on',on); row.classList.toggle('on',on); } }
+  try{
+    const api=window.pywebview&&window.pywebview.api;
+    if(api){ if(on&&api.register_parts){ await api.register_parts([id]); }
+             else if(!on&&api.unregister_parts){ await api.unregister_parts([id]); } }
+  }catch(e){}
+  updatePbCounts();
+  const fc=document.getElementById('regFootCount'); if(fc){ fc.textContent=`本案已登記 ${REGISTERED.size} 項`; }
+  const modal=document.getElementById('regModal');
+  const modalOpen=modal && modal.classList.contains('open');
+  if(!modalOpen){
+    const cc=document.getElementById('pbCount');
+    if(cc && PBVIEW!=='project'){ cc.textContent=`總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`; }
+    if(PBVIEW==='project'){ renderPricebook(); }
+  }
 }
 function renderPricebook(){
   const q = (document.getElementById('pbSearch').value || '').toLowerCase().trim();
-  const onlyUn = document.getElementById('pbUnpriced').checked;
-  const fpart = document.getElementById('pbPart').value;
-  const fmat = document.getElementById('pbMat').value;
-  const cols = `<colgroup><col style="width:10%"><col style="width:11%"><col style="width:6%"><col style="width:6%"><col style="width:9%"><col style="width:7%"><col style="width:6%"><col style="width:8%"><col style="width:7%"><col style="width:8%"><col style="width:17%"><col style="width:5%"></colgroup>`;
-  const head = `<thead><tr><th>料號</th><th>零件類型</th><th>尺寸</th><th>SCH</th><th>材質</th><th>類別</th><th>單位</th><th class="r">單價</th><th>來源</th><th>生效日</th><th>備註</th><th></th></tr></thead>`;
+  const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const fpart=gv('pbPart'), fsize=gv('pbSize'), fsch=gv('pbSch'), fmat=gv('pbMat'), fcat=gv('pbCat');
+  const cols = `<colgroup><col style="width:4%"><col style="width:4%"><col style="width:7%"><col style="width:17%"><col style="width:8%"><col style="width:6%"><col style="width:13%"><col style="width:7%"><col style="width:6%"><col style="width:10%"><col style="width:18%"></colgroup>`;
+  const head = `<thead><tr><th class="pb-reg-h" title="登記本案">✓</th><th></th><th>料號</th><th>零件類型</th><th>尺寸</th><th>SCH</th><th>材質</th><th>類別</th><th>單位</th><th>來源</th><th>備註</th></tr></thead>`;
+  const narrowed = !!(q || PB_CAT || (fpart&&fpart!=='全部零件') || (fsize&&fsize!=='全部尺寸') || (fsch&&fsch!=='全部 SCH') || (fmat&&fmat!=='全部材質') || (fcat&&fcat!=='全部類別'));
+  const wrap = inner => `<table class="edit-table">${cols}${head}<tbody>${inner}</tbody></table>`;
+  if(PBVIEW==='master' && !narrowed){          // 總庫視圖未縮小範圍 → 不倒 896 筆，先請點分類
+    document.getElementById('pbTable').innerHTML = wrap(`<tr><td colspan="11" class="empty">${emptyBlock('點上方零件分類（或用搜尋 / 篩選）挑選 — 不會一次載入 896 筆','illus-search-empty.png')}</td></tr>`);
+    document.getElementById('pbCount').textContent = `總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`;
+    updatePbCounts(); return;
+  }
   let shown = 0;
   const body = PRICE.map((p,i)=>({p,i})).filter(({p})=>{
-    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat}`.toLowerCase().includes(q)){ return false; }
-    if(onlyUn && parseFloat(p.price) > 0){ return false; }
+    if(PBVIEW==='project' && !REGISTERED.has(String(p.id))){ return false; }
+    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat} ${p.src}`.toLowerCase().includes(q)){ return false; }
     if(fpart && fpart!=='全部零件' && p.part!==fpart){ return false; }
+    if(fsize && fsize!=='全部尺寸' && p.size!==fsize){ return false; }
+    if(fsch && fsch!=='全部 SCH' && p.sch!==fsch){ return false; }
     if(fmat && fmat!=='全部材質' && p.mat!==fmat){ return false; }
+    if(fcat && fcat!=='全部類別' && p.cat!==fcat){ return false; }
+    if(PB_CAT && partImg(p.part)!==PB_CAT){ return false; }
     return true;
   }).map(({p,i})=>{ shown++; return pbRow(p,i); }).join('');
-  document.getElementById('pbTable').innerHTML = `<table class="edit-table">${cols}${head}<tbody>${body || '<tr><td colspan="12" class="empty">查無符合的料號</td></tr>'}</tbody></table>`;
-  document.getElementById('pbCount').textContent = `顯示 ${shown} / 共 ${PRICE.length} 筆`;
+  const emptyMsg = PBVIEW==='project' ? '本案尚未登記配件 — 按右下「＋ 登記材料」選類型挑選加入' : '查無符合的料號';
+  document.getElementById('pbTable').innerHTML = wrap(body || `<tr><td colspan="11" class="empty">${emptyBlock(emptyMsg,'illus-search-empty.png')}</td></tr>`);
+  document.getElementById('pbCount').textContent = PBVIEW==='project'
+    ? `本案配件 ${REGISTERED.size} 項`
+    : `顯示 ${shown} / 總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`;
+  updatePbCounts();
 }
-(function pbInit(){
-  const part = document.getElementById('pbPart');
-  if(part){ part.innerHTML = '<option>全部零件</option>' + OPT.part.map(x=>`<option>${esc(x)}</option>`).join(''); }
-  const mat = document.getElementById('pbMat');
-  if(mat){ mat.innerHTML = '<option>全部材質</option>' + OPT.mat.map(x=>`<option>${esc(x)}</option>`).join(''); }
-  renderPricebook();
-})();
+function pbNatCmp(a,b){
+  const na=parseInt(String(a).replace(/[^0-9]/g,''),10), nb=parseInt(String(b).replace(/[^0-9]/g,''),10);
+  if(!isNaN(na) && !isNaN(nb) && na!==nb){ return na-nb; }
+  return String(a).localeCompare(String(b));
+}
+function pbFillFilter(id, allLabel, field){
+  const sel=document.getElementById(id); if(!sel){ return; }
+  const cur=sel.value;
+  const vals=[...new Set(PRICE.map(p=>p[field]).filter(Boolean))].sort(pbNatCmp);
+  sel.innerHTML=`<option>${allLabel}</option>`+vals.map(v=>`<option>${esc(v)}</option>`).join('');
+  if([...sel.options].some(o=>o.value===cur)){ sel.value=cur; }
+}
+function pbFillFilters(){
+  pbFillFilter('pbPart','全部零件','part');
+  pbFillFilter('pbSize','全部尺寸','size');
+  pbFillFilter('pbSch','全部 SCH','sch');
+  pbFillFilter('pbMat','全部材質','mat');
+  pbFillFilter('pbCat','全部類別','cat');
+  pbRenderChips();
+}
+let PB_CAT='';
+function pbChipLabel(img){
+  return {Elbow:'彎頭',Valve:'閥件',Flange:'法蘭',Reducer:'大小頭',BoltNut:'螺栓',
+    Cross:'四通',Tee:'三通',Pipe:'鋼管',Gasket:'墊片',Olet:'Olet',Strainer:'過濾器',
+    Coupling:'接頭',Nipple:'短節',SightGlass:'視鏡',Cap:'管帽',Union:'由令',
+    Bushing:'補心',ExpansionJoint:'伸縮',FlexHose:'軟管',PipeSupport:'管架',
+    plug:'管塞',Other:'其他'}[img]||img;
+}
+function pbRenderChips(){
+  const box=document.getElementById('pbChips'); if(!box){ return; }
+  const cnt={};
+  PRICE.forEach(p=>{ const k=partImg(p.part); cnt[k]=(cnt[k]||0)+1; });
+  const cats=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+  let h=`<button class="pbchip${PB_CAT===''?' on':''}" type="button" onclick="pbSetCat('')"><span class="pbchip-all">全部</span><i>${PRICE.length}</i></button>`;
+  h+=cats.map(c=>`<button class="pbchip${PB_CAT===c?' on':''}" type="button" onclick="pbSetCat('${c}')" title="${esc(pbChipLabel(c))}"><img src="img/parts/${c}.png" alt="" onerror="this.style.display='none'"><span>${esc(pbChipLabel(c))}</span><i>${cnt[c]}</i></button>`).join('');
+  box.innerHTML=h;
+}
+function pbSetCat(c){ PB_CAT=(PB_CAT===c?'':c); pbRenderChips(); renderPricebook(); }
+(function pbInit(){ pbFillFilters(); renderPricebook(); })();
 
-/* ── 請款追蹤（皮；金額讀自記錄，狀態/日期/備註可編輯） ── */
+/* ── 登記材料 浮動視窗（本案配件 → ＋登記材料 → 選類型 → 篩選挑選）── */
+let REG_CAT='';
+function openRegModal(){
+  if(!PRICE.length){ toast('總庫是空的，先匯入材料','warn'); return; }
+  REG_CAT=''; regRenderCats(); regShowStep(1);
+  document.getElementById('regFootCount').textContent = `本案已登記 ${REGISTERED.size} 項`;
+  document.getElementById('regModal').classList.add('open');
+}
+function closeRegModal(){
+  document.getElementById('regModal').classList.remove('open');
+  renderPricebook();
+}
+function regShowStep(n){
+  document.getElementById('regStep1').style.display = n===1?'':'none';
+  document.getElementById('regStep2').style.display = n===2?'':'none';
+  const hint=document.getElementById('regHint'); if(hint){ hint.style.display = n===1?'':'none'; }
+}
+function regBack(){ REG_CAT=''; regShowStep(1); }
+function regRenderCats(){
+  const cnt={};
+  PRICE.forEach(p=>{ const k=partImg(p.part); cnt[k]=(cnt[k]||0)+1; });
+  const cats=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+  document.getElementById('regStep1').innerHTML = cats.map(c=>{
+    const on=PRICE.filter(p=>partImg(p.part)===c && REGISTERED.has(String(p.id))).length;
+    return `<button type="button" class="reg-cat" onclick="regPick('${c}')"><img src="img/parts/${c}.png" alt="" onerror="this.style.display='none'"><span>${esc(pbChipLabel(c))}</span><i>${cnt[c]}</i>${on?`<b class="reg-cat-on">本案 ${on}</b>`:''}</button>`;
+  }).join('');
+}
+function regPick(c){
+  REG_CAT=c;
+  const items=PRICE.filter(p=>partImg(p.part)===c);
+  document.getElementById('regCatName').textContent = pbChipLabel(c)+'（'+items.length+'）';
+  const fill=(id,label,field)=>{ const sel=document.getElementById(id); const vals=[...new Set(items.map(p=>p[field]).filter(Boolean))].sort(pbNatCmp); sel.innerHTML=`<option>${label}</option>`+vals.map(v=>`<option>${esc(v)}</option>`).join(''); };
+  fill('regSize','全部尺寸','size'); fill('regMat','全部材質','mat');
+  document.getElementById('regSearch').value='';
+  regShowStep(2); regRenderList();
+}
+function regRenderList(){
+  const q=(document.getElementById('regSearch').value||'').toLowerCase().trim();
+  const fs=document.getElementById('regSize').value, fm=document.getElementById('regMat').value;
+  const items=PRICE.filter(p=>{
+    if(partImg(p.part)!==REG_CAT){ return false; }
+    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat}`.toLowerCase().includes(q)){ return false; }
+    if(fs&&fs!=='全部尺寸'&&p.size!==fs){ return false; }
+    if(fm&&fm!=='全部材質'&&p.mat!==fm){ return false; }
+    return true;
+  });
+  document.getElementById('regList').innerHTML = items.map(p=>{
+    const on=REGISTERED.has(String(p.id));
+    return `<label class="reg-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleReg('${esc(String(p.id))}',this.checked,this)"><img src="img/parts/${partImg(p.part)}.png" alt="" onerror="this.style.display='none'"><span class="reg-item-nm">${esc(p.part)}</span><span class="reg-item-meta">${esc(p.size||'')}${p.sch?' · '+esc(p.sch):''}${p.mat?' · '+esc(p.mat):''}</span></label>`;
+  }).join('') || `<div class="empty" style="padding:24px">此類查無符合</div>`;
+  document.getElementById('regFootCount').textContent = `本案已登記 ${REGISTERED.size} 項`;
+}
+
+/* ── 請款追蹤（只追狀態；不算金額，狀態/日期/備註可編輯） ── */
 Object.assign(OPT, { bill: ['未請款','已請款','已結案','部分請款','保留'] });
 const BILL = [
   {rec:0, status:'已請款', billDate:'2025-09-05', remark:''},
@@ -879,38 +1145,26 @@ const BILL = [
   {rec:2, status:'未請款', billDate:'',           remark:'待補照片'},
   {rec:3, status:'保留',   billDate:'',           remark:''}
 ];
-function recMoney(r){
-  const weld = r.welds.reduce((s,w)=>s+(+w.amount||0),0);
-  const mat  = r.mats.reduce((s,m)=>s+(+m.amount||0),0);
-  const untaxed = weld + mat;
-  const tax = Math.round(untaxed * 0.05);
-  return {weld, mat, untaxed, tax, total: untaxed + tax};
-}
 function billEdit(i,field,value){ BILL[i][field] = value; renderBillStats(); }
 function billRow(b,i){
   const r = records[b.rec];
-  const m = recMoney(r);
   const opts = OPT.bill.map(x=>`<option${x===b.status?' selected':''}>${esc(x)}</option>`).join('');
   return `<tr>`
     + `<td><code>${esc(r.id)}</code></td>`
     + `<td>${esc(r.date.slice(5))}</td>`
     + `<td>${esc(r.series)}</td>`
     + `<td>${esc(r.reason)}</td>`
+    + `<td>焊口 ${r.welds.length} · 材料 ${r.mats.length}</td>`
     + `<td class="cell"><select class="edit" onchange="billEdit(${i},'status',this.value)">${opts}</select></td>`
     + `<td class="cell"><input class="edit" value="${esc(b.billDate)}" placeholder="YYYY-MM-DD" oninput="billEdit(${i},'billDate',this.value)"></td>`
-    + `<td class="num">${money(m.weld)}</td>`
-    + `<td class="num">${money(m.mat)}</td>`
-    + `<td class="num">${money(m.untaxed)}</td>`
-    + `<td class="num">${money(m.tax)}</td>`
-    + `<td class="num"><strong>${money(m.total)}</strong></td>`
     + `<td class="cell"><input class="edit" value="${esc(b.remark)}" oninput="billEdit(${i},'remark',this.value)"></td>`
     + `</tr>`;
 }
 function renderBilling(){
   const q  = (document.getElementById('billSearch').value || '').toLowerCase().trim();
   const fs = document.getElementById('billStatus').value;
-  const cols = `<colgroup><col style="width:10%"><col style="width:7%"><col style="width:9%"><col style="width:15%"><col style="width:9%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:9%"><col style="width:11%"></colgroup>`;
-  const head = `<thead><tr><th>報告編號</th><th>日期</th><th>流水號</th><th>說明</th><th>請款狀態</th><th>請款日期</th><th class="r">焊口金額</th><th class="r">材料金額</th><th class="r">未稅小計</th><th class="r">稅額5%</th><th class="r">含稅總額</th><th>備註</th></tr></thead>`;
+  const cols = `<colgroup><col style="width:12%"><col style="width:8%"><col style="width:11%"><col style="width:22%"><col style="width:13%"><col style="width:12%"><col style="width:11%"><col style="width:11%"></colgroup>`;
+  const head = `<thead><tr><th>報告編號</th><th>日期</th><th>流水號</th><th>說明</th><th>內容</th><th>請款狀態</th><th>請款日期</th><th>備註</th></tr></thead>`;
   let shown = 0;
   const body = BILL.map((b,i)=>({b,i})).filter(({b})=>{
     const r = records[b.rec];
@@ -918,28 +1172,23 @@ function renderBilling(){
     if(fs && fs!=='全部狀態' && b.status!==fs){ return false; }
     return true;
   }).map(({b,i})=>{ shown++; return billRow(b,i); }).join('');
-  document.getElementById('billTable').innerHTML = `<table class="edit-table">${cols}${head}<tbody>${body || '<tr><td colspan="12" class="empty">查無符合的請款</td></tr>'}</tbody></table>`;
+  document.getElementById('billTable').innerHTML = `<table class="edit-table">${cols}${head}<tbody>${body || `<tr><td colspan="8" class="empty">${emptyBlock('查無符合的請款','illus-search-empty.png')}</td></tr>`}</tbody></table>`;
   document.getElementById('billCount').textContent = `顯示 ${shown} / 共 ${BILL.length} 筆`;
   renderBillStats();
 }
 function renderBillStats(){
   const cnt = s => BILL.filter(b=>b.status===s).length;
-  let weldT=0, matT=0, pendAmt=0, billAmt=0;
-  BILL.forEach(b=>{
-    const m = recMoney(records[b.rec]);
-    weldT += m.weld; matT += m.mat;
-    if(b.status==='未請款'){ pendAmt += m.total; }
-    if(b.status==='已請款' || b.status==='已結案'){ billAmt += m.total; }
-  });
   document.getElementById('billStats').innerHTML =
-      metric('總筆數', BILL.length) + metric('未請款', cnt('未請款')) + metric('已請款', cnt('已請款')) + metric('已結案', cnt('已結案'))
-    + metric('焊口總額', money(weldT)) + metric('材料總額', money(matT)) + metric('未請款額', money(pendAmt)) + metric('已請款額', money(billAmt));
+      metric('總筆數', BILL.length) + metric('未請款', cnt('未請款')) + metric('已請款', cnt('已請款'))
+    + metric('已結案', cnt('已結案')) + metric('部分請款', cnt('部分請款')) + metric('保留', cnt('保留'));
 }
 (function billInit(){
   const sel = document.getElementById('billStatus');
   if(sel){ sel.innerHTML = '<option>全部狀態</option>' + OPT.bill.map(x=>`<option>${esc(x)}</option>`).join(''); }
   renderBilling();
 })();
+
+/* 材料採購/收料是外部 Excel 的領域，不在本程式；材料只保留「既有清單(材料價目)」＋「匯出彙總」。 */
 
 /* ── 共用：Toast / 下拉選單 / 跨分頁串接 ── */
 let _toastTimer;
