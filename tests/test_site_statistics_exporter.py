@@ -94,13 +94,30 @@ def test_export_site_statistics_workbook_creates_expected_sheets(tmp_path):
 
     wb = load_workbook(output, data_only=False)
     try:
-        assert wb.sheetnames == ["總覽", "修改單清單", "焊口統計", "照片索引", "照片表", "用料統計", "問題清單"]
-        assert wb["總覽"]["A1"].value == "現場修改統計單 - 總覽"
-        assert wb["修改單清單"]["A3"].value == "R-1"
-        assert wb["照片索引"]["E3"].value == "before"
-        assert wb["照片表"]["A3"].value == "R-1"
-        assert wb["照片表"]["F3"].value == "找不到圖片"
-        assert wb["用料統計"]["A3"].value == "Pipe (管)"
+        assert wb.sheetnames == [
+            "目錄",
+            "開發_資料總覽",
+            "開發_修改單原始清單",
+            "開發_照片索引",
+            "開發_問題清單",
+            "報告_總覽",
+            "報告_修改單清單",
+            "報告_焊口統計",
+            "報告_用料統計",
+            "報告_照片表",
+        ]
+        assert wb["目錄"]["A1"].value == "現場修改統計單 - 工作簿目錄"
+        assert wb["目錄"]["A8"].hyperlink.target == "#'開發_資料總覽'!A1"
+        assert wb["開發_資料總覽"]["A1"].value == "開發者檢查 - 資料總覽"
+        assert wb["開發_修改單原始清單"]["A3"].value == "R-1"
+        assert wb["開發_修改單原始清單"]["P3"].value == "C:/project/attachments/20260616/001_1r2"
+        assert wb["開發_照片索引"]["E3"].value == "before"
+        assert wb["報告_總覽"]["A1"].value == "報告 - 總覽"
+        assert wb["報告_修改單清單"]["A3"].value == "R-1"
+        assert wb["報告_照片表"]["A3"].value == "R-1"
+        assert wb["報告_照片表"]["F3"].value == "找不到圖片"
+        assert wb["報告_照片表"].max_column == 8
+        assert wb["報告_用料統計"]["A3"].value == "Pipe (管)"
     finally:
         wb.close()
 
@@ -122,9 +139,10 @@ def test_export_site_statistics_workbook_embeds_before_after_images(tmp_path):
 
     wb = load_workbook(output, data_only=False)
     try:
-        assert wb["照片表"]["A3"].value == "R-1"
-        assert wb["照片表"]["I3"].value == str(before)
-        assert wb["照片表"]["J3"].value == str(after)
+        assert wb["報告_照片表"]["A3"].value == "R-1"
+        assert wb["報告_照片表"].max_column == 8
+        assert wb["開發_照片索引"]["J3"].value == str(before)
+        assert wb["開發_照片索引"]["J4"].value == str(after)
     finally:
         wb.close()
     with ZipFile(output) as archive:

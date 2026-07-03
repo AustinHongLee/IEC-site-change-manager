@@ -23,6 +23,7 @@ def test_core_and_gui_imports_do_not_require_com_modules():
         "workbook_pdf_converter",
         "demo_smoke",
         "site_statistics_exporter",
+        "owner_data_report",
         "record_manager",
         "project_guard",
         "gui",

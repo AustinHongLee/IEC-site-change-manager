@@ -145,7 +145,7 @@ exe 只是把 Python 直譯器包起來，**它打包的是程式，不是你的
 
 #### (1) 首次開啟畫面（Onboarding / 空專案）
 - **該長怎樣**：一張卡片置中，標題「歡迎，這個資料夾還不是一個專案」，三顆大按鈕：「① 在這裡建立新專案」「② 我選錯資料夾了，重新選」「③ 從舊版升級／匯入」。下方一行小字顯示目前路徑（讓使用者確認自己在哪）。
-- **現在的問題**：`啟動GUI.bat` 直接進主視窗，假設環境是好的。第一次在空資料夾跑，使用者看到的是一個空列表，不知道發生什麼事。
+- **現在的問題**：`tools\\launchers\\啟動GUI.bat` 直接進主視窗，假設環境是好的。第一次在空資料夾跑，使用者看到的是一個空列表，不知道發生什麼事。
 - **怎麼改**：啟動守門（第六章）先判斷狀態，再決定進哪個畫面。首次開啟**絕不能**直接進四 Tab 主畫面。
 
 #### (2) 專案資料夾健康檢查畫面
@@ -775,9 +775,9 @@ exe 啟動
 3. **records.json 與 billing.json 都已有原子寫入**（`.tmp`+`os.replace`）——很好；確保**所有** JSON 寫入（dwg_map、weld_snapshot、wizard_data 等附屬檔）都走同一機制，別留漏網的直接覆蓋。原子只防斷電，多人覆蓋要靠上面的鎖。
 4. **「先進垃圾桶不真刪」**：刪除/重命名前，把原始物件複製到 `.trash/{時間}/`，確認成功才清。
 
-### 7.3 一致性檢查（把你的 _audit_data.py 變成系統的一部分）
+### 7.3 一致性檢查（把你的 tools/audit_data.py 變成系統的一部分）
 
-你已經有一支很好的 `_audit_data.py`（一次性掃描），和 `utils.check_integrity()`。**把它升級成系統內建、可隨時跑、啟動可選跑的 `audit_integrity()`**（你 DATA_FLOW_AUDIT 的建議 A1）：
+你已經有一支很好的 `tools/audit_data.py`（一次性掃描），和 `utils.check_integrity()`。**把它升級成系統內建、可隨時跑、啟動可選跑的 `audit_integrity()`**（你 DATA_FLOW_AUDIT 的建議 A1）：
 - records ↔ attachments 雙向對應（有紀錄沒資料夾 / 有資料夾沒紀錄）。
 - details/material/photo → record 外鍵完整（沒有孤兒）。
 - report_no、(date,serial) 唯一性。
@@ -973,7 +973,7 @@ exe 啟動
 
 ### 2. 給工程師看的版本（下一步先改什麼）
 
-別急著做材料和請款功能，先止血。**第 0 階段四件事，按順序：**（1）加單寫者鎖 + 心跳 + 唯讀模式——這是雲端共用不掉資料的根，現在 H4 是最大地雷。注意：`records.json` 和 `billing.json` 主檔其實**都已經是原子寫入了**（`.tmp`+`os.replace`，3 月稽核標的 M4 已被修掉），但原子只防單機斷電、**擋不住兩台電腦互相覆蓋**——你缺的是鎖；順手把附屬 JSON（dwg_map/weld_snapshot）也補原子、把 billing 納入 auto_backup（目前只備份 records）；（2）把「改焊口連動重命名」這種多檔操作包成 write-then-swap + journal，能 rollback；（3）把 settings.json 和 weld_snapshot.json 裡的絕對路徑（`C:\Users\a0976\...`）改成相對專案根，否則換機必死；（4）把 `_audit_data.py` 升級成內建的 `audit_integrity()`，啟動可選跑。同時順手清掉 Product_report_、tkinter_backup、debug_* 這些棄用碼，並把 main.py / gui.py 那段 ~200 行重複邏輯抽共用。**這些做完之前，不要碰新功能。** 材料系統記得：從一開始就照「方案 B 的 UI、方案 C 的 schema」設計，金額用 Decimal/整數分，價格存當下快照——這幾個決定錯了，半年後的資料就回不去了。
+別急著做材料和請款功能，先止血。**第 0 階段四件事，按順序：**（1）加單寫者鎖 + 心跳 + 唯讀模式——這是雲端共用不掉資料的根，現在 H4 是最大地雷。注意：`records.json` 和 `billing.json` 主檔其實**都已經是原子寫入了**（`.tmp`+`os.replace`，3 月稽核標的 M4 已被修掉），但原子只防單機斷電、**擋不住兩台電腦互相覆蓋**——你缺的是鎖；順手把附屬 JSON（dwg_map/weld_snapshot）也補原子、把 billing 納入 auto_backup（目前只備份 records）；（2）把「改焊口連動重命名」這種多檔操作包成 write-then-swap + journal，能 rollback；（3）把 settings.json 和 weld_snapshot.json 裡的絕對路徑（`C:\Users\a0976\...`）改成相對專案根，否則換機必死；（4）把 `tools/audit_data.py` 升級成內建的 `audit_integrity()`，啟動可選跑。同時順手清掉 Product_report_、tkinter_backup、debug_* 這些棄用碼，並把 main.py / gui.py 那段 ~200 行重複邏輯抽共用。**這些做完之前，不要碰新功能。** 材料系統記得：從一開始就照「方案 B 的 UI、方案 C 的 schema」設計，金額用 Decimal/整數分，價格存當下快照——這幾個決定錯了，半年後的資料就回不去了。
 
 ### 3. 給現場使用者看的版本（之後用起來會怎樣）
 

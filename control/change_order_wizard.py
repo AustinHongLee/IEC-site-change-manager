@@ -1268,7 +1268,8 @@ def normalize_series_raw(series: Any) -> str:
 def _op_combo(object_name: str) -> QComboBox:
     combo = QComboBox()
     combo.setObjectName(object_name)
-    for op in (Op.CUT, Op.EXTEND, Op.SHORTEN):
+    options = (Op.NEW,) if "new" in object_name else (Op.REWORK,)
+    for op in options:
         combo.addItem(op.value, op.value)
     return combo
 

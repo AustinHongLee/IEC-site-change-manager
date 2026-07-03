@@ -45,8 +45,8 @@ def test_project_path_stays_on_exe_folder_when_resources_are_internal(monkeypatc
     assert resources.project_path("records", "material_pricebook.json") == str(
         tmp_path / "records" / "material_pricebook.json"
     )
-    assert resources.resource_path("material_pricebook_seed.json") == str(
-        internal / "material_pricebook_seed.json"
+    assert resources.resource_path("records", "seed", "material_pricebook_seed.json") == str(
+        internal / "records" / "seed" / "material_pricebook_seed.json"
     )
 
 

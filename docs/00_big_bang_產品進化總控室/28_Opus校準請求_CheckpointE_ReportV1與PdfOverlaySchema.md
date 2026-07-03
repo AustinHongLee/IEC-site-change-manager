@@ -138,7 +138,7 @@ LibreOffice 部署策略已拍板：
   - 通過模板驗證
 - `python .\control\main.py --health-check`
   - healthy
-- `python .\_audit_data.py`
+- `python .\tools\audit_data.py`
   - error=0, warning=1
   - warning 是既有 attachments 尚未產 records：`20250820/55_2a2`、`20260112/0547_AG`
 - `git diff --check`

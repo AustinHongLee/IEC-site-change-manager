@@ -146,7 +146,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert dialog.open_staging_folder() == str(staging_root)
         assert opened_paths[-1] == str(staging_root)
 
-        _set_combo_text(dialog.existing_op_combo, Op.EXTEND.value)
+        _set_combo_text(dialog.existing_op_combo, Op.REWORK.value)
         dialog.source_weld_table.selectRow(0)
         assert dialog.existing_base_edit.text() == "2"
         first_existing = dialog.add_existing_request()
@@ -159,7 +159,7 @@ def test_change_order_wizard_source_driven_slice_smoke(qapp, tmp_path, monkeypat
         assert first_existing.spec_source == SpecSource.LOOKED_UP
         assert second_existing.code == "2c"
 
-        _set_combo_text(dialog.new_op_combo, Op.EXTEND.value)
+        _set_combo_text(dialog.new_op_combo, Op.NEW.value)
         dialog.new_size_edit.setText('1"')
         dialog.new_sch_edit.setText("SCH40")
         dialog.new_material_edit.setText("SUS304")
@@ -316,7 +316,7 @@ def test_change_order_wizard_auto_group_scenario_after_six_welds(qapp, tmp_path)
     try:
         dialog.series_edit.setText("088")
         dialog.date_edit.setText("20260624")
-        _set_combo_text(dialog.new_op_combo, Op.EXTEND.value)
+        _set_combo_text(dialog.new_op_combo, Op.NEW.value)
 
         for index in range(7):
             dialog.new_size_edit.setText(f'{index + 1}"')

@@ -11,6 +11,7 @@ from weld_control import init_weld_manager_from_settings
 
 
 REAL_JOINT_ATTRIBUTES = frozenset({"焊口", "管牙製作安裝"})
+REAL_JOINT_PROPERTIES = frozenset({"原圖焊口", "修改", "新增"})
 
 
 def normalize_series_raw(series: Any) -> str:
@@ -31,8 +32,31 @@ def _row_value(row: dict[str, Any], column_name: str) -> Any:
     return row.get(resolved)
 
 
+def _exact_normalized_row_value(row: dict[str, Any], column_name: str) -> Any:
+    target = column_name.replace(" ", "").replace("\n", "").lower()
+    for key in row.keys():
+        if str(key).replace(" ", "").replace("\n", "").lower() == target:
+            return row.get(key)
+    return None
+
+
 def _is_real_joint(row: dict[str, Any]) -> bool:
-    return _text(_row_value(row, "屬性.1")) in REAL_JOINT_ATTRIBUTES
+    attr = _text(_exact_normalized_row_value(row, "屬性.1"))
+    if attr is not None:
+        return attr in REAL_JOINT_ATTRIBUTES
+
+    # Some補登/結算管制表 variants do not carry 屬性.1.  In those files the
+    # weld detail sheet marks actual rows through 焊口屬性, or simply consists of
+    # weld-number rows with spec columns.  Keep the old strict path when 屬性.1
+    # exists, but accept these detail-only variants.
+    prop = _text(_row_value(row, "焊口屬性")) or _text(_row_value(row, "屬性"))
+    if prop is not None:
+        return prop in REAL_JOINT_PROPERTIES or "焊口" in prop
+
+    return bool(
+        _text(_row_value(row, "焊口編號"))
+        and any(_text(_row_value(row, name)) for name in ("尺寸", "厚度", "材質", "銲接型式"))
+    )
 
 
 class WeldLookup:

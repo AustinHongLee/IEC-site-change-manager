@@ -111,7 +111,7 @@
   - `python control/main.py --health-check`
   - 狀態 healthy。
 - 資料稽核：
-  - `python _audit_data.py`
+  - `python tools/audit_data.py`
   - error=0, warning=1。
   - warning 是既有的 2 個 attachments 子資料夾尚未寫入 records。
 - `git diff --check`

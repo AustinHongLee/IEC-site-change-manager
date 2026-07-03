@@ -28,10 +28,9 @@ pip install -r requirements.txt
 
 ### GUI 模式（推薦）
 ```bash
-cd control
-python main.py
+python control/co_main_app.py
 ```
-或直接雙擊執行 `啟動GUI.bat`
+或直接雙擊執行根目錄的 `啟動_新版GUI.bat`。
 
 ### GUI 新功能
 - **🔍 驗證資料夾** - 檢查選擇的資料夾是否有缺少檔案

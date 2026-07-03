@@ -17,8 +17,21 @@ from __future__ import annotations
 import functools
 import json
 import traceback
+import re
 from pathlib import Path
 from typing import Any, Callable
+
+from material_taxonomy import (
+    category_for_part,
+    enrich_material_item,
+    load_taxonomy,
+    material_match_key,
+    normalize_material,
+    normalize_schedule,
+    normalize_size,
+    taxonomy_options,
+)
+from support_bom import analyze_support_bom
 
 API_VERSION = "main-0.1"
 
@@ -60,6 +73,63 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def _settings_path_value(root: Path, key: str) -> str:
+    data = _read_json(root / "settings.json")
+    if not isinstance(data, dict):
+        return ""
+    paths = data.get("paths")
+    if not isinstance(paths, dict):
+        return ""
+    return str(paths.get(key) or "")
+
+
+def _photo_label(role: Any) -> str:
+    value = str(role or "").strip().lower()
+    if value == "before":
+        return "修改前"
+    if value == "after":
+        return "修改後"
+    return str(role or "")
+
+
+def _date_key(value: Any) -> str:
+    """Normalize UI/report dates to YYYYMMDD so the output tab can group records."""
+    digits = re.sub(r"\D", "", str(value or ""))
+    return digits[:8] if len(digits) >= 8 else ""
+
+
+def _status_key(value: Any) -> str:
+    raw = str(value or "").strip()
+    return {"完整": "done", "待補": "pending", "草稿": "pending"}.get(raw, raw or "pending")
+
+
+def _weld_kind_label(value: Any, origin: Any = None) -> str:
+    raw = str(value or "").strip()
+    origin_text = str(origin or "").strip()
+    if raw in {"新焊", "新增焊口"}:
+        return "新焊"
+    if raw in {"重焊", "原焊口重接", "拆除不重焊"}:
+        return "重焊"
+    if raw in {"裁切", "加長", "縮短"}:
+        return "新焊" if origin_text == "new" else "重焊"
+    if origin_text == "new":
+        return "新焊"
+    if origin_text == "existing":
+        return "重焊"
+    return raw
+
+
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
+_IMAGE_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".bmp": "image/bmp",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+}
+
+
 class MainBridge:
     """主介面橋。對外方法皆回信封；`project_root` 下的 records/ 放舊系統資料。"""
 
@@ -68,6 +138,10 @@ class MainBridge:
         self.records_dir = self.root / "records"
         self._pick_file_fn = pick_file_fn  # 由 launcher 注入原生檔案對話框
         self._save_file_fn = None          # 由 launcher 注入原生存檔對話框
+        self._pick_folder_fn = None        # 由 launcher 注入原生資料夾對話框
+        self._open_path_fn = None          # 測試可注入；桌面版預設用系統開啟
+        self._pricebook_cache_key = None
+        self._pricebook_cache_data = None
 
     # ---- 對外 API（皆回信封） -------------------------------------------- #
     @_enveloped
@@ -82,89 +156,733 @@ class MainBridge:
     @_enveloped
     def pricebook(self) -> list:
         """讀真實料表 → 對映成前端 PRICE 形狀；缺檔回 []。"""
-        data = _read_json(self.records_dir / "material_pricebook.json")
+        path = self.records_dir / "material_pricebook.json"
+        try:
+            stat = path.stat()
+            project_path = self._project_parts_path()
+            try:
+                project_stat = project_path.stat()
+                project_cache_key = (project_stat.st_mtime_ns, project_stat.st_size)
+            except OSError:
+                project_cache_key = None
+            cache_key = (stat.st_mtime_ns, stat.st_size, project_cache_key)
+        except OSError:
+            cache_key = None
+        if cache_key is not None and cache_key == self._pricebook_cache_key:
+            return self._pricebook_cache_data or []
+
+        data = _read_json(path)
         items = data.get("items") if isinstance(data, dict) else data
+        items = list(items or []) + self._read_custom_project_parts()
+        taxonomy = load_taxonomy(str(self.root))
         out = []
         for it in (items or []):
             if not isinstance(it, dict):
                 continue
+            row = enrich_material_item(it, taxonomy)
             out.append({
                 "id": it.get("id") or "",
-                "part": it.get("零件類型") or "",
-                "size": it.get("尺寸") or "",
-                "sch": it.get("SCH") or "",
-                "mat": it.get("材質") or "",
-                "cat": it.get("類別") or "",
-                "unit": it.get("單位") or "",
+                "part": row.get("零件類型") or "",
+                "size": row.get("尺寸") or "",
+                "sch": row.get("SCH") or "",
+                "mat": row.get("材質") or "",
+                "cat": row.get("類別") or "",
+                "unit": row.get("單位") or "",
                 "src": it.get("來源") or "",
                 "remark": it.get("備註") or "",
+                "type": it.get("Type") or row.get("Type") or "",
+                "level": it.get("支撐級別") or row.get("支撐級別") or "",
+                "spec": it.get("規格") or "",
+                "icon": row.get("icon") or "",
+                "material_family": row.get("material_family") or "",
+                "match_key": row.get("match_key") or "",
+                "project_only": bool(it.get("project_only")),
+                "source_designation": it.get("source_designation") or "",
             })
+        self._pricebook_cache_key = cache_key
+        self._pricebook_cache_data = out
         return out
 
     @_enveloped
-    def records(self) -> list:
-        """讀舊 store records.json → 對映成前端 records 形狀（目前空，回 []）。"""
-        data = _read_json(self.records_dir / "records.json")
-        recs = (data or {}).get("records") if isinstance(data, dict) else None
-        # 舊 store details / materials 需以報告編號 join；目前 store 為空，
-        # 待有真資料時再補 join，這裡先安全回基本欄位（空則 []）。
+    def material_taxonomy(self) -> dict:
+        """材料分類 / 規格軸 / 圖示對照。前端用它覆蓋硬編碼 fallback。"""
+        taxonomy = load_taxonomy(str(self.root))
+        return {**taxonomy, "options": taxonomy_options(taxonomy)}
+
+    @_enveloped
+    def support_bom(self, designation: str, overrides: dict | None = None) -> dict:
+        """展開管架 Type 編碼為 BOM 與本系統材料列。"""
+        return analyze_support_bom(designation, project_root=self.root, overrides=overrides or {})
+
+    def _attachments_root(self) -> Path:
+        """精靈出單的根目錄（＝專案 attachments/，與預設 config.ATTACHMENTS_ROOT 同位置、可測）。"""
+        return self.root / "attachments"
+
+    def _read_change_orders(self) -> list:
+        """掃 attachments 下所有 change_order.json（精靈出的單）→ 前端 record 形狀，日期新到舊。"""
+        root = self._attachments_root()
+        if not root.exists():
+            return []
         out = []
-        for r in (recs or []):
-            if not isinstance(r, dict):
+        for cop in root.rglob("change_order.json"):
+            data = _read_json(cop)
+            if not isinstance(data, dict):
                 continue
-            out.append({
-                "id": r.get("報告編號") or "",
-                "date": r.get("日期") or "",
-                "series": r.get("Series NO") or r.get("Series") or "",
-                "status": "done" if str(r.get("需重產", "")).strip() != "1" else "pending",
-                "reason": r.get("說明") or "",
-                "welds": [],
-                "mats": [],
-                "photos": [],
-            })
+            out.append(self._record_from_change_order(cop, data))
+        out.sort(key=lambda r: (r.get("date") or "", r.get("id") or ""), reverse=True)
         return out
+
+    def _record_from_change_order(self, cop: Path, data: dict) -> dict:
+        folder = cop.parent
+        welds = []
+        for w in (data.get("welds") or []):
+            if not isinstance(w, dict):
+                continue
+            sp = w.get("spec") or {}
+            welds.append({
+                "code": w.get("code") or "",
+                "mark": _weld_kind_label(w.get("op"), w.get("origin")),
+                "size": sp.get("size") or "",
+                "mat": sp.get("material") or "",
+                "sch": sp.get("sch") or "",
+                "coef": "",
+            })
+        mats = []
+        for m in (data.get("materials") or []):
+            if not isinstance(m, dict):
+                continue
+            mats.append({
+                "id": m.get("component_id") or "",
+                "part": m.get("component") or "",
+                "size": m.get("size") or "",
+                "sch": m.get("schedule") or "",
+                "mat": m.get("material") or "",
+                "qty": "" if m.get("qty") is None else m.get("qty"),
+                "unit": m.get("unit") or "",
+                "remark": m.get("remark") or "",
+            })
+        photos = []
+        for ph in (data.get("photos") or []):
+            if not isinstance(ph, dict):
+                continue
+            src = self._attachment_url(folder, ph.get("file") or "")
+            photos.append({"src": src, "label": _photo_label(ph.get("role")), "file": ph.get("file") or ""})
+        return {
+            "id": data.get("id") or folder.name,
+            "date": data.get("date") or "",
+            "series": str(data.get("series") or ""),
+            "status": _status_key(data.get("status")),
+            "reason": data.get("reason") or "",
+            "welds": welds,
+            "mats": mats,
+            "photos": photos,
+            "folder": str(folder),
+        }
+
+    def _attachment_url(self, folder: Path, value: str) -> str:
+        text = str(value or "").strip()
+        if not text or text.lower().startswith("data:"):
+            return text
+        path = self._path_from_file_value(text)
+        candidate = path if path.is_absolute() else folder / path
+        try:
+            if candidate.is_file():
+                return str(candidate.resolve())
+        except OSError:
+            pass
+        return text
+
+    def _find_change_order(self, record_id: str) -> tuple[Path, dict]:
+        target = str(record_id or "").strip()
+        if not target:
+            raise ValueError("缺少記錄編號")
+        for path in self._attachments_root().rglob("change_order.json"):
+            data = _read_json(path)
+            if not isinstance(data, dict):
+                continue
+            if str(data.get("id") or path.parent.name) == target:
+                return path, data
+        raise FileNotFoundError(f"找不到修改單記錄：{record_id}")
+
+    def _write_change_order(self, path: Path, data: dict) -> None:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _photo_at(self, data: dict, index: int) -> dict:
+        photos = data.get("photos")
+        if not isinstance(photos, list):
+            raise ValueError("此記錄沒有照片清單")
+        if index < 0 or index >= len(photos) or not isinstance(photos[index], dict):
+            raise IndexError("照片序號超出範圍")
+        return photos[index]
+
+    def _photo_response(self, folder: Path, photo: dict) -> dict:
+        return {
+            "src": self._attachment_url(folder, photo.get("file") or ""),
+            "label": _photo_label(photo.get("role")),
+            "file": photo.get("file") or "",
+        }
+
+    def _path_from_file_value(self, value: str) -> Path:
+        text = str(value or "").strip()
+        if text.lower().startswith("file:"):
+            from urllib.parse import unquote, urlparse
+            parsed = urlparse(text)
+            raw = unquote(parsed.path or "")
+            if parsed.netloc:
+                raw = f"//{parsed.netloc}{raw}"
+            if len(raw) >= 4 and raw[0] == "/" and raw[2] == ":":
+                raw = raw[1:]
+            return Path(raw)
+        return Path(text)
+
+    def _resolved_photo_path(self, folder: Path, value: str) -> Path:
+        path = self._path_from_file_value(value)
+        return path if path.is_absolute() else folder / path
+
+    @_enveloped
+    def image_data_url(self, file_path: str) -> dict:
+        """把本機圖片讀成 data URL，給燈箱與縮圖使用。"""
+        text = str(file_path or "").strip()
+        if not text:
+            raise ValueError("缺少圖片路徑")
+        if text.lower().startswith("data:"):
+            return {"name": "", "path": text, "url": text}
+        path = self._path_from_file_value(text)
+        if not path.is_absolute():
+            path = self.root / path
+        if not path.is_file():
+            raise FileNotFoundError(f"找不到圖片：{file_path}")
+        suffix = path.suffix.lower()
+        if suffix not in _IMAGE_EXTS:
+            raise ValueError(f"不支援的圖片格式：{suffix or path.name}")
+        import base64
+        import mimetypes
+        mime = _IMAGE_MIME.get(suffix) or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        return {"name": path.name, "path": str(path.resolve()), "url": f"data:{mime};base64,{encoded}"}
+
+    @_enveloped
+    def replace_photo(self, record_id: str, photo_index: int, source_path: str) -> dict:
+        """取代某張照片：複製新檔到該修改單附件資料夾，並更新 change_order.json。"""
+        record_path, data = self._find_change_order(record_id)
+        folder = record_path.parent
+        photo = self._photo_at(data, int(photo_index))
+        source = self._path_from_file_value(source_path)
+        if not source.is_file():
+            raise FileNotFoundError(f"找不到取代照片：{source_path}")
+        suffix = source.suffix.lower()
+        if suffix not in _IMAGE_EXTS:
+            raise ValueError(f"不支援的圖片格式：{suffix or source.name}")
+        current = str(photo.get("file") or "").strip()
+        role = str(photo.get("role") or "photo").strip().lower() or "photo"
+        old_path = self._resolved_photo_path(folder, current) if current else None
+        stem = old_path.stem if old_path is not None and old_path.name else role
+        destination = folder / f"{stem}{suffix}"
+        if source.resolve() != destination.resolve():
+            import shutil
+            shutil.copy2(source, destination)
+        photo["file"] = destination.name
+        self._write_change_order(record_path, data)
+        return {"record": str(record_path), "photo": self._photo_response(folder, photo)}
+
+    @_enveloped
+    def save_photo_annotation(self, record_id: str, photo_index: int, data_url: str) -> dict:
+        """儲存燈箱 canvas 合成後的標註圖，並把該照片指向標註檔。"""
+        payload = str(data_url or "")
+        if "," in payload:
+            header, payload = payload.split(",", 1)
+            if "base64" not in header.lower():
+                raise ValueError("標註資料必須是 base64 data URL")
+        import base64
+        raw = base64.b64decode(payload, validate=True)
+        record_path, data = self._find_change_order(record_id)
+        folder = record_path.parent
+        photo = self._photo_at(data, int(photo_index))
+        current = str(photo.get("file") or "").strip()
+        current_path = self._resolved_photo_path(folder, current) if current else folder / "photo.png"
+        base = current_path.stem[:-10] if current_path.stem.endswith("_annotated") else current_path.stem
+        destination = folder / f"{base}_annotated.png"
+        destination.write_bytes(raw)
+        photo["file"] = destination.name
+        self._write_change_order(record_path, data)
+        return {"record": str(record_path), "photo": self._photo_response(folder, photo)}
+
+    @_enveloped
+    def delete_photo(self, record_id: str, photo_index: int) -> dict:
+        """從 change_order.json 移除照片引用；檔案保留在附件資料夾中。"""
+        record_path, data = self._find_change_order(record_id)
+        photos = data.get("photos")
+        if not isinstance(photos, list):
+            raise ValueError("此記錄沒有照片清單")
+        removed = photos.pop(int(photo_index))
+        self._write_change_order(record_path, data)
+        return {"record": str(record_path), "removed": removed, "count": len(photos)}
+
+    @_enveloped
+    def records(self) -> list:
+        """讀精靈出的 change_order.json（attachments/）→ 前端記錄形狀；無則 []。"""
+        return self._read_change_orders()
 
 
     @_enveloped
     def dates(self) -> list:
-        """產出報告左欄：attachments 的日期資料夾 → 每日的圖號(流水號)清單。
+        """產出報告左欄：優先彙整新版草稿 change_order.json，再補舊 weld_snapshot。"""
+        by_date: dict[str, list] = {}
+        seen: set[tuple[str, str]] = set()
+        for rec in self._read_change_orders():
+            date = _date_key(rec.get("date"))
+            series = str(rec.get("series") or "")
+            if not date or not series:
+                continue
+            seen.add((date, series))
+            welds = rec.get("welds") or []
+            weld_codes = [
+                str(w.get("code") or "").strip()
+                for w in welds
+                if isinstance(w, dict) and str(w.get("code") or "").strip()
+            ]
+            by_date.setdefault(date, []).append({
+                "series": series,
+                "welds": len(welds),
+                "weld_codes": weld_codes,
+                "status": rec.get("status") or "pending",
+                "sel": False,
+                "folder": rec.get("folder") or "",
+                "record_id": rec.get("id") or "",
+                "source": "change_order",
+            })
 
-        來源優先用 records/weld_snapshot.json 的 folders（已解析好 serial/welds）；
-        沒有就回 []。狀態先一律 'pending'（記錄空、尚未產出）。
-        """
         snap = _read_json(self.records_dir / "weld_snapshot.json") or {}
         folders = snap.get("folders") if isinstance(snap, dict) else None
-        by_date: dict[str, list] = {}
         for key, info in (folders or {}).items():
             if not isinstance(info, dict):
                 continue
-            date = str(key).split("/", 1)[0]
+            date = _date_key(str(key).split("/", 1)[0])
             serial = info.get("serial") or info.get("raw_serial") or ""
-            welds = len(info.get("welds") or [])
+            serial = str(serial)
+            if not date or not serial or (date, serial) in seen:
+                continue
+            snap_welds = info.get("welds") or []
+            weld_codes = []
+            for w in snap_welds:
+                code = w.get("code") if isinstance(w, dict) else w
+                code = str(code or "").strip()
+                if code:
+                    weld_codes.append(code)
             by_date.setdefault(date, []).append({
-                "series": str(serial),
-                "welds": welds,
+                "series": serial,
+                "welds": len(snap_welds),
+                "weld_codes": weld_codes,
                 "status": "pending",
                 "sel": False,
                 "folder": str(key),
+                "record_id": "",
+                "source": "weld_snapshot",
             })
         out = []
         for date in sorted(by_date.keys(), reverse=True):
-            out.append({"date": date, "open": False, "items": by_date[date]})
+            items = sorted(by_date[date], key=lambda it: str(it.get("series") or ""))
+            out.append({"date": date, "open": False, "items": items})
         if out:
             out[0]["open"] = True
         return out
 
     @_enveloped
     def billing(self) -> dict:
-        """請款：目前 store 空 → 回空清單 + 批次 + 稅率設定。"""
+        """請款：每筆記錄一列（rec 對映 records()），狀態預設未請款、可從 billing.json 讀回。"""
+        recs = self._read_change_orders()
+        saved = _read_json(self.records_dir / "billing.json") or {}
+        by_id = saved.get("byId") if isinstance(saved, dict) else {}
+        by_id = by_id if isinstance(by_id, dict) else {}
+        rows = []
+        for i, r in enumerate(recs):
+            st = by_id.get(r["id"]) or {}
+            rows.append({
+                "rec": i,
+                "status": st.get("status") or "未請款",
+                "billDate": st.get("billDate") or "",
+                "remark": st.get("remark") or "",
+            })
         batches_doc = _read_json(self.records_dir / "billing_batches.json") or {}
         meta = batches_doc.get("meta") or {}
-        batches = []
-        for b in (batches_doc.get("batches") or []):
-            if isinstance(b, dict):
-                batches.append(b)
-        return {"rows": [], "batches": batches, "tax_rate": meta.get("tax_rate", "5%")}
+        batches = [b for b in (batches_doc.get("batches") or []) if isinstance(b, dict)]
+        return {"rows": rows, "batches": batches, "tax_rate": meta.get("tax_rate", "5%")}
+
+    @_enveloped
+    def save_billing(self, rows: list) -> dict:
+        """儲存請款追蹤狀態；只存狀態/日期/備註，不涉及金額。"""
+        recs = self._read_change_orders()
+        by_id = {}
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            try:
+                idx = int(row.get("rec"))
+            except (TypeError, ValueError):
+                continue
+            if idx < 0 or idx >= len(recs):
+                continue
+            rid = recs[idx].get("id")
+            if not rid:
+                continue
+            by_id[str(rid)] = {
+                "status": row.get("status") or "未請款",
+                "billDate": row.get("billDate") or "",
+                "remark": row.get("remark") or "",
+            }
+        self.records_dir.mkdir(parents=True, exist_ok=True)
+        (self.records_dir / "billing.json").write_text(
+            json.dumps({"byId": by_id}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return {"saved": True, "count": len(by_id)}
+
+    def _open_path(self, path: Path) -> None:
+        target = Path(path)
+        if not target.exists():
+            raise FileNotFoundError(f"找不到路徑：{target}")
+        if self._open_path_fn is not None:
+            self._open_path_fn(str(target))
+            return
+        import os
+        import subprocess
+        import sys
+        if sys.platform.startswith("win"):
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(target)])
+        else:
+            subprocess.Popen(["xdg-open", str(target)])
+
+    def _drawing_pdf_path(self, folder: Path, data: dict) -> Path:
+        drawing = data.get("drawing_pdf")
+        if isinstance(drawing, dict) and drawing.get("file"):
+            candidate = self._resolved_photo_path(folder, str(drawing.get("file") or ""))
+            if candidate.is_file():
+                return candidate
+        pdfs = sorted(p for p in folder.glob("*.pdf") if p.is_file())
+        if pdfs:
+            return pdfs[0]
+        raise FileNotFoundError("這筆記錄沒有可開啟的 PDF")
+
+    @_enveloped
+    def open_record_folder(self, record_id: str) -> dict:
+        """用系統檔案總管開啟修改單附件資料夾。"""
+        record_path, _data = self._find_change_order(record_id)
+        folder = record_path.parent
+        self._open_path(folder)
+        return {"path": str(folder)}
+
+    @_enveloped
+    def open_record_pdf(self, record_id: str) -> dict:
+        """開啟這筆修改單附件資料夾中的圖面 PDF。"""
+        record_path, data = self._find_change_order(record_id)
+        pdf = self._drawing_pdf_path(record_path.parent, data)
+        self._open_path(pdf)
+        return {"path": str(pdf)}
+
+    @_enveloped
+    def save_record(self, record: dict) -> dict:
+        """把紀錄管理中可編輯的焊口/材料明細寫回 change_order.json。"""
+        if not isinstance(record, dict):
+            raise ValueError("紀錄資料格式錯誤")
+        record_path, data = self._find_change_order(str(record.get("id") or ""))
+        if "date" in record:
+            data["date"] = record.get("date") or data.get("date")
+        if "series" in record:
+            data["series"] = str(record.get("series") or data.get("series") or "")
+        if "reason" in record:
+            data["reason"] = record.get("reason") or None
+
+        old_welds = data.get("welds") if isinstance(data.get("welds"), list) else []
+        new_welds = []
+        for i, row in enumerate(record.get("welds") or []):
+            if not isinstance(row, dict):
+                continue
+            old = dict(old_welds[i]) if i < len(old_welds) and isinstance(old_welds[i], dict) else {
+                "joint_type": "焊口",
+                "origin": "manual",
+            }
+            spec = dict(old.get("spec") or {})
+            old["code"] = str(row.get("code") or "")
+            old["op"] = _weld_kind_label(row.get("mark"), old.get("origin"))
+            spec["size"] = str(row.get("size") or "")
+            spec["material"] = str(row.get("mat") or "")
+            spec["sch"] = str(row.get("sch") or "")
+            old["spec"] = spec
+            new_welds.append(old)
+        data["welds"] = new_welds
+
+        new_mats = []
+        for row in record.get("mats") or []:
+            if not isinstance(row, dict):
+                continue
+            qty = row.get("qty")
+            try:
+                qn = float(str(qty).replace(",", ""))
+                qty = int(qn) if qn == int(qn) else qn
+            except (TypeError, ValueError):
+                qty = qty if qty not in (None, "") else 1
+            new_mats.append({
+                "component_id": str(row.get("id") or ""),
+                "component": str(row.get("part") or ""),
+                "size": str(row.get("size") or ""),
+                "schedule": str(row.get("sch") or ""),
+                "material": str(row.get("mat") or ""),
+                "qty": qty,
+                "unit": str(row.get("unit") or ""),
+                "remark": str(row.get("remark") or ""),
+            })
+        data["materials"] = new_mats
+
+        import datetime
+        audit = data.get("audit") if isinstance(data.get("audit"), dict) else {}
+        history = audit.get("history") if isinstance(audit.get("history"), list) else []
+        history.append({
+            "who": None,
+            "when": datetime.datetime.now().isoformat(timespec="seconds"),
+            "action": "saved_from_main",
+            "detail": None,
+        })
+        audit["history"] = history
+        data["audit"] = audit
+        self._write_change_order(record_path, data)
+        return self._record_from_change_order(record_path, data)
+
+    def _export_rows(self, path: str, default_name: str, sheet_name: str, columns: list[str], rows: list[list[Any]]) -> dict:
+        if not path:
+            if self._save_file_fn is None:
+                raise RuntimeError("存檔對話框未注入（此環境不支援匯出）")
+            path = self._save_file_fn("excel", default_name)
+            if not path:
+                return {"cancelled": True}
+        import openpyxl
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = sheet_name
+        ws.append(columns)
+        for row in rows:
+            ws.append(row)
+        ws.freeze_panes = "A2"
+        for col in ws.columns:
+            width = max(len(str(cell.value or "")) for cell in col[:60])
+            ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 10), 42)
+        wb.save(path)
+        return {"path": str(path), "count": len(rows)}
+
+    @_enveloped
+    def export_records(self, path: str = "") -> dict:
+        """匯出目前 change_order 記錄清單成 Excel。"""
+        rows = []
+        for r in self._read_change_orders():
+            rows.append([
+                r.get("id", ""),
+                r.get("date", ""),
+                r.get("series", ""),
+                r.get("status", ""),
+                r.get("reason", ""),
+                len(r.get("welds") or []),
+                len(r.get("mats") or []),
+                len(r.get("photos") or []),
+                r.get("folder", ""),
+            ])
+        return self._export_rows(
+            path,
+            "修改單紀錄清單.xlsx",
+            "紀錄清單",
+            ["報告編號", "日期", "流水號", "狀態", "說明", "焊口數", "材料數", "照片數", "資料夾"],
+            rows,
+        )
+
+    @_enveloped
+    def export_record_materials(self, path: str = "") -> dict:
+        """匯出所有修改單材料明細彙總；只記品項與量，不帶價格。"""
+        rows = []
+        for r in self._read_change_orders():
+            for m in r.get("mats") or []:
+                rows.append([
+                    r.get("id", ""),
+                    r.get("date", ""),
+                    r.get("series", ""),
+                    m.get("id", ""),
+                    m.get("part", ""),
+                    m.get("size", ""),
+                    m.get("sch", ""),
+                    m.get("mat", ""),
+                    m.get("qty", ""),
+                    m.get("unit", ""),
+                    m.get("remark", ""),
+                ])
+        return self._export_rows(
+            path,
+            "修改單材料彙總.xlsx",
+            "材料彙總",
+            ["報告編號", "日期", "流水號", "料號", "零件", "尺寸", "SCH", "材質", "數量", "單位", "備註"],
+            rows,
+        )
+
+    def _include_keys_from_output_items(self, items: Any) -> list[tuple[str, str]] | None:
+        keys: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        attachments_root = self._attachments_root().resolve()
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            date = _date_key(item.get("date"))
+            folder = str(item.get("folder") or "").strip().replace("\\", "/")
+            if folder:
+                raw_path = Path(folder)
+                if raw_path.is_absolute():
+                    try:
+                        rel = raw_path.resolve().relative_to(attachments_root)
+                        parts = rel.parts
+                        if len(parts) >= 2 and (not date or _date_key(parts[0]) == date):
+                            date = _date_key(parts[0])
+                            folder = "/".join(parts[1:])
+                        elif parts:
+                            folder = parts[-1]
+                    except Exception:
+                        folder = raw_path.name or folder
+                elif "/" in folder:
+                    first, rest = folder.split("/", 1)
+                    if not date or _date_key(first) == date:
+                        date = _date_key(first)
+                        folder = rest.strip("/")
+            if not folder:
+                folder = str(item.get("record_id") or item.get("series") or "").strip()
+            key = (date, folder)
+            if not date or not folder or key in seen:
+                continue
+            seen.add(key)
+            keys.append(key)
+        return keys or None
+
+    @_enveloped
+    def export_output_center(self, report_type: str = "owner-data", selected: list | None = None) -> dict:
+        """建立輸出中心；新版 GUI 預設產出可交付的業主資料包。"""
+        from site_output_center import run_site_output_center
+
+        output_dir = self.root / "staging" / "site_output_center_web"
+        return run_site_output_center(
+            output_dir,
+            project_root=self.root,
+            attachments_root=self._attachments_root(),
+            include_report_keys=self._include_keys_from_output_items(selected),
+            overwrite=True,
+            render_pdf=True,
+            render_png=False,
+            render_statistics=True,
+            render_summary_pdf=True,
+            render_photo_grid_pdf=True,
+            report_type=report_type or "owner-data",
+        )
+
+    @_enveloped
+    def open_output_folder(self, kind: str = "output") -> dict:
+        """開啟設定中的 output/pdf 資料夾；未設定時使用專案內 output/ 或 pdf/。"""
+        kind_text = str(kind or "").strip().lower()
+        if kind_text in {"owner", "owner-data", "owner_data", "owner_data_report"}:
+            target = self.root / "staging" / "site_output_center_web" / "owner_data_report"
+            if not target.exists():
+                target = self.root / "staging" / "site_output_center_web"
+            target.mkdir(parents=True, exist_ok=True)
+            self._open_path(target)
+            return {"path": str(target)}
+        if kind_text in {"site", "site-output", "site_output", "site_output_center", "developer"}:
+            target = self.root / "staging" / "site_output_center_web"
+            target.mkdir(parents=True, exist_ok=True)
+            self._open_path(target)
+            return {"path": str(target)}
+        settings = self.app_settings()
+        data = settings.get("data") if isinstance(settings, dict) else {}
+        key = "pdf_dir" if kind_text == "pdf" else "output_dir"
+        fallback = "pdf" if key == "pdf_dir" else "output"
+        raw = str((data or {}).get(key) or "").strip()
+        target = Path(raw) if raw else self.root / fallback
+        if not target.is_absolute():
+            target = self.root / target
+        target.mkdir(parents=True, exist_ok=True)
+        self._open_path(target)
+        return {"path": str(target)}
+
+    @_enveloped
+    def open_wizard(self) -> dict:
+        """開修改單精靈（subprocess 另開原生視窗、獨立行程；接真橋、能出單寫 change_order.json）。"""
+        import subprocess
+        import sys
+        app = self.root / "control" / "co_wizard_app.py"
+        if not app.exists():
+            raise FileNotFoundError(f"找不到精靈啟動器：{app}")
+        subprocess.Popen([sys.executable, str(app)], cwd=str(self.root))
+        return {"launched": True, "app": str(app)}
+
+    # ---- 設定：路徑（config 預設 + records/app_settings.json 覆蓋）---------- #
+    @_enveloped
+    def app_settings(self) -> dict:
+        """回目前路徑設定：有存過就用存的，否則讀專案 settings/config 預設。"""
+        saved = _read_json(self.records_dir / "app_settings.json")
+        saved = saved if isinstance(saved, dict) else {}
+        dwg = out = pdf = ""
+        try:
+            import config as _C
+            dwg = str(getattr(_C, "DRAWING_LIST_PATH", "") or "")
+            out = str(getattr(_C, "OUTPUT_ROOT", "") or "")
+            pdf = str(getattr(_C, "PDF_OUTPUT_DIR", "") or "")
+        except Exception:
+            pass
+        weld = _settings_path_value(self.root, "weld_control_table")
+        return {
+            "dwg_list": saved.get("dwg_list") or _settings_path_value(self.root, "drawing_list") or dwg,
+            "weld_control_table": saved.get("weld_control_table") or weld,
+            "output_dir": saved.get("output_dir") or out,
+            "pdf_dir": saved.get("pdf_dir") or pdf,
+        }
+
+    @_enveloped
+    def save_setting(self, key: str, value: Any) -> dict:
+        """存單一設定；路徑同時寫入 settings.json，讓修改單精靈可讀到焊口表。"""
+        p = self.records_dir / "app_settings.json"
+        saved = _read_json(p)
+        saved = saved if isinstance(saved, dict) else {}
+        key = str(key)
+        saved[key] = value
+        self.records_dir.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+        if key in {"dwg_list", "weld_control_table"}:
+            settings_key = "drawing_list" if key == "dwg_list" else key
+            self._write_settings_path(settings_key, value)
+        return {"saved": True, "key": key, "value": value}
+
+    def _write_settings_path(self, key: str, value: Any) -> None:
+        p = self.root / "settings.json"
+        data = _read_json(p)
+        data = data if isinstance(data, dict) else {}
+        paths = data.get("paths")
+        if not isinstance(paths, dict):
+            paths = {}
+            data["paths"] = paths
+        paths[str(key)] = "" if value is None else str(value)
+        meta = data.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            data["meta"] = meta
+        try:
+            import datetime
+            meta["last_modified"] = datetime.datetime.now().isoformat()
+        except Exception:
+            pass
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    @_enveloped
+    def pick_path(self, kind: str = "output") -> dict:
+        """開原生對話框選路徑：kind='dwg'/'weld' 選 Excel 檔，'output'/'pdf' 選資料夾。"""
+        if kind in {"dwg", "weld"}:
+            if self._pick_file_fn is None:
+                raise RuntimeError("檔案對話框未注入")
+            return {"path": self._pick_file_fn("excel")}
+        if self._pick_folder_fn is None:
+            raise RuntimeError("資料夾對話框未注入")
+        return {"path": self._pick_folder_fn()}
 
     @_enveloped
     def health(self) -> dict:
@@ -211,14 +929,27 @@ class MainBridge:
     def import_material_excel(self, path: str) -> dict:
         """匯入管制單 Excel（自動辨識多格式）→ 併入總庫（去重、不覆蓋、只加新品項）。"""
         new_items = _parse_material_xlsx(path)
+        taxonomy = load_taxonomy(str(self.root))
+        clean_new_items = []
+        for it in new_items:
+            row = enrich_material_item(it, taxonomy)
+            clean_new_items.append({
+                **it,
+                "零件類型": row.get("零件類型") or "",
+                "尺寸": row.get("尺寸") or "",
+                "SCH": row.get("SCH") or "",
+                "材質": row.get("材質") or "",
+                "類別": row.get("類別") or "",
+                "單位": row.get("單位") or it.get("單位") or "",
+            })
+        new_items = clean_new_items
         self.records_dir.mkdir(parents=True, exist_ok=True)
         p = self.records_dir / "material_pricebook.json"
         doc = _read_json(p)
         existing = (doc.get("items") if isinstance(doc, dict) else doc) or []
 
         def _key(it):
-            g = lambda k: " ".join(str(it.get(k, "")).split()).lower()
-            return f"{g('零件類型')}|{g('尺寸')}|{g('SCH')}|{g('材質')}"   # 顯示鍵：畫面看到的四欄相同即視為同一料
+            return material_match_key(it, taxonomy)   # 顯示鍵：畫面看到的四欄相同即視為同一料
 
         seen = {_key(it) for it in existing}
         added = []
@@ -248,32 +979,80 @@ class MainBridge:
     def _project_parts_path(self) -> Path:
         return self.records_dir / "project_parts.json"
 
+    def _read_project_parts_doc(self) -> dict:
+        data = _read_json(self._project_parts_path())
+        return data if isinstance(data, dict) else {}
+
     def _read_registered(self) -> set:
-        data = _read_json(self._project_parts_path()) or {}
+        data = self._read_project_parts_doc()
         reg = data.get("registered") if isinstance(data, dict) else None
         return set(str(x) for x in (reg or []))
 
-    def _write_registered(self, reg) -> None:
+    def _read_custom_project_parts(self) -> list:
+        data = self._read_project_parts_doc()
+        custom = data.get("custom") if isinstance(data, dict) else None
+        return [x for x in (custom or []) if isinstance(x, dict) and x.get("id")]
+
+    def _valid_material_ids(self) -> set:
+        base = {str(it.get("id")) for it in self._all_materials() if isinstance(it, dict) and it.get("id")}
+        custom = {str(it.get("id")) for it in self._read_custom_project_parts() if isinstance(it, dict) and it.get("id")}
+        return base | custom
+
+    def _write_project_parts_doc(self, reg, custom=None) -> None:
         self.records_dir.mkdir(parents=True, exist_ok=True)
         ids = sorted(set(str(x) for x in reg))
+        if custom is None:
+            custom = self._read_custom_project_parts()
         self._project_parts_path().write_text(
-            json.dumps({"registered": ids, "meta": {"count": len(ids)}},
+            json.dumps({"registered": ids, "custom": list(custom or []), "meta": {"count": len(ids), "custom_count": len(custom or [])}},
                        ensure_ascii=False, indent=2),
             encoding="utf-8")
+
+    def _write_registered(self, reg) -> None:
+        self._write_project_parts_doc(reg)
+
+    def _project_material_from_frontend(self, row: dict) -> dict:
+        mid = str(row.get("id") or "").strip()
+        if not mid:
+            raise ValueError("project material missing id")
+        return {
+            "id": mid,
+            "零件類型": str(row.get("part") or row.get("零件類型") or ""),
+            "尺寸": str(row.get("size") or row.get("尺寸") or ""),
+            "SCH": str(row.get("sch") or row.get("SCH") or ""),
+            "材質": str(row.get("mat") or row.get("材質") or ""),
+            "類別": str(row.get("cat") or row.get("類別") or ""),
+            "單位": str(row.get("unit") or row.get("單位") or ""),
+            "來源": str(row.get("src") or row.get("來源") or "管架展開"),
+            "規格": str(row.get("spec") or row.get("規格") or ""),
+            "備註": str(row.get("remark") or row.get("備註") or ""),
+            "Type": str(row.get("type") or row.get("Type") or ""),
+            "支撐級別": str(row.get("level") or row.get("支撐級別") or "管架展開"),
+            "project_only": True,
+            "source_designation": str(row.get("source_designation") or ""),
+        }
 
     @_enveloped
     def project_parts(self) -> dict:
         """本案已登記的料號清單（前端據此把總庫過濾成本案配件）。"""
-        return {"registered": sorted(self._read_registered())}
+        cur = self._read_registered()
+        valid = self._valid_material_ids()
+        registered = cur & valid if valid else cur
+        dropped = cur - registered
+        if dropped:
+            self._write_registered(registered)
+        return {"registered": sorted(registered), "dropped": sorted(dropped), "custom": self._read_custom_project_parts()}
 
     @_enveloped
     def register_parts(self, ids) -> dict:
         """把料號加入本案配件（勾選登記）。"""
         cur = self._read_registered()
-        add = [str(x) for x in (ids or [])]
+        valid = self._valid_material_ids()
+        requested = [str(x) for x in (ids or [])]
+        add = [x for x in requested if not valid or x in valid]
         cur.update(add)
         self._write_registered(cur)
-        return {"registered": sorted(cur), "added": add}
+        return {"registered": sorted(cur), "added": add, "ignored": [x for x in requested if x not in add]}
 
     @_enveloped
     def unregister_parts(self, ids) -> dict:
@@ -283,6 +1062,23 @@ class MainBridge:
         cur.difference_update(rem)
         self._write_registered(cur)
         return {"registered": sorted(cur), "removed": rem}
+
+    @_enveloped
+    def upsert_project_parts(self, items) -> dict:
+        """新增/更新本案自訂材料，並自動登記到本案配件。"""
+        requested = [x for x in (items or []) if isinstance(x, dict)]
+        custom = {str(x.get("id")): x for x in self._read_custom_project_parts() if isinstance(x, dict) and x.get("id")}
+        added: list[str] = []
+        for row in requested:
+            item = self._project_material_from_frontend(row)
+            custom[item["id"]] = item
+            added.append(item["id"])
+        cur = self._read_registered()
+        cur.update(added)
+        self._write_project_parts_doc(cur, custom.values())
+        self._pricebook_cache_key = None
+        self._pricebook_cache_data = None
+        return {"registered": sorted(cur), "added": added, "custom_count": len(custom)}
 
     # ---- 匯出（總庫 / 本案配件 → Excel，交回採購/收料）--------------------- #
     def _all_materials(self) -> list:
@@ -300,7 +1096,7 @@ class MainBridge:
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = sheet_name
-        cols = ["料號", "零件類型", "尺寸", "SCH", "材質", "類別", "單位", "來源", "規格", "備註"]
+        cols = ["料號", "零件類型", "尺寸", "SCH", "材質", "料別", "單位", "來源", "規格", "備註"]
         keys = ["id", "零件類型", "尺寸", "SCH", "材質", "類別", "單位", "來源", "規格", "備註"]
         ws.append(cols)
         for it in items:
@@ -317,7 +1113,7 @@ class MainBridge:
     def export_project_parts(self, path: str = "") -> dict:
         """匯出本案已登記配件成 Excel（交回採購/收料）。"""
         reg = self._read_registered()
-        items = [it for it in self._all_materials() if str(it.get("id")) in reg]
+        items = [it for it in (self._all_materials() + self._read_custom_project_parts()) if str(it.get("id")) in reg]
         return self._export_materials(items, path, "本案配件", "本案配件")
 
 
@@ -338,17 +1134,12 @@ _INCH_DN = {
 
 def _canon_size(s):
     """尺寸統一成 DN（吋 → DN；DN 保留；認不出原樣回）。"""
-    s = " ".join(str(s or "").split())
-    return _INCH_DN.get(s, s)
+    return normalize_size(s)
 
 
 def _canon_mat(m):
     """材質正規化：收空白、去尾點、A182-F304→A182 F304（合併空格/連字號的重複值）。"""
-    import re
-    m = " ".join(str(m or "").split())
-    m = re.sub(r'\s*\.\s*$', '', m)
-    m = re.sub(r'^(A\d+)-', r'\1 ', m)
-    return " ".join(m.split())
+    return normalize_material(m)
 
 
 def _pm_size(d):
@@ -435,17 +1226,7 @@ def _pm_type(d):
 
 
 def _pm_cat(n):
-    u = str(n or "").upper()
-    n = str(n or "")
-    if "閥" in n or "VALVE" in u:
-        return "閥件"
-    if "墊" in n or "GASKET" in u:
-        return "墊料"
-    if "螺" in n or "BOLT" in u or "NUT" in u:
-        return "螺栓"
-    if "法蘭" in n or "FLANGE" in u:
-        return "法蘭"
-    return "配管"
+    return category_for_part(n)
 
 
 def _parse_material_xlsx(path: Any) -> list:
@@ -521,7 +1302,7 @@ def _parse_material_xlsx(path: Any) -> list:
         blob = raw + " " + spec
         typ = (_pm_type(blob) or raw) if derive else raw
         items.append({
-            "零件類型": typ, "尺寸": _canon_size(_pm_size(blob)), "SCH": _pm_sch(blob),
+            "零件類型": typ, "尺寸": _canon_size(_pm_size(blob)), "SCH": normalize_schedule(_pm_sch(blob)),
             "材質": _canon_mat(matcol or _pm_mat(blob)), "類別": _pm_cat(typ),
             "單位": unit, "規格": spec, "來源": src, "備註": "",
         })

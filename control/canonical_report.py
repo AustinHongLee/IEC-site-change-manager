@@ -10,6 +10,8 @@ Excel COM；所有 renderer 之後都應該吃這份資料模型。
 from __future__ import annotations
 
 import os
+import json
+import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -86,7 +88,8 @@ def _collect_report(
     details_by_report: dict[str, list[dict[str, Any]]],
     materials_by_report: dict[str, list[dict[str, Any]]],
 ) -> dict[str, Any]:
-    folder_path = attachments_root / date_str / folder_name
+    folder_path = _resolve_report_folder(attachments_root, date_str, folder_name)
+    change_order = _load_change_order(folder_path)
     folder_info = None
     parse_error = ""
     if folder_path.is_dir():
@@ -96,21 +99,25 @@ def _collect_report(
             parse_error = str(exc)
 
     report_id = _text(record, "報告編號")
-    series = _text(record, "Series NO") or (folder_info.series_no if folder_info else _series_from_folder(folder_name))
-    note_raw = folder_info.note_text if folder_info else ""
+    series = _text(record, "Series NO") or _text(change_order, "series") or (folder_info.series_no if folder_info else _series_from_folder(folder_name))
+    note_raw = folder_info.note_text if folder_info else _text(change_order, "reason")
     materials_text = folder_info.materials_text if folder_info else _text(record, "材料附加")
     tokens = folder_info.tokens if folder_info else []
     status = _report_status(record, folder_path)
 
-    description = _text(record, "說明")
+    description = _text(record, "說明") or _text(change_order, "reason")
     if not description and folder_info:
         description = build_auto_description(tokens, note_raw)
 
     weld_rows = _weld_rows_from_details(details_by_report.get(report_id, [])) if report_id else []
+    if not weld_rows and change_order:
+        weld_rows = _weld_rows_from_change_order(change_order.get("welds", []))
     if not weld_rows:
         weld_rows = _weld_rows_from_tokens(tokens)
 
     material_rows = _material_rows_from_records(materials_by_report.get(report_id, [])) if report_id else []
+    if not material_rows and change_order:
+        material_rows = _material_rows_from_change_order(change_order.get("materials", []))
     if not material_rows and folder_path.is_dir():
         material_rows = _material_rows_from_parsed(parse_materials_txt(str(folder_path)))
 
@@ -142,7 +149,7 @@ def _collect_report(
             "date": _date_text(date_str),
             "date_raw": date_str,
             "series": series,
-            "dwg_no": _text(record, "DWG NO"),
+            "dwg_no": _text(record, "DWG NO") or _text(change_order, "dwg_no"),
             "line_number": _text(record, "LINE NUMBER"),
             "change_type": _text(record, "變更類型") or _infer_change_type(tokens),
             "description": description,
@@ -166,6 +173,36 @@ def _collect_report(
             "collected_at": datetime.now().isoformat(timespec="seconds"),
         },
     }
+
+
+def _resolve_report_folder(attachments_root: Path, date_str: str, folder_name: str) -> Path:
+    primary = attachments_root / date_str / folder_name
+    if primary.is_dir():
+        return primary
+    direct = attachments_root / folder_name
+    if direct.is_dir():
+        change_order = _load_change_order(direct)
+        if change_order:
+            co_date = _date_key_text(change_order.get("date"))
+            if not date_str or not co_date or co_date == date_str:
+                return direct
+    return primary
+
+
+def _load_change_order(folder_path: Path) -> dict[str, Any]:
+    path = folder_path / "change_order.json"
+    if not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _date_key_text(value: Any) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return digits[:8] if len(digits) >= 8 else ""
 
 
 def _normalize_report_keys(keys: Iterable[tuple[str, str]]) -> set[tuple[str, str]]:
@@ -241,12 +278,54 @@ def _weld_rows_from_details(details: list[dict[str, Any]]) -> list[dict[str, Any
     return rows
 
 
+def _weld_rows_from_change_order(welds: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for weld in welds or []:
+        if not isinstance(weld, dict):
+            continue
+        spec = weld.get("spec") if isinstance(weld.get("spec"), dict) else {}
+        code = _text(weld, "code")
+        base = _split_weld_code(code)
+        rows.append({
+            "weld_no": _text(weld, "base") or base["weld_no"],
+            "mark": _text(weld, "op") or base["mark"],
+            "size": _number_or_text(spec.get("size")),
+            "material": _text(spec, "material"),
+            "thickness": _text(spec, "sch"),
+            "type": _text(spec, "weld_type"),
+            "code": code,
+            "is_cut": _text(weld, "origin") == "existing",
+        })
+    return rows
+
+
 def _material_rows_from_parsed(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [_material_row(item) for item in materials or []]
 
 
 def _material_rows_from_records(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [_material_row(item) for item in materials or []]
+
+
+def _material_rows_from_change_order(materials: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for item in materials or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append({
+            "component": _text(item, "component"),
+            "size": _text(item, "size"),
+            "sch": _text(item, "schedule"),
+            "material": _text(item, "material"),
+            "qty": _number_or_text(item.get("qty")),
+            "unit": _text(item, "unit"),
+            "category": "材料",
+            "remark": _text(item, "remark"),
+            "price": "",
+            "amount": "",
+            "pricing_status": "",
+        })
+    return rows
 
 
 def _material_row(item: dict[str, Any]) -> dict[str, Any]:
@@ -276,14 +355,52 @@ def _build_welds(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 total_size += float(size)
             except (TypeError, ValueError):
                 pass
-    codes = [str(row.get("code", "")).strip() for row in rows if str(row.get("code", "")).strip()]
+    parts = [_format_weld_summary_part(row) for row in sorted(rows, key=_weld_sort_key)]
+    parts = [part for part in parts if part]
     return {
         "rows": rows,
         "count": len(rows),
         "total_size": total_size,
-        "summary": "、".join(codes) + (f"（共{len(rows)}口）" if rows else ""),
+        "summary": "、".join(parts) + (f"（共{len(rows)}口）" if rows else ""),
         "by_size": [{"size": size, "count": count} for size, count in sorted(by_size.items())],
     }
+
+
+def _format_weld_summary_part(row: dict[str, Any]) -> str:
+    code = str(row.get("code", "") or "").strip()
+    if not code:
+        weld_no = str(row.get("weld_no", "") or "").strip()
+        mark = str(row.get("mark", "") or "").strip()
+        code = (weld_no + mark).strip()
+    specs = [
+        str(row.get("size", "") or "").strip(),
+        str(row.get("material", "") or "").strip(),
+        str(row.get("thickness", "") or "").strip(),
+    ]
+    specs = [item for item in specs if item]
+    if code and specs:
+        return f"{code}（{' / '.join(specs)}）"
+    if code:
+        return code
+    if specs:
+        return " / ".join(specs)
+    return ""
+
+
+def _weld_sort_key(row: dict[str, Any]) -> tuple[int, int, str, str]:
+    code = str(row.get("code", "") or "").strip()
+    if not code:
+        code = (str(row.get("weld_no", "") or "").strip() + str(row.get("mark", "") or "").strip()).strip()
+    match = re.match(r"^\s*(\d+)([A-Za-z]?)(.*)$", code)
+    if not match:
+        return (1, 0, code.lower(), "")
+    number = int(match.group(1))
+    mark = match.group(2).lower()
+    tail = match.group(3).lower()
+    mark_order = {"r": 0}
+    if mark and mark not in mark_order:
+        mark_order[mark] = ord(mark) - ord("a") + 1
+    return (0, number, f"{mark_order.get(mark, 99):03d}-{mark}", tail)
 
 
 def _build_materials(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -517,7 +634,7 @@ def _build_report_set_issues(reports: list[dict[str, Any]]) -> list[dict[str, st
 
 def _source_files(folder_path: Path) -> list[str]:
     names = []
-    for name in ("weld_info.json", "GroupWeld.txt", "note.txt", "materials.txt"):
+    for name in ("change_order.json", "weld_info.json", "GroupWeld.txt", "note.txt", "materials.txt", "drawing.pdf"):
         if (folder_path / name).exists():
             names.append(name)
     for photo in _photo_rows(folder_path, "before") + _photo_rows(folder_path, "after"):

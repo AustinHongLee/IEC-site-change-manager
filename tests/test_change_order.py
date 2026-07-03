@@ -43,7 +43,7 @@ def _sample() -> ChangeOrder:
                 joint_type=JointType.WELD,
                 origin=Origin.EXISTING,
                 base="2",
-                op=Op.CUT,
+                op=Op.REWORK,
                 rework_index=1,
                 code="2a",
                 spec=Spec(size="6\"", sch="STD", material="A106-B", weld_type="BW"),
@@ -53,7 +53,7 @@ def _sample() -> ChangeOrder:
                 joint_type=JointType.THREAD,
                 origin=Origin.NEW,
                 base=None,
-                op=Op.EXTEND,
+                op=Op.NEW,
                 code="1001",
                 spec=Spec(size="2\""),
                 spec_source=SpecSource.MANUAL,
@@ -131,7 +131,7 @@ def test_unknown_fields_are_ignored():
 
 def test_unknown_enum_value_is_tolerated_not_crash():
     # 未來新增的 op 值，舊程式載入不可崩，保留原字串
-    data = WeldEvent(op=Op.CUT).to_dict()
+    data = WeldEvent(op=Op.REWORK).to_dict()
     data["op"] = "鑽孔"          # 未知 op
     data["origin"] = "未知來源"   # 未知 origin
     we = WeldEvent.from_dict(data)
@@ -154,7 +154,7 @@ def test_enum_serialized_as_value():
     d = co.to_dict()
     assert d["status"] == "完整"
     assert d["scenario"] == "normal"
-    assert d["welds"][0]["op"] == "裁切"
+    assert d["welds"][0]["op"] == "重焊"
     assert d["welds"][0]["joint_type"] == "焊口"
     assert d["welds"][1]["joint_type"] == "管牙"
     assert d["welds"][0]["origin"] == "existing"
@@ -165,17 +165,19 @@ def test_enum_serialized_as_value():
 def test_enum_value_in_json_text_not_member_name():
     co = _sample()
     text = json.dumps(co.to_dict(), ensure_ascii=False)
-    assert "裁切" in text and "完整" in text
+    assert "重焊" in text and "完整" in text
     assert "Op.CUT" not in text and "Status.COMPLETE" not in text
 
 
 def test_enum_value_reverse_lookup():
     co = ChangeOrder.from_dict({"status": "完整", "scenario": "group",
-                                "welds": [{"op": "縮短", "joint_type": "管牙"}]})
+                                "welds": [{"op": "縮短", "origin": "existing", "joint_type": "管牙"},
+                                          {"op": "加長", "origin": "new"}]})
     assert co.status is Status.COMPLETE
     assert co.scenario is Scenario.GROUP
-    assert co.welds[0].op is Op.SHORTEN
+    assert co.welds[0].op is Op.REWORK
     assert co.welds[0].joint_type is JointType.THREAD
+    assert co.welds[1].op is Op.NEW
 
 
 # --------------------------------------------------------------------------- #
@@ -236,7 +238,7 @@ def test_save_json_is_utf8_unescaped(tmp_path):
     path = tmp_path / "co.json"
     _sample().save_json(path)
     raw = path.read_text(encoding="utf-8")
-    assert "裁切" in raw          # 中文不被 \uXXXX 轉義
+    assert "重焊" in raw          # 中文不被 \uXXXX 轉義
     assert "\\u" not in raw
     # 確認是合法 JSON 且無殘留 .tmp
     json.loads(raw)

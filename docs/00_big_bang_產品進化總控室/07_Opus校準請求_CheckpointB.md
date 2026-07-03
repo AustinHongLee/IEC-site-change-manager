@@ -90,8 +90,8 @@
 ```powershell
 python -m pytest -s tests
 python control\main.py --health-check
-python tools\validate_pricebook.py material_pricebook_seed.json
-python tools\import_pricebook_seed.py material_pricebook_seed.json
+python tools\validate_pricebook.py records\seed\material_pricebook_seed.json
+python tools\import_pricebook_seed.py records\seed\material_pricebook_seed.json
 git diff --check
 ```
 

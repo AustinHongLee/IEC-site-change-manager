@@ -12,7 +12,7 @@
 ```
 工務修改單/                          ← 專案根目錄
 │
-├── 啟動GUI.bat                     🟢 入口：自動修復 venv → 啟動 GUI
+├── 啟動_新版GUI.bat                🟢 入口：新版主介面 GUI
 ├── .python-version                 🟢 鎖定 Python 3.12
 ├── requirements.txt                🟢 pip 依賴清單（純 ASCII）
 ├── settings.json                   🟢 使用者設定（路徑、欄位映射、執行參數）
@@ -20,12 +20,11 @@
 ├── README.md                       🟢 專案說明
 ├── PROJECT_MAP.md                  🟢 ← 本文件
 │
-├── 管線修改紀錄清單.xlsx            ⚠️ 舊版 Excel（已被 records.json 取代）
-├── _refresh_fp.py                  🔧 一次性腳本：重算全部指紋
-├── _audit_data.py                  🔧 一次性腳本：資料完整性掃描
 ├── DATA_FLOW_AUDIT.md              📄 過期文件（已被本文件取代）
 │
 ├── control/                        🟢 全部原始碼（見下方模組清單）
+├── tools/                          🟢 開發/維護工具（含一次性腳本與舊 launcher）
+├── packaging/                      🟢 打包工具與 PyInstaller spec
 ├── tests/                          🟢 測試套件（100 個測試）
 ├── template/                       🟢 Excel 報告模板
 ├── records/                        🟢 JSON 資料儲存區
@@ -104,7 +103,7 @@ pdf/YYYYMMDD-NN.pdf    ← 報告編號即檔名（如 20260303-01.pdf）
 ## 🧩 模組架構圖
 
 ```
-啟動GUI.bat
+啟動_新版GUI.bat
     │
     ▼
 main.py ─────────┬──→ gui.py (MainWindow)
@@ -382,7 +381,7 @@ wizard.py ← 從 Tab 1 啟動
 |------|------|------|------|
 | **settings.json 絕對路徑** | 路徑含磁碟代號 | 跨機器/磁碟代號變更會壞 | 改存相對路徑 |
 | **無檔案鎖** | GUI + CLI 或多機同時存取 | records.json 覆蓋風險 | Google Drive 已有衝突處理，但建議加 lockfile |
-| **一次性腳本在根目錄** | `_refresh_fp.py` `_audit_data.py` | 根目錄雜亂 | 移至 `control/tools/` |
+| **一次性腳本在根目錄** | 已移至 `tools/refresh_fp.py`、`tools/audit_data.py` | 根目錄雜亂 | 已整理 |
 | **過期文件** | `MODULE_MAP.md` `DATA_FLOW_AUDIT.md` 內容已過時 | 誤導開發者 | 刪除或標記取代 |
 | **Zoom 實作重複** | `_ZoomLabel`(gui_panels) vs `_ZoomPopup`(wizard) | 維護兩套 hover zoom | 統一至 theme.py |
 | **tkinter 備份** | `control/tkinter_backup/` 仍存在 | 佔空間 | 確認不再需要後刪除 |
@@ -443,7 +442,7 @@ attachments/          records.json   output/ + pdf/
 | P1 | 抽取 `_process_folders()` 共用邏輯 | 消除 main.py ↔ gui.py 重複 |
 | P2 | 遷移 `parse_materials_txt()` + `upsert_materials_rows()` | 從 Product_report_ 搬至 record_manager |
 | P2 | billing.json 改用原子寫入 | `_save_billing_json()` 加 `.tmp` + `os.replace()` |
-| P3 | 一次性腳本移至 `control/tools/` | `_refresh_fp.py`, `_audit_data.py` |
+| P3 | 一次性腳本移至 `tools/` | `tools/refresh_fp.py`, `tools/audit_data.py` |
 | P3 | 刪除過期文件 | `MODULE_MAP.md`, `DATA_FLOW_AUDIT.md` |
 | P3 | 統一 Zoom 元件 | 合併 `_ZoomLabel` / `_ZoomPopup` |
 | P4 | 評估刪除 `tkinter_backup/` | 已完全不用 |

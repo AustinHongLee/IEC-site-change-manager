@@ -37,6 +37,31 @@ def _lookup_for_fixture(tmp_path):
     return WeldLookup(manager=manager)
 
 
+def _write_backfill_fixture(path):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "焊口編號明細"
+    ws.append(["流水號", "焊口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性", "焊口屬性"])
+    ws.append([107, 1, 3, "S-40", "C.S", "FSW", None, "原圖焊口"])
+    ws.append([107, 2, 3, "S-40", "C.S", "BW", None, "原圖焊口"])
+    ws.append([108, "17r", 2, "S-80", "304", "SW", "修改", "修改"])
+    ws.append([108, "1001a", 2, "S-80", "304", "BW", "新增", "新增"])
+    wb.save(path)
+    wb.close()
+
+
+def _lookup_for_backfill_fixture(tmp_path):
+    workbook = tmp_path / "weld_control_backfill.xlsx"
+    _write_backfill_fixture(workbook)
+    manager = WeldControlManager({
+        "file_path": str(workbook),
+        "sheet_name": "焊口編號明細",
+        "col_serial": "流水號",
+        "col_weld_no": "焊口編號",
+    })
+    return WeldLookup(manager=manager)
+
+
 def test_normalize_series_raw_strips_leading_zeroes():
     assert normalize_series_raw("0202") == "202"
     assert normalize_series_raw("202") == "202"
@@ -75,6 +100,19 @@ def test_existing_weld_ids_filters_installation_accounting_rows(tmp_path):
 
     assert lookup.existing_weld_ids("0202") == ["1", "2"]
     assert lookup.existing_weld_ids("0203") == ["1"]
+
+
+def test_existing_weld_ids_accepts_backfill_sheet_without_attribute_1(tmp_path):
+    lookup = _lookup_for_backfill_fixture(tmp_path)
+
+    assert lookup.existing_weld_ids("107") == ["1", "2"]
+    assert lookup.lookup_spec("107", "1") == Spec(
+        size="3",
+        sch="S-40",
+        material="C.S",
+        weld_type="FSW",
+    )
+    assert lookup.existing_weld_ids("108") == ["17r", "1001a"]
 
 
 def test_exists_checks_manager_primary_key_with_normalized_series(tmp_path):

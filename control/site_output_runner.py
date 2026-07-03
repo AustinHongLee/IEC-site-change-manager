@@ -12,11 +12,16 @@ from pathlib import Path
 from typing import Any, Callable
 
 from canonical_report import collect_canonical_report_set
+from owner_data_report import build_owner_data_report_package
 from pdf_overlay_renderer import render_pdf_overlay_for_report
 from site_statistics_exporter import export_site_statistics_workbook
 
 
 TemplateBuilder = Callable[[], dict[str, Any]]
+REPORT_TYPE_DEVELOPER = "developer"
+REPORT_TYPE_OWNER_DATA = "owner-data"
+REPORT_TYPE_BOTH = "both"
+REPORT_TYPES = {REPORT_TYPE_DEVELOPER, REPORT_TYPE_OWNER_DATA, REPORT_TYPE_BOTH}
 
 
 @dataclass(frozen=True)
@@ -53,11 +58,15 @@ def run_site_output_bundle(
     render_statistics: bool = True,
     render_summary_pdf: bool = True,
     render_photo_grid_pdf: bool = True,
+    report_type: str = REPORT_TYPE_DEVELOPER,
 ) -> dict[str, Any]:
+    report_type = _normalize_report_type(report_type)
+    render_developer_outputs = report_type in (REPORT_TYPE_DEVELOPER, REPORT_TYPE_BOTH)
+    render_owner_data_package = report_type in (REPORT_TYPE_OWNER_DATA, REPORT_TYPE_BOTH)
     render_summary_pdf = bool(render_pdf and render_summary_pdf)
     render_photo_grid_pdf = bool(render_pdf and render_photo_grid_pdf)
     render_statistics = bool(render_statistics)
-    if not (render_statistics or render_summary_pdf or render_photo_grid_pdf):
+    if render_developer_outputs and not (render_statistics or render_summary_pdf or render_photo_grid_pdf) and not render_owner_data_package:
         raise ValueError("至少要選擇一種輸出內容")
 
     project = Path(project_root or Path.cwd()).resolve()
@@ -86,15 +95,27 @@ def run_site_output_bundle(
     summary_path = root / config.summary_filename
 
     _write_json(report_set_path, report_set)
-    statistics_result = export_site_statistics_workbook(str(statistics_path), report_set=report_set) if render_statistics else ""
-    summary_template = config.summary_template_builder()
-    photo_grid_template = config.photo_grid_template_builder()
-    _write_json(summary_template_path, summary_template)
-    _write_json(photo_grid_template_path, photo_grid_template)
-    _write_blank_base_pdf(base_pdf_path)
+    statistics_result = (
+        export_site_statistics_workbook(str(statistics_path), report_set=report_set)
+        if render_developer_outputs and render_statistics
+        else ""
+    )
+
+    owner_data_package = (
+        build_owner_data_report_package(root, report_set)
+        if render_owner_data_package
+        else {}
+    )
+
+    summary_template = config.summary_template_builder() if render_developer_outputs else {}
+    photo_grid_template = config.photo_grid_template_builder() if render_developer_outputs else {}
+    if render_developer_outputs:
+        _write_json(summary_template_path, summary_template)
+        _write_json(photo_grid_template_path, photo_grid_template)
+        _write_blank_base_pdf(base_pdf_path)
 
     renders = []
-    if render_summary_pdf or render_photo_grid_pdf:
+    if render_developer_outputs and (render_summary_pdf or render_photo_grid_pdf):
         for report in report_set.get("reports", []) or []:
             folder = str(report.get("report", {}).get("folder", "") or "report")
             safe_folder = _safe_filename(folder)
@@ -119,15 +140,18 @@ def run_site_output_bundle(
                     template_name="photo_grid",
                 ))
 
-    statistics_ok = (not render_statistics) or bool(Path(statistics_result).exists())
-    pdf_ok = (not (render_summary_pdf or render_photo_grid_pdf)) or all(item.get("ok") for item in renders)
-    ok = statistics_ok and pdf_ok
+    statistics_ok = (not (render_developer_outputs and render_statistics)) or bool(Path(statistics_result).exists())
+    pdf_ok = (not (render_developer_outputs and (render_summary_pdf or render_photo_grid_pdf))) or all(item.get("ok") for item in renders)
+    owner_ok = (not render_owner_data_package) or bool(owner_data_package.get("ok"))
+    ok = statistics_ok and pdf_ok and owner_ok
     files = {
         "report_set": str(report_set_path),
-        "statistics_xlsx": str(statistics_path) if render_statistics else "",
-        config.summary_template_file_key: str(summary_template_path),
-        config.photo_grid_template_file_key: str(photo_grid_template_path),
-        "pdf_base": str(base_pdf_path),
+        "statistics_xlsx": str(statistics_path) if render_developer_outputs and render_statistics else "",
+        config.summary_template_file_key: str(summary_template_path) if render_developer_outputs else "",
+        config.photo_grid_template_file_key: str(photo_grid_template_path) if render_developer_outputs else "",
+        "pdf_base": str(base_pdf_path) if render_developer_outputs else "",
+        "owner_data_package": owner_data_package.get("package_root", ""),
+        "owner_data_index_xlsx": owner_data_package.get("index_xlsx", ""),
         "summary": str(summary_path),
     }
     summary = {
@@ -140,19 +164,41 @@ def run_site_output_bundle(
             "requested_count": len(include_report_keys or []),
         },
         "content": {
-            "statistics_xlsx": render_statistics,
-            "summary_pdf": render_summary_pdf,
-            "photo_grid_pdf": render_photo_grid_pdf,
+            "report_type": report_type,
+            "developer_outputs": render_developer_outputs,
+            "owner_data_package": render_owner_data_package,
+            "statistics_xlsx": bool(render_developer_outputs and render_statistics),
+            "summary_pdf": bool(render_developer_outputs and render_summary_pdf),
+            "photo_grid_pdf": bool(render_developer_outputs and render_photo_grid_pdf),
             "png": bool(render_png),
         },
         "report_count": len(report_set.get("reports", []) or []),
         "files": files,
         "renders": renders,
+        "owner_data_package": owner_data_package,
         "aggregates": report_set.get("aggregates", {}),
         "issues": report_set.get("issues", []),
     }
     _write_json(summary_path, summary)
     return summary
+
+
+def _normalize_report_type(report_type: str) -> str:
+    text = str(report_type or REPORT_TYPE_DEVELOPER).strip().lower().replace("_", "-")
+    aliases = {
+        "owner": REPORT_TYPE_OWNER_DATA,
+        "ownerdata": REPORT_TYPE_OWNER_DATA,
+        "owner-data-report": REPORT_TYPE_OWNER_DATA,
+        "client": REPORT_TYPE_OWNER_DATA,
+        "all": REPORT_TYPE_BOTH,
+        "full": REPORT_TYPE_BOTH,
+        "dev": REPORT_TYPE_DEVELOPER,
+        "internal": REPORT_TYPE_DEVELOPER,
+    }
+    text = aliases.get(text, text)
+    if text not in REPORT_TYPES:
+        raise ValueError(f"未知報告型態：{report_type}")
+    return text
 
 
 def _render_output_pdf(

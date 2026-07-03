@@ -1422,6 +1422,7 @@ class RecordManagerPanel(QWidget):
                 render_statistics=scope["content"]["statistics_xlsx"],
                 render_summary_pdf=scope["content"]["summary_pdf"],
                 render_photo_grid_pdf=scope["content"]["photo_grid_pdf"],
+                report_type=scope.get("report_type", "developer"),
             )
             self._show_output_center_result_dialog(result)
         except Exception as e:
@@ -1596,7 +1597,30 @@ class RecordManagerPanel(QWidget):
         layout.addWidget(QLabel("輸出範圍："))
         layout.addWidget(scope_combo)
 
-        content_group = QGroupBox("輸出內容", dlg)
+        report_type_combo = QComboBox(dlg)
+        report_types = [
+            {
+                "value": "owner-data",
+                "label": "業主資料包（資料夾 + 索引 Excel）",
+                "description": "產生可交付的 owner_data_report 資料夾。",
+            },
+            {
+                "value": "developer",
+                "label": "開發檢查包（內部 Excel / PDF / JSON）",
+                "description": "保留內部檢查、統計與 PDF overlay 輸出。",
+            },
+            {
+                "value": "both",
+                "label": "全部輸出",
+                "description": "同時產生業主資料包與內部檢查輸出。",
+            },
+        ]
+        for item in report_types:
+            report_type_combo.addItem(item["label"], item)
+        layout.addWidget(QLabel("報告型態："))
+        layout.addWidget(report_type_combo)
+
+        content_group = QGroupBox("開發檢查輸出內容", dlg)
         content_layout = QVBoxLayout(content_group)
         chk_statistics = QCheckBox("現場統計單 Excel", content_group)
         chk_statistics.setChecked(True)
@@ -1632,26 +1656,39 @@ class RecordManagerPanel(QWidget):
         message_label.setStyleSheet(f"color: {Colors.TEXT_SECONDARY};")
         layout.addWidget(message_label)
 
+        def selected_report_type() -> dict:
+            return report_type_combo.currentData() or report_types[0]
+
+        def refresh_content_enabled():
+            report_type = selected_report_type().get("value", "owner-data")
+            enabled = report_type in ("developer", "both")
+            content_group.setEnabled(enabled)
+
         def refresh_message():
             option = scope_combo.currentData() or options[0]
+            report_type = selected_report_type()
+            content = {
+                "statistics_xlsx": chk_statistics.isChecked(),
+                "summary_pdf": chk_summary_pdf.isChecked(),
+                "photo_grid_pdf": chk_photo_grid_pdf.isChecked(),
+            }
             message_label.setText(
                 self._format_output_center_export_confirmation(
                     self._normalize_output_center_output_dir(output_edit.text(), default_output_dir),
                     option.get("label", ""),
                     option.get("count", 0),
-                    self._format_output_center_content_label({
-                        "statistics_xlsx": chk_statistics.isChecked(),
-                        "summary_pdf": chk_summary_pdf.isChecked(),
-                        "photo_grid_pdf": chk_photo_grid_pdf.isChecked(),
-                    }),
+                    self._format_output_center_selected_content_label(report_type.get("value", ""), content),
+                    report_type.get("label", ""),
                 )
             )
 
         scope_combo.currentIndexChanged.connect(lambda _idx: refresh_message())
+        report_type_combo.currentIndexChanged.connect(lambda _idx: (refresh_content_enabled(), refresh_message()))
         chk_statistics.stateChanged.connect(lambda _state: refresh_message())
         chk_summary_pdf.stateChanged.connect(lambda _state: refresh_message())
         chk_photo_grid_pdf.stateChanged.connect(lambda _state: refresh_message())
         output_edit.textChanged.connect(lambda _text: refresh_message())
+        refresh_content_enabled()
         refresh_message()
 
         buttons = QDialogButtonBox(
@@ -1666,12 +1703,13 @@ class RecordManagerPanel(QWidget):
             return None
 
         option = scope_combo.currentData() or options[0]
+        report_type = selected_report_type().get("value", "owner-data")
         content = {
             "statistics_xlsx": chk_statistics.isChecked(),
             "summary_pdf": chk_summary_pdf.isChecked(),
             "photo_grid_pdf": chk_photo_grid_pdf.isChecked(),
         }
-        if not any(content.values()):
+        if report_type in ("developer", "both") and not any(content.values()):
             QMessageBox.information(self, "沒有選擇輸出內容", "請至少選擇一種輸出內容。")
             return None
         output_dir = self._normalize_output_center_output_dir(output_edit.text(), default_output_dir)
@@ -1681,6 +1719,7 @@ class RecordManagerPanel(QWidget):
         return {
             "mode": option["mode"],
             "label": option["label"],
+            "report_type": report_type,
             "include_report_keys": key_by_mode.get(option["mode"]),
             "content": content,
             "output_dir": output_dir,
@@ -2008,6 +2047,18 @@ class RecordManagerPanel(QWidget):
         return "、".join(labels) if labels else "未選擇"
 
     @staticmethod
+    def _format_output_center_selected_content_label(report_type: str, content: dict) -> str:
+        report_type = str(report_type or "developer").strip()
+        labels = []
+        if report_type in ("owner-data", "both"):
+            labels.append("業主資料包（資料夾 + 索引 Excel）")
+        if report_type in ("developer", "both"):
+            dev_label = RecordManagerPanel._format_output_center_content_label(content)
+            if dev_label != "未選擇":
+                labels.append(dev_label)
+        return "、".join(labels) if labels else "未選擇"
+
+    @staticmethod
     def _normalize_output_center_output_dir(value: str, default_output_dir: str) -> str:
         text = str(value or "").strip().strip('"').strip("'")
         if not text:
@@ -2021,6 +2072,8 @@ class RecordManagerPanel(QWidget):
         items = []
         files = result.get("files", {}) or {}
         static_outputs = [
+            ("主要輸出", "業主資料包索引 Excel", "", "", files.get("owner_data_index_xlsx", "")),
+            ("主要輸出", "業主資料包資料夾", "", "", files.get("owner_data_package", "")),
             ("資料檔", "資料 JSON", "", "", files.get("report_set", "")),
             ("主要輸出", "現場統計單 Excel", "", "", files.get("statistics_xlsx", "")),
             ("資料檔", "摘要 JSON", "", "", files.get("summary", "")),
@@ -2217,11 +2270,14 @@ class RecordManagerPanel(QWidget):
         scope_label: str = "全部 attachments",
         report_count: int = 0,
         content_label: str = "現場統計單 Excel、summary PDF、照片 PDF",
+        report_type_label: str = "",
     ) -> str:
+        report_type_line = f"報告型態：{report_type_label}\n" if report_type_label else ""
         return (
             "將用目前 attachments/ 建立現場輸出中心資料。\n\n"
             f"範圍：{scope_label}\n"
             f"預計修改單：{report_count} 張\n"
+            f"{report_type_line}"
             f"輸出內容：{content_label}\n"
             f"輸出資料夾：{output_dir}\n\n"
             "會重新產生該輸出中心資料夾中的檔案；原始 attachments/ 不會被修改。"
@@ -2258,6 +2314,10 @@ class RecordManagerPanel(QWidget):
         ]
         if files.get("statistics_xlsx"):
             lines.append(f"統計單：{files['statistics_xlsx']}")
+        if files.get("owner_data_package"):
+            lines.append(f"業主資料包：{files['owner_data_package']}")
+        if files.get("owner_data_index_xlsx"):
+            lines.append(f"業主索引：{files['owner_data_index_xlsx']}")
         issues = result.get("issues", []) or []
         if issues:
             lines.extend(["", "資料提醒："])

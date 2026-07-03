@@ -25,7 +25,7 @@
 | 已做 | 附屬 JSON 原子寫入 | `settings.json`、`dwg_map.json`、`weld_snapshot.json` 已改為原子寫入 |
 | 部分 | 多檔操作 journal | 已套用到焊口同步、資料夾 rename、records 儲存、歸檔/還原；仍需逐步盤點其他檔案搬移點 |
 | 已做 | `.trash` 隔離區 | staging 清空、單檔移除、wizard 消耗 staging 原檔已先移入隔離區 |
-| 已做 | `_audit_data.py` 模組化 | 程式內可呼叫 `audit_integrity()`，回傳結構化結果 |
+| 已做 | `tools/audit_data.py` 模組化 | 程式內可呼叫 `audit_integrity()`，回傳結構化結果 |
 | 已做 | `weld_snapshot.json` 路徑相對化 | 不寫死 `C:\Users\...`，換機不失效 |
 | 已做 | 健康檢查 UI 最小版 | 能列出問題、可修復項、不可自動修復項 |
 | 部分 | 防連點 / 冪等處理盤點 | 主產出、重試、紀錄儲存、請款儲存、請款匯出、歸檔/還原、編輯儲存已加防重入；仍需逐步盤點所有工具對話框 |

@@ -106,11 +106,42 @@ def test_collects_records_details_and_materials_into_canonical_shape(tmp_path):
     assert report["report"]["report_id"] == "20260616-01"
     assert report["report"]["fingerprint"] == "abc"
     assert report["welds"]["rows"][0]["code"] == "1r"
+    assert report["welds"]["summary"] == "1r（2 / SS / SCH 40）（共1口）"
     assert report["welds"]["total_size"] == 2.0
     assert report["materials"]["rows"][0]["component"] == "Pipe (管)"
     assert result["aggregates"]["status_counts"]["needs_rebuild"] == 1
     assert result["aggregates"]["weld_count"] == 1
     assert result["aggregates"]["material_row_count"] == 1
+
+
+def test_weld_summary_is_naturally_sorted_with_specs(tmp_path):
+    folder = tmp_path / "attachments" / "20260616" / "107_20260616_01"
+    folder.mkdir(parents=True)
+    (folder / "note.txt").write_text("排序測試", encoding="utf-8")
+    store = {
+        "records": [{
+            "日期": "20260616",
+            "報告編號": "R-107",
+            "Series NO": "0107",
+            "資料夾名": "107_20260616_01",
+        }],
+        "details": [
+            {"紀錄編號": "R-107", "焊口編號": "1001", "焊口尺寸": "4", "材質": "C.S", "厚度": "S-40"},
+            {"紀錄編號": "R-107", "焊口編號": "6a", "焊口尺寸": "4", "材質": "C.S", "厚度": "S-40"},
+            {"紀錄編號": "R-107", "焊口編號": "1a", "焊口尺寸": "3", "材質": "C.S", "厚度": "S-40"},
+            {"紀錄編號": "R-107", "焊口編號": "3a", "焊口尺寸": "3", "材質": "C.S", "厚度": "S-40"},
+        ],
+        "materials": [],
+    }
+
+    result = collect_canonical_report_set(
+        project_root=tmp_path,
+        attachments_root=tmp_path / "attachments",
+        store=store,
+    )
+
+    summary = result["reports"][0]["welds"]["summary"]
+    assert summary == "1a（3 / C.S / S-40）、3a（3 / C.S / S-40）、6a（4 / C.S / S-40）、1001（4 / C.S / S-40）（共4口）"
 
 
 def test_field_path_catalog_contains_template_contract_paths():

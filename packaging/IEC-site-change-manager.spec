@@ -29,7 +29,8 @@ datas = [
     asset("template", "template"),
     asset("control/image", "control/image"),
     asset("control/wizard_data.json", "control"),
-    asset("material_pricebook_seed.json", "."),
+    asset("records/material_taxonomy.json", "records"),
+    asset("records/seed/material_pricebook_seed.json", "records/seed"),
 ]
 
 hiddenimports = [

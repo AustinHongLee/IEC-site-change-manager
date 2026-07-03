@@ -48,7 +48,14 @@ def make_package(root: Path):
     (package / "_internal" / "template").mkdir(parents=True)
     (package / "_internal" / "control" / "image").mkdir(parents=True)
     (package / "_internal" / "control" / "wizard_data.json").write_text("{}", encoding="utf-8")
-    (package / "_internal" / "material_pricebook_seed.json").write_text("[]", encoding="utf-8")
+    (package / "_internal" / "records").mkdir(parents=True)
+    (package / "_internal" / "records" / "material_taxonomy.json").write_text(
+        '{"schema_version":"material_taxonomy.v1"}', encoding="utf-8"
+    )
+    (package / "_internal" / "records" / "seed").mkdir(parents=True)
+    (package / "_internal" / "records" / "seed" / "material_pricebook_seed.json").write_text(
+        "[]", encoding="utf-8"
+    )
     write_build_info(package, repo)
     (package / "IEC-site-change-manager.exe").write_text("fake exe", encoding="utf-8")
     return package
@@ -139,7 +146,7 @@ def test_check_release_package_allow_dirty_downgrades_dirty_build_info_to_warnin
 def test_check_release_package_rejects_missing_asset(tmp_path):
     repo = Path(__file__).resolve().parents[1]
     package = make_package(tmp_path)
-    (package / "_internal" / "material_pricebook_seed.json").unlink()
+    (package / "_internal" / "records" / "seed" / "material_pricebook_seed.json").unlink()
 
     result = run_tool(repo, "--package-dir", str(package), "--json")
 

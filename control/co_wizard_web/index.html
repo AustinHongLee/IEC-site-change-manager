@@ -61,8 +61,39 @@
             </div>
           </div>
           <div class="section-line">
-            <label for="reason">原因</label>
-            <input id="reason" autocomplete="off" placeholder="例：現場管線干涉">
+            <div class="reason-grid">
+              <div>
+                <label for="reason">原因</label>
+                <input id="reason" autocomplete="off" placeholder="例：現場管線干涉">
+              </div>
+              <div>
+                <label for="reasonPreset">常用原因</label>
+                <select id="reasonPreset" onchange="applyReasonPreset(this.value);this.value=''">
+                  <option value="">選擇原因</option>
+                  <optgroup label="管線干涉">
+                    <option value="現場管線干涉">現場管線干涉</option>
+                    <option value="設備位置干涉">設備位置干涉</option>
+                    <option value="鋼構或支撐干涉">鋼構或支撐干涉</option>
+                    <option value="維修空間不足">維修空間不足</option>
+                  </optgroup>
+                  <optgroup label="尺寸調整">
+                    <option value="管線長度不足需加長">管線長度不足需加長</option>
+                    <option value="管線過長需裁切">管線過長需裁切</option>
+                    <option value="管線高度或方向調整">管線高度或方向調整</option>
+                    <option value="閥件位置調整">閥件位置調整</option>
+                  </optgroup>
+                  <optgroup label="現場差異">
+                    <option value="圖面與現場不符">圖面與現場不符</option>
+                    <option value="既設管線位置不同">既設管線位置不同</option>
+                    <option value="施工後需補強或補料">施工後需補強或補料</option>
+                  </optgroup>
+                  <optgroup label="業主需求">
+                    <option value="業主指示追加">業主指示追加</option>
+                    <option value="操作維護需求調整">操作維護需求調整</option>
+                  </optgroup>
+                </select>
+              </div>
+            </div>
           </div>
           <div class="section-line">
             <button class="primary" type="button" id="loadBtn" onclick="loadWelds()">載入焊口</button>
@@ -100,7 +131,7 @@
               <div class="toolbar">
                 <div class="grow">
                   <label for="exOp">操作</label>
-                  <select id="exOp"><option>裁切</option><option selected>加長</option><option>縮短</option></select>
+                  <select id="exOp"><option selected>重焊</option></select>
                 </div>
                 <button type="button" onclick="addExisting()">加入既有重焊</button>
               </div>
@@ -115,7 +146,7 @@
             <div class="grid-3">
               <div>
                 <label for="nwOp">操作</label>
-                <select id="nwOp"><option>裁切</option><option selected>加長</option><option>縮短</option></select>
+                <select id="nwOp"><option selected>新焊</option></select>
               </div>
               <div>
                 <label for="nwSize">尺寸</label>
@@ -210,8 +241,23 @@
         </div>
         <div class="sheet pad">
           <div class="section-title">
-            <h3>新增材料</h3>
-            <span>零件 / 規格 / 數量</span>
+            <h3>本案配件</h3>
+            <span id="projectPartCount">尚未載入</span>
+          </div>
+          <div class="material-pickbar">
+            <input id="matProjectSearch" autocomplete="off" placeholder="搜尋本案配件" oninput="renderProjectParts()">
+            <button class="ghost" type="button" onclick="loadProjectParts()">刷新</button>
+            <button class="ghost" type="button" onclick="usePendingMaterial()">待登記材料</button>
+          </div>
+          <div class="project-part-list" id="projectPartRows">
+            <div class="empty">尚未載入本案配件</div>
+          </div>
+        </div>
+
+        <div class="sheet pad material-entry">
+          <div class="section-title">
+            <h3>加入本單</h3>
+            <span id="matSelectedState">尚未選零件</span>
           </div>
           <div class="grid-3">
             <div>
@@ -245,6 +291,7 @@
           </div>
           <div class="section-line">
             <button type="button" onclick="addMaterial()">加入材料</button>
+            <button class="ghost" type="button" onclick="clearMaterialDraft()">清除</button>
           </div>
         </div>
 
@@ -265,8 +312,13 @@
 
     <footer class="statusbar">
       <div class="status-text" id="status">狀態：—</div>
-      <button type="button" onclick="doExport(false)">存草稿</button>
-      <button class="primary" type="button" onclick="doExport(true)">正式建立</button>
+      <div class="step-progress" id="stepProgress">步驟 1 / 4 · 基本資料</div>
+      <div class="footer-actions">
+        <button class="ghost" type="button" id="prevStepBtn" onclick="goPrevStep()">← 上一步</button>
+        <button type="button" id="nextStepBtn" onclick="goNextStep()">下一步 →</button>
+        <button type="button" onclick="doExport(false)">存草稿</button>
+        <button class="primary" type="button" onclick="doExport(true)">正式建立</button>
+      </div>
     </footer>
   </section>
 
@@ -305,11 +357,11 @@
       <div class="history-head">
         <div>
           <h2>標註</h2>
-          <p>照片版，PDF 下一刀</p>
+          <p>照片與 PDF</p>
         </div>
       </div>
       <div class="annotation-list" id="annotationRows">
-        <div class="empty">先加入照片，再從這裡標註</div>
+        <div class="empty">先加入照片或 PDF，再從這裡標註</div>
       </div>
     </div>
   </aside>
@@ -319,7 +371,7 @@
   <div class="annotation-dialog">
     <div class="history-head">
       <div>
-        <h2>照片標註</h2>
+        <h2 id="annotationHeading">照片標註</h2>
         <p id="annotationTitle">—</p>
       </div>
       <button class="sm" type="button" onclick="closeAnnotation()">關閉</button>
@@ -327,11 +379,30 @@
     <div class="annotation-tools">
       <button class="sm active" type="button" data-annotation-tool="pen" onclick="setAnnotationTool('pen')">畫筆</button>
       <button class="sm" type="button" data-annotation-tool="arrow" onclick="setAnnotationTool('arrow')">箭頭</button>
+      <button class="sm" type="button" data-annotation-tool="rect" onclick="setAnnotationTool('rect')">框線</button>
+      <button class="sm" type="button" data-annotation-tool="ellipse" onclick="setAnnotationTool('ellipse')">圈選</button>
+      <button class="sm" type="button" data-annotation-tool="xmark" onclick="setAnnotationTool('xmark')">切除X</button>
       <button class="sm" type="button" data-annotation-tool="text" onclick="setAnnotationTool('text')">文字</button>
       <input id="annotationText" autocomplete="off" placeholder="文字內容">
+      <div class="annotation-style">
+        <label>顏色 <input id="annotationColor" type="color" value="#f59e0b" oninput="setAnnotationColor(this.value)"></label>
+        <div class="color-swatches" aria-label="標註顏色">
+          <button class="swatch active" type="button" data-color="#f59e0b" style="--swatch:#f59e0b" onclick="setAnnotationColor('#f59e0b')"></button>
+          <button class="swatch" type="button" data-color="#ef4444" style="--swatch:#ef4444" onclick="setAnnotationColor('#ef4444')"></button>
+          <button class="swatch" type="button" data-color="#1860ab" style="--swatch:#1860ab" onclick="setAnnotationColor('#1860ab')"></button>
+          <button class="swatch" type="button" data-color="#22c55e" style="--swatch:#22c55e" onclick="setAnnotationColor('#22c55e')"></button>
+          <button class="swatch" type="button" data-color="#ffffff" style="--swatch:#ffffff" onclick="setAnnotationColor('#ffffff')"></button>
+        </div>
+        <label>線寬 <input id="annotationStroke" type="range" min="3" max="30" value="9" oninput="updateAnnotationStyleLabels()"><span id="annotationStrokeLabel">9</span></label>
+        <label>字級 <input id="annotationFontSize" type="range" min="18" max="96" value="42" oninput="updateAnnotationStyleLabels()"><span id="annotationFontLabel">42</span></label>
+      </div>
       <button class="sm" type="button" onclick="undoAnnotation()">復原</button>
       <button class="sm" type="button" onclick="clearAnnotation()">清除</button>
       <button class="primary sm" type="button" onclick="saveAnnotation()">儲存標註</button>
+    </div>
+    <div class="annotation-assist">
+      <div class="assist-label">常用文字</div>
+      <div class="annotation-chips" id="annotationTextChips"></div>
     </div>
     <div class="annotation-stage" id="annotationStage">
       <img id="annotationImage" alt="">
@@ -350,6 +421,7 @@ const pageMeta = {
   files:['照片圖面','修改前、修改後與圖面 PDF'],
   materials:['材料','零件、尺寸與數量']
 };
+const pageFlow = ['basic','welds','files','materials'];
 const missingLabels = {
   missing_before_photo:'修改前照片',
   missing_after_photo:'修改後照片',
@@ -360,13 +432,21 @@ const missingLabels = {
 };
 let api=null;
 let picked=null;
+let pickedWeld=null;
+let newWeldDefaults={size:'', material:'', sch:'', weld_type:''};
 let connected=false;
 let stagingRole='before';
 let annotatingIndex=-1;
+let annotatingTarget=null;
 let annotationTool='pen';
 let annotationDrawing=false;
 let annotationStart=null;
 let annotationUndo=[];
+let lastBuiltWelds=[];
+let projectParts=[];
+let selectedProjectPart=null;
+let materialEntryMode='project';
+let currentPage='basic';
 
 window.addEventListener('pywebviewready', async ()=>{
   api = window.pywebview.api;
@@ -374,6 +454,7 @@ window.addEventListener('pywebviewready', async ()=>{
   wireInputs();
   wireNav();
   wireAnnotationCanvas();
+  showPage(currentPage);
   setHistoryCollapsed(false);
   try{
     const info = await call('info');
@@ -387,6 +468,7 @@ window.addEventListener('pywebviewready', async ()=>{
   syncNavStatus();
   await refreshHistory();
   await refreshStaging();
+  await loadProjectParts();
   await rebuild();
 });
 
@@ -400,11 +482,14 @@ function fileName(path){
 }
 function fileUrl(path){
   const text = String(path ?? '');
-  if(!text || /^(data|file):/i.test(text)){ return text; }
-  return 'file:///' + text.replace(/\\/g,'/').replace(/^\/+/, '');
+  if(!text || /^data:/i.test(text)){ return text; }
+  return encodeURI(text.replace(/\\/g,'/'));
 }
 function isImageFile(path){
   return /\.(jpe?g|png|bmp|gif|webp)$/i.test(String(path ?? ''));
+}
+function isPdfFile(path){
+  return /\.pdf$/i.test(String(path ?? ''));
 }
 
 function wireInputs(){
@@ -412,6 +497,7 @@ function wireInputs(){
     byId(id).addEventListener('input', ()=>{
       state[id==='series'?'series':id] = val(id);
       syncNavStatus();
+      updateStepControls();
       if(id === 'series'){ refreshHistory(); }
       rebuild();
     });
@@ -425,10 +511,75 @@ function wireNav(){
 }
 
 function showPage(name){
+  if(!pageMeta[name]){ name = 'basic'; }
+  currentPage = name;
   document.querySelectorAll('.page').forEach(page=>page.classList.toggle('active', page.id === `page-${name}`));
-  document.querySelectorAll('.nav-step').forEach(btn=>btn.classList.toggle('active', btn.dataset.page === name));
+  document.querySelectorAll('.nav-step').forEach(btn=>{
+    const active = btn.dataset.page === name;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-current', active ? 'step' : 'false');
+  });
   byId('pageTitle').textContent = pageMeta[name][0];
   byId('pageHint').textContent = pageMeta[name][1];
+  updateStepControls();
+}
+
+function currentStepIndex(){
+  const index = pageFlow.indexOf(currentPage);
+  return index >= 0 ? index : 0;
+}
+
+function updateStepControls(){
+  const index = currentStepIndex();
+  const progress = byId('stepProgress');
+  const prev = byId('prevStepBtn');
+  const next = byId('nextStepBtn');
+  if(progress){
+    progress.textContent = `步驟 ${index + 1} / ${pageFlow.length} · ${pageMeta[currentPage][0]}`;
+  }
+  if(prev){
+    prev.disabled = index === 0;
+  }
+  if(!next){ return; }
+  next.disabled = false;
+  if(currentPage === 'basic'){
+    next.textContent = val('series') && state.welds.length === 0 ? '載入焊口 →' : '前往焊口 →';
+  }else if(currentPage === 'welds'){
+    next.textContent = '前往照片圖面 →';
+  }else if(currentPage === 'files'){
+    next.textContent = '前往材料 →';
+  }else{
+    next.textContent = '檢查後建立';
+  }
+}
+
+function goPrevStep(){
+  const index = currentStepIndex();
+  if(index > 0){
+    showPage(pageFlow[index - 1]);
+  }
+}
+
+async function goNextStep(){
+  const index = currentStepIndex();
+  if(currentPage === 'basic'){
+    syncState();
+    if(!state.series){
+      byId('series').focus();
+      toast('先填流水號，再進到焊口', true);
+      return;
+    }
+    if(state.welds.length === 0){
+      await loadWelds();
+      return;
+    }
+  }
+  if(index < pageFlow.length - 1){
+    showPage(pageFlow[index + 1]);
+    return;
+  }
+  await rebuild();
+  toast('已到最後一步，可存草稿或正式建立');
 }
 
 function setHistoryCollapsed(collapsed){
@@ -473,6 +624,15 @@ function syncNavStatus(){
   byId('navStatus').textContent = `圖號 ${series} · ${connected ? '已連線' : '連線中'}`;
 }
 
+async function applyReasonPreset(value){
+  if(!value){ return; }
+  byId('reason').value = value;
+  state.reason = value;
+  syncNavStatus();
+  refreshAnnotationAssist();
+  await rebuild();
+}
+
 function updateHints(){
   const hasSeries = !!val('series');
   const hasBefore = state.photos.some(photo=>photo.role === 'before');
@@ -487,8 +647,17 @@ function toggleHint(el, on){ if(el){ el.classList.toggle('hint-pulse', !!on); } 
 async function loadWelds(){
   syncState();
   syncNavStatus();
+  updateStepControls();
+  if(!state.series){
+    showPage('basic');
+    byId('series').focus();
+    toast('先填流水號，再載入焊口', true);
+    return;
+  }
   const result = await call('existing_welds', state.series);
   picked = null;
+  pickedWeld = null;
+  newWeldDefaults = {size:'', material:'', sch:'', weld_type:''};
   renderPickList(result.welds || []);
   await refreshHistory();
   showPage('welds');
@@ -581,19 +750,89 @@ function renderPickList(welds){
   byId('weldCount').textContent = welds.length ? `${welds.length} 筆` : '查無焊口';
   if(!welds.length){
     body.innerHTML = '<tr><td colspan="5" class="empty">這張圖號查無焊口</td></tr>';
+    applyNewWeldDefaults({}, {force:true});
     return;
   }
   body.innerHTML = '';
+  adoptNewWeldDefaults(commonWeldSpec(welds), {force:true});
   welds.forEach(weld=>{
     const tr = document.createElement('tr');
     tr.className = 'pick';
     tr.innerHTML = `<td><code>${escapeHtml(weld.weld_no)}</code></td><td>${escapeHtml(weld.size)}</td><td>${escapeHtml(weld.material)}</td><td>${escapeHtml(weld.sch)}</td><td>${escapeHtml(weld.weld_type)}</td>`;
     tr.addEventListener('click', ()=>{
       picked = weld.weld_no;
+      pickedWeld = weld;
       body.querySelectorAll('tr').forEach(row=>row.classList.remove('selected'));
       tr.classList.add('selected');
+      adoptNewWeldDefaults(specFromWeld(weld));
     });
     body.appendChild(tr);
+  });
+}
+
+function specFromWeld(weld){
+  return {
+    size:String((weld && weld.size) || '').trim(),
+    material:String((weld && weld.material) || '').trim(),
+    sch:String((weld && weld.sch) || '').trim(),
+    weld_type:String((weld && weld.weld_type) || '').trim()
+  };
+}
+
+function commonWeldSpec(welds){
+  const fields = ['size','material','sch','weld_type'];
+  const result = {};
+  fields.forEach(field=>{
+    const counts = new Map();
+    (welds || []).forEach(weld=>{
+      const value = specFromWeld(weld)[field];
+      if(!value){ return; }
+      counts.set(value, (counts.get(value) || 0) + 1);
+    });
+    let best = '';
+    let bestCount = 0;
+    counts.forEach((count,value)=>{
+      if(count > bestCount){
+        best = value;
+        bestCount = count;
+      }
+    });
+    result[field] = best;
+  });
+  return result;
+}
+
+function newWeldInputsAreDefaultish(){
+  const map = {size:'nwSize', material:'nwMat', sch:'nwSch', weld_type:'nwType'};
+  return Object.entries(map).every(([field,id])=>{
+    const current = val(id);
+    return !current || current === (newWeldDefaults[field] || '');
+  });
+}
+
+function adoptNewWeldDefaults(spec, options={}){
+  const shouldForce = !!options.force || newWeldInputsAreDefaultish();
+  const normalized = {
+    size:String((spec && spec.size) || '').trim(),
+    material:String((spec && spec.material) || '').trim(),
+    sch:String((spec && spec.sch) || '').trim(),
+    weld_type:String((spec && spec.weld_type) || '').trim()
+  };
+  Object.keys(newWeldDefaults).forEach(field=>{
+    if(normalized[field]){ newWeldDefaults[field] = normalized[field]; }
+  });
+  applyNewWeldDefaults(newWeldDefaults, {force:shouldForce});
+}
+
+function applyNewWeldDefaults(spec, options={}){
+  const map = {size:'nwSize', material:'nwMat', sch:'nwSch', weld_type:'nwType'};
+  Object.entries(map).forEach(([field,id])=>{
+    const el = byId(id);
+    if(!el){ return; }
+    const value = String((spec && spec[field]) || '').trim();
+    if(options.force || !el.value.trim()){
+      el.value = value;
+    }
   });
 }
 
@@ -602,17 +841,18 @@ async function addExisting(){
     toast('先選一筆既有焊口', true);
     return;
   }
-  state.welds.push({kind:'existing', base:picked, op:byId('exOp').value});
+  state.welds.push({kind:'existing', base:picked, op:'重焊'});
   await rebuild();
 }
 
 async function addNew(){
   state.welds.push({
     kind:'new',
-    op:byId('nwOp').value,
+    op:'新焊',
     spec:{size:val('nwSize'), material:val('nwMat'), sch:val('nwSch'), weld_type:val('nwType')}
   });
   ['nwSize','nwMat','nwSch','nwType'].forEach(id=>byId(id).value='');
+  applyNewWeldDefaults(newWeldDefaults, {force:true});
   await rebuild();
 }
 
@@ -645,22 +885,132 @@ async function clearPdf(){
   await rebuild();
 }
 
+async function loadProjectParts(){
+  if(!api || typeof api.project_parts !== 'function'){
+    projectParts = [];
+    renderProjectParts();
+    return;
+  }
+  try{
+    const data = await call('project_parts');
+    projectParts = Array.isArray(data.items) ? data.items : [];
+    if(selectedProjectPart && !projectParts.some(part=>String(part.id) === String(selectedProjectPart.id))){
+      clearMaterialDraft();
+    }
+    renderProjectParts();
+  }catch(e){
+    projectParts = [];
+    renderProjectParts();
+  }
+}
+
+function projectPartText(part){
+  return [part.id, part.part, part.size, part.sch, part.mat, part.cat, part.unit, part.src]
+    .filter(Boolean).join(' ');
+}
+
+function renderProjectParts(){
+  const list = byId('projectPartRows');
+  const count = byId('projectPartCount');
+  if(!list || !count){ return; }
+  const q = val('matProjectSearch').toLowerCase();
+  const rows = projectParts.filter(part=>!q || projectPartText(part).toLowerCase().includes(q));
+  count.textContent = projectParts.length ? `本案 ${projectParts.length} 項` : '本案尚未登記';
+  list.innerHTML = '';
+  if(!rows.length){
+    list.innerHTML = `<div class="empty">${projectParts.length ? '查無符合的本案配件' : '本案尚未登記配件'}</div>`;
+    return;
+  }
+  rows.forEach(part=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'project-part-card' + (selectedProjectPart && String(selectedProjectPart.id) === String(part.id) ? ' selected' : '');
+    btn.innerHTML = `<span class="part-id">${escapeHtml(part.id)}</span>
+      <strong>${escapeHtml(part.part || '未命名零件')}</strong>
+      <span>${escapeHtml([part.size, part.sch, part.mat].filter(Boolean).join(' / '))}</span>
+      <small>${escapeHtml([part.cat, part.unit, part.src].filter(Boolean).join(' · '))}</small>`;
+    btn.addEventListener('click', ()=>selectProjectPart(part));
+    list.appendChild(btn);
+  });
+}
+
+function setMaterialInputsReadonly(readonly){
+  ['matComponent','matSize','matSchedule','matMaterial','matUnit'].forEach(id=>{
+    const el = byId(id);
+    if(el){ el.readOnly = !!readonly; }
+  });
+}
+
+function selectProjectPart(part){
+  selectedProjectPart = part;
+  materialEntryMode = 'project';
+  byId('matComponent').value = part.part || '';
+  byId('matSize').value = part.size || '';
+  byId('matSchedule').value = part.sch || '';
+  byId('matMaterial').value = part.mat || '';
+  byId('matUnit').value = part.unit || '';
+  byId('matSelectedState').textContent = `${part.id || ''} · 本案配件`;
+  setMaterialInputsReadonly(true);
+  renderProjectParts();
+  byId('matQty').focus();
+}
+
+function usePendingMaterial(){
+  selectedProjectPart = null;
+  materialEntryMode = 'pending';
+  byId('matSelectedState').textContent = '待登記材料';
+  ['matComponent','matSize','matSchedule','matMaterial','matUnit'].forEach(id=>byId(id).value='');
+  setMaterialInputsReadonly(false);
+  renderProjectParts();
+  byId('matComponent').focus();
+}
+
+function clearMaterialDraft(){
+  selectedProjectPart = null;
+  materialEntryMode = 'project';
+  ['matComponent','matSize','matSchedule','matMaterial','matQty','matUnit','matRemark'].forEach(id=>byId(id).value='');
+  byId('matSelectedState').textContent = '尚未選零件';
+  setMaterialInputsReadonly(false);
+  renderProjectParts();
+}
+
 async function addMaterial(){
-  const material = {
+  if(!selectedProjectPart && materialEntryMode !== 'pending'){
+    toast('先從本案配件選一項，或改用待登記材料', true);
+    return;
+  }
+  if(!val('matQty')){
+    toast('先填數量', true);
+    return;
+  }
+  if(materialEntryMode === 'pending' && !val('matComponent')){
+    toast('先填零件名稱', true);
+    return;
+  }
+  let remark = val('matRemark');
+  if(materialEntryMode === 'pending' && !remark.includes('待登記')){
+    remark = remark ? `待登記：${remark}` : '待登記';
+  }
+  const material = selectedProjectPart ? {
+    component_id:String(selectedProjectPart.id || ''),
+    component:selectedProjectPart.part || '',
+    size:selectedProjectPart.size || '',
+    schedule:selectedProjectPart.sch || '',
+    material:selectedProjectPart.mat || '',
+    qty:val('matQty'),
+    unit:val('matUnit') || selectedProjectPart.unit || '',
+    remark
+  } : {
     component:val('matComponent'),
     size:val('matSize'),
     schedule:val('matSchedule'),
     material:val('matMaterial'),
     qty:val('matQty'),
     unit:val('matUnit'),
-    remark:val('matRemark')
+    remark
   };
-  if(!Object.values(material).some(Boolean)){
-    toast('先填一筆材料', true);
-    return;
-  }
   state.materials.push(material);
-  ['matComponent','matSize','matSchedule','matMaterial','matQty','matUnit','matRemark'].forEach(id=>byId(id).value='');
+  clearMaterialDraft();
   await rebuild();
 }
 
@@ -680,10 +1030,12 @@ async function rebuild(){
   }catch(e){
     return;
   }
-  renderWeldRows((result.co && result.co.welds) || []);
+  lastBuiltWelds = (result.co && result.co.welds) || [];
+  renderWeldRows(lastBuiltWelds);
   renderFiles();
   renderMaterials();
   renderStatus(result.status, result.issues || []);
+  refreshAnnotationAssist();
 }
 
 function renderFiles(){
@@ -705,27 +1057,37 @@ function renderFiles(){
     renderAnnotationRows();
     return;
   }
-  pdfRows.innerHTML = `<tr><td>圖面 PDF</td><td>${escapeHtml(fileName(state.drawing_pdf))}</td><td><button class="sm" type="button" onclick="clearPdf()">清除</button></td></tr>`;
+  pdfRows.innerHTML = `<tr><td>圖面 PDF</td><td>${escapeHtml(fileName(state.drawing_pdf))}</td><td><button class="sm" type="button" onclick="openPdfAnnotation()">標註</button> <button class="sm" type="button" onclick="clearPdf()">清除</button></td></tr>`;
   renderAnnotationRows();
 }
 
 function renderAnnotationRows(){
   const list = byId('annotationRows');
-  const photos = state.photos
+  const items = state.photos
     .map((photo,index)=>({photo,index}))
-    .filter(item=>isImageFile(item.photo.file));
-  if(!photos.length){
-    list.innerHTML = '<div class="empty">先加入照片，再從這裡標註</div>';
+    .filter(item=>isImageFile(item.photo.file))
+    .map(item=>({kind:'photo', ...item}));
+  if(state.drawing_pdf){
+    items.push({kind:'pdf', file:state.drawing_pdf});
+  }
+  if(!items.length){
+    list.innerHTML = '<div class="empty">先加入照片或 PDF，再從這裡標註</div>';
     return;
   }
   list.innerHTML = '';
-  photos.forEach(({photo,index})=>{
+  items.forEach(item=>{
     const card = document.createElement('button');
     card.className = 'annotation-card';
     card.type = 'button';
-    card.innerHTML = `<span>${photo.role === 'after' ? '修改後' : '修改前'}</span>
-      <strong>${escapeHtml(fileName(photo.file))}</strong>`;
-    card.addEventListener('click', ()=>openAnnotation(index));
+    if(item.kind === 'pdf'){
+      card.innerHTML = `<span>圖面 PDF</span>
+        <strong>${escapeHtml(fileName(item.file))}</strong>`;
+      card.addEventListener('click', openPdfAnnotation);
+    }else{
+      card.innerHTML = `<span>${item.photo.role === 'after' ? '修改後' : '修改前'}</span>
+        <strong>${escapeHtml(fileName(item.photo.file))}</strong>`;
+      card.addEventListener('click', ()=>openAnnotation(item.index));
+    }
     list.appendChild(card);
   });
 }
@@ -745,27 +1107,134 @@ function setAnnotationTool(tool){
   });
 }
 
-function openAnnotation(index){
+function annotationScale(){
+  const canvas = byId('annotationCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const sx = rect.width ? canvas.width / rect.width : 1;
+  const sy = rect.height ? canvas.height / rect.height : sx;
+  return Math.max(sx, sy, 1);
+}
+
+function annotationStrokePx(){
+  return Math.max(1, Number(byId('annotationStroke')?.value || 9));
+}
+
+function annotationTextPx(){
+  return Math.max(10, Number(byId('annotationFontSize')?.value || 42));
+}
+
+function annotationColor(){
+  return byId('annotationColor')?.value || '#f59e0b';
+}
+
+function setAnnotationColor(color){
+  const normalized = String(color || '#f59e0b').toLowerCase();
+  const input = byId('annotationColor');
+  if(input){ input.value = normalized; }
+  document.querySelectorAll('[data-color]').forEach(btn=>{
+    btn.classList.toggle('active', String(btn.dataset.color || '').toLowerCase() === normalized);
+  });
+}
+
+function updateAnnotationStyleLabels(){
+  const stroke = byId('annotationStrokeLabel');
+  const font = byId('annotationFontLabel');
+  if(stroke){ stroke.textContent = String(annotationStrokePx()); }
+  if(font){ font.textContent = String(annotationTextPx()); }
+}
+
+async function resolveAnnotationSource(target){
+  if(target.kind === 'pdf'){
+    if(api && typeof api.pdf_page_data_url === 'function'){
+      const response = await api.pdf_page_data_url(target.path, target.pageIndex || 0);
+      if(response && response.ok === true && response.data && response.data.url){
+        return response.data;
+      }
+      throw new Error((response && response.error) || 'PDF 讀取失敗');
+    }
+    throw new Error('後端尚未提供 PDF 標註');
+  }
+  if(api && typeof api.image_data_url === 'function'){
+    const response = await api.image_data_url(target.path);
+    if(response && response.ok === true && response.data && response.data.url){
+      return response.data;
+    }
+    throw new Error((response && response.error) || '照片讀取失敗');
+  }
+  return {path:target.path, url:fileUrl(target.path)};
+}
+
+async function openAnnotation(index){
   const photo = state.photos[index];
   if(!photo || !isImageFile(photo.file)){
-    toast('目前只支援照片標註，PDF 下一刀補', true);
+    toast('這筆不是可標註的照片', true);
     return;
   }
-  annotatingIndex = index;
+  return openAnnotationTarget({
+    kind:'photo',
+    index,
+    path:photo.file,
+    heading:'照片標註',
+    loadError:'照片載入失敗，無法標註'
+  });
+}
+
+async function openPdfAnnotation(){
+  if(!state.drawing_pdf){
+    toast('先選圖面 PDF', true);
+    return;
+  }
+  if(!isPdfFile(state.drawing_pdf)){
+    toast('圖面不是 PDF，無法用 PDF 標註流程', true);
+    return;
+  }
+  return openAnnotationTarget({
+    kind:'pdf',
+    path:state.drawing_pdf,
+    pageIndex:0,
+    heading:'PDF 標註',
+    loadError:'PDF 載入失敗，無法標註'
+  });
+}
+
+async function openAnnotationTarget(target){
+  annotatingTarget = target;
+  annotatingIndex = target.kind === 'photo' ? target.index : -1;
   annotationUndo = [];
-  byId('annotationTitle').textContent = fileName(photo.file);
+  byId('annotationHeading').textContent = target.heading || '標註';
+  byId('annotationTitle').textContent = fileName(target.path);
+  refreshAnnotationAssist();
   byId('annotationModal').classList.add('open');
   byId('annotationModal').setAttribute('aria-hidden','false');
   const img = byId('annotationImage');
+  img.removeAttribute('src');
   img.onload = setupAnnotationCanvas;
-  img.onerror = ()=>toast('照片載入失敗，無法標註', true);
-  img.src = fileUrl(photo.file);
+  img.onerror = ()=>toast(target.loadError || '載入失敗，無法標註', true);
+  try{
+    const resolved = await resolveAnnotationSource(target);
+    if(annotatingTarget !== target){ return; }
+    if(target.kind === 'photo' && resolved.path){
+      state.photos[target.index].file = resolved.path;
+      target.path = resolved.path;
+      byId('annotationTitle').textContent = fileName(resolved.path);
+    }else if(target.kind === 'pdf' && resolved.path){
+      state.drawing_pdf = resolved.path;
+      target.path = resolved.path;
+      target.pageIndex = resolved.page_index || 0;
+      const pageText = resolved.page_count ? ` · 第 ${target.pageIndex + 1}/${resolved.page_count} 頁` : '';
+      byId('annotationTitle').textContent = `${fileName(resolved.path)}${pageText}`;
+    }
+    img.src = resolved.url;
+  }catch(e){
+    toast(`${target.kind === 'pdf' ? 'PDF' : '照片'}讀取失敗：${e.message || e}`, true);
+  }
 }
 
 function closeAnnotation(){
   byId('annotationModal').classList.remove('open');
   byId('annotationModal').setAttribute('aria-hidden','true');
   annotatingIndex = -1;
+  annotatingTarget = null;
 }
 
 function setupAnnotationCanvas(){
@@ -773,6 +1242,7 @@ function setupAnnotationCanvas(){
   const canvas = byId('annotationCanvas');
   canvas.width = img.naturalWidth || img.clientWidth;
   canvas.height = img.naturalHeight || img.clientHeight;
+  updateAnnotationStyleLabels();
   clearAnnotation(false);
 }
 
@@ -787,13 +1257,82 @@ function annotationPoint(event){
 
 function annotationContext(){
   const ctx = byId('annotationCanvas').getContext('2d');
-  ctx.lineWidth = 8;
+  const scale = annotationScale();
+  const color = annotationColor();
+  ctx.lineWidth = annotationStrokePx() * scale;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#f59e0b';
-  ctx.fillStyle = '#f59e0b';
-  ctx.font = '32px Microsoft JhengHei, Segoe UI, sans-serif';
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.font = `${annotationTextPx() * scale}px Microsoft JhengHei, Segoe UI, sans-serif`;
   return ctx;
+}
+
+function annotationReason(){
+  return val('reason') || state.reason || '現場管線干涉';
+}
+
+function annotationWeldGroups(){
+  const welds = Array.isArray(lastBuiltWelds) ? lastBuiltWelds : [];
+  return {
+    rework:welds.filter(w=>w && w.origin === 'existing'),
+    fresh:welds.filter(w=>w && w.origin === 'new')
+  };
+}
+
+function annotationSuggestions(){
+  const reason = annotationReason();
+  const groups = annotationWeldGroups();
+  const reworkCodes = groups.rework.map(w=>w.code).filter(Boolean);
+  const baseCodes = groups.rework.map(w=>w.base).filter(Boolean);
+  const newCodes = groups.fresh.map(w=>w.code).filter(Boolean);
+  const items = [
+    ['原因', `因${reason}`],
+    ['問題', `因${reason}，此處需修改`]
+  ];
+  groups.rework.forEach(w=>{
+    if(w.base || w.code){
+      items.push([`原${w.base || ''}`, `因${reason}，切除原焊口 ${w.base || w.code}，重焊 ${w.code || ''}`]);
+    }
+  });
+  groups.fresh.forEach(w=>{
+    if(w.code){
+      items.push([`新${w.code}`, `因${reason}，新增焊口 ${w.code}`]);
+    }
+  });
+  if(baseCodes.length && newCodes.length){
+    items.push(['切除+新增', `因${reason}，切除原焊口 ${baseCodes.join('、')}，新增焊口 ${newCodes.join('、')}`]);
+  }
+  if(newCodes.length){
+    items.push(['加長新增', `因${reason}，加長並新增焊口 ${newCodes.join('、')}`]);
+  }
+  if(reworkCodes.length){
+    items.push(['重焊', `重焊焊口 ${reworkCodes.join('、')}`]);
+  }
+  const seen = new Set();
+  return items
+    .map(([label,text])=>({label, text:String(text || '').replace(/\s+/g,' ').trim()}))
+    .filter(item=>item.text && !seen.has(item.text) && seen.add(item.text));
+}
+
+function refreshAnnotationAssist(){
+  const chips = byId('annotationTextChips');
+  if(!chips){ return; }
+  chips.innerHTML = '';
+  annotationSuggestions().forEach(item=>{
+    const btn = document.createElement('button');
+    btn.className = 'text-chip';
+    btn.type = 'button';
+    btn.textContent = item.label;
+    btn.title = item.text;
+    btn.addEventListener('click', ()=>useAnnotationText(item.text));
+    chips.appendChild(btn);
+  });
+}
+
+function useAnnotationText(text){
+  byId('annotationText').value = text;
+  setAnnotationTool('text');
 }
 
 function pushAnnotationUndo(){
@@ -803,14 +1342,14 @@ function pushAnnotationUndo(){
 }
 
 function startAnnotation(event){
-  if(annotatingIndex < 0){ return; }
+  if(!annotatingTarget){ return; }
   event.preventDefault();
   const point = annotationPoint(event);
   const ctx = annotationContext();
   pushAnnotationUndo();
   if(annotationTool === 'text'){
     const text = val('annotationText') || '標註';
-    ctx.fillText(text, point.x, point.y);
+    drawAnnotationText(ctx, text, point.x, point.y);
     return;
   }
   annotationDrawing = true;
@@ -836,6 +1375,12 @@ function endAnnotation(event){
   const point = annotationPoint(event);
   if(annotationTool === 'arrow'){
     drawArrow(annotationStart, point);
+  }else if(annotationTool === 'rect'){
+    drawRect(annotationStart, point);
+  }else if(annotationTool === 'ellipse'){
+    drawEllipse(annotationStart, point);
+  }else if(annotationTool === 'xmark'){
+    drawXMark(annotationStart, point);
   }
   annotationDrawing = false;
   annotationStart = null;
@@ -844,7 +1389,7 @@ function endAnnotation(event){
 function drawArrow(start, end){
   const ctx = annotationContext();
   const angle = Math.atan2(end.y - start.y, end.x - start.x);
-  const head = 28;
+  const head = Math.max(24, annotationStrokePx() * 3.4) * annotationScale();
   ctx.beginPath();
   ctx.moveTo(start.x, start.y);
   ctx.lineTo(end.x, end.y);
@@ -855,6 +1400,74 @@ function drawArrow(start, end){
   ctx.lineTo(end.x - head * Math.cos(angle + Math.PI / 6), end.y - head * Math.sin(angle + Math.PI / 6));
   ctx.closePath();
   ctx.fill();
+}
+
+function drawRect(start, end){
+  const ctx = annotationContext();
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const w = Math.abs(end.x - start.x);
+  const h = Math.abs(end.y - start.y);
+  ctx.strokeRect(x, y, w, h);
+}
+
+function drawEllipse(start, end){
+  const ctx = annotationContext();
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const w = Math.abs(end.x - start.x);
+  const h = Math.abs(end.y - start.y);
+  ctx.beginPath();
+  ctx.ellipse(x + w / 2, y + h / 2, Math.max(w / 2, 1), Math.max(h / 2, 1), 0, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function drawXMark(start, end){
+  const ctx = annotationContext();
+  const x = Math.min(start.x, end.x);
+  const y = Math.min(start.y, end.y);
+  const w = Math.abs(end.x - start.x);
+  const h = Math.abs(end.y - start.y);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w, y + h);
+  ctx.moveTo(x + w, y);
+  ctx.lineTo(x, y + h);
+  ctx.stroke();
+}
+
+function drawAnnotationText(ctx, text, x, y){
+  const canvas = byId('annotationCanvas');
+  const scale = annotationScale();
+  const maxWidth = Math.max(220 * scale, canvas.width - x - (24 * scale));
+  const lines = wrapAnnotationText(ctx, text, maxWidth);
+  const lineHeight = annotationTextPx() * scale * 1.25;
+  lines.forEach((line,index)=>{
+    const yy = y + index * lineHeight;
+    ctx.save();
+    ctx.lineWidth = Math.max(4, annotationTextPx() * 0.18) * scale;
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.strokeText(line, x, yy);
+    ctx.restore();
+    ctx.fillText(line, x, yy);
+  });
+}
+
+function wrapAnnotationText(ctx, text, maxWidth){
+  const chars = Array.from(String(text || ''));
+  const lines = [];
+  let line = '';
+  chars.forEach(ch=>{
+    const next = line + ch;
+    if(line && ctx.measureText(next).width > maxWidth){
+      lines.push(line);
+      line = ch.trimStart();
+    }else{
+      line = next;
+    }
+  });
+  if(line){ lines.push(line); }
+  return lines.length ? lines : [''];
 }
 
 function clearAnnotation(track=true){
@@ -877,8 +1490,7 @@ function undoAnnotation(){
 }
 
 async function saveAnnotation(){
-  if(annotatingIndex < 0){ return; }
-  const photo = state.photos[annotatingIndex];
+  if(!annotatingTarget){ return; }
   const base = byId('annotationImage');
   const marks = byId('annotationCanvas');
   const merged = document.createElement('canvas');
@@ -888,13 +1500,20 @@ async function saveAnnotation(){
   try{
     ctx.drawImage(base, 0, 0, merged.width, merged.height);
     ctx.drawImage(marks, 0, 0);
-    const result = await call('save_annotated', merged.toDataURL('image/png'), fileName(photo.file));
-    state.photos[annotatingIndex].file = result.path;
-    toast('已更新標註照片');
+    if(annotatingTarget.kind === 'pdf'){
+      const result = await call('save_pdf_annotation', merged.toDataURL('image/png'), annotatingTarget.path, annotatingTarget.pageIndex || 0);
+      state.drawing_pdf = result.path;
+      toast('已更新標註 PDF');
+    }else{
+      const photo = state.photos[annotatingTarget.index];
+      const result = await call('save_annotated', merged.toDataURL('image/png'), fileName(photo.file));
+      state.photos[annotatingTarget.index].file = result.path;
+      toast('已更新標註照片');
+    }
     closeAnnotation();
     await rebuild();
   }catch(e){
-    toast('標註儲存失敗，可能是圖片來源不允許 canvas 合成', true);
+    toast(`標註儲存失敗：${e.message || e}`, true);
   }
 }
 
@@ -908,7 +1527,10 @@ function renderMaterials(){
   body.innerHTML = '';
   state.materials.forEach((material,index)=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(material.component)}</td><td>${escapeHtml(material.size)}</td><td>${escapeHtml(material.schedule)}</td><td>${escapeHtml(material.material)}</td><td>${escapeHtml(material.qty)}</td><td>${escapeHtml(material.unit)}</td><td>${escapeHtml(material.remark)}</td><td><button class="sm" type="button" onclick="removeMaterial(${index})">移除</button></td>`;
+    const badge = material.component_id
+      ? `<small class="material-source">${escapeHtml(material.component_id)}</small>`
+      : (String(material.remark || '').includes('待登記') ? '<small class="material-source pending">待登記</small>' : '');
+    tr.innerHTML = `<td><span class="material-name">${escapeHtml(material.component)}</span>${badge}</td><td>${escapeHtml(material.size)}</td><td>${escapeHtml(material.schedule)}</td><td>${escapeHtml(material.material)}</td><td>${escapeHtml(material.qty)}</td><td>${escapeHtml(material.unit)}</td><td>${escapeHtml(material.remark)}</td><td><button class="sm" type="button" onclick="removeMaterial(${index})">移除</button></td>`;
     body.appendChild(tr);
   });
 }

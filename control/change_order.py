@@ -55,6 +55,10 @@ class Origin(str, Enum):
 
 
 class Op(str, Enum):
+    REWORK = "重焊"
+    NEW = "新焊"
+    # Legacy construction-action labels kept for old records/tests. New UI writes
+    # only REWORK/NEW; project-specific wording is handled at export time.
     CUT = "裁切"
     EXTEND = "加長"
     SHORTEN = "縮短"
@@ -98,6 +102,24 @@ def _coerce_enum(enum_cls: Type[_E], value: Any) -> Any:
         return enum_cls(value)
     except ValueError:
         return value
+
+
+def _coerce_weld_op(value: Any, origin: Any = None) -> Any:
+    raw = _enum_value(value)
+    if raw is None:
+        return None
+    if raw in {Op.REWORK.value, "原焊口重接"}:
+        return Op.REWORK
+    if raw in {Op.NEW.value, "新增焊口"}:
+        return Op.NEW
+
+    origin_value = _enum_value(origin)
+    if raw in {Op.CUT.value, Op.EXTEND.value, Op.SHORTEN.value, "拆除不重焊"}:
+        if origin_value == Origin.NEW.value:
+            return Op.NEW
+        return Op.REWORK
+
+    return _coerce_enum(Op, raw)
 
 
 # --------------------------------------------------------------------------- #
@@ -155,11 +177,12 @@ class WeldEvent:
     @classmethod
     def from_dict(cls, data: Optional[dict[str, Any]]) -> "WeldEvent":
         data = data or {}
+        origin = _coerce_enum(Origin, data.get("origin"))
         return cls(
             joint_type=_coerce_enum(JointType, data.get("joint_type", JointType.WELD)),
-            origin=_coerce_enum(Origin, data.get("origin")),
+            origin=origin,
             base=data.get("base"),
-            op=_coerce_enum(Op, data.get("op")),
+            op=_coerce_weld_op(data.get("op"), origin),
             rework_index=data.get("rework_index"),
             code=data.get("code"),
             spec=Spec.from_dict(data.get("spec")),

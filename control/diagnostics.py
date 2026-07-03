@@ -108,8 +108,12 @@ def collect_support_bundle(
                 "template_27_exists": Path(TEMPLATE_PATH_27).is_file(),
                 "wizard_data_path": WIZARD_DATA_PATH,
                 "wizard_data_exists": Path(WIZARD_DATA_PATH).is_file(),
-                "material_pricebook_seed_path": resource_path("material_pricebook_seed.json"),
-                "material_pricebook_seed_exists": Path(resource_path("material_pricebook_seed.json")).is_file(),
+                "material_taxonomy_path": resource_path("records", "material_taxonomy.json"),
+                "material_taxonomy_exists": Path(resource_path("records", "material_taxonomy.json")).is_file(),
+                "material_pricebook_seed_path": resource_path("records", "seed", "material_pricebook_seed.json"),
+                "material_pricebook_seed_exists": Path(
+                    resource_path("records", "seed", "material_pricebook_seed.json")
+                ).is_file(),
             },
         },
         "environment": {

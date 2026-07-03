@@ -86,13 +86,13 @@
 
           <div class="sheet pad">
             <div class="actions">
-              <button class="primary" type="button" onclick="runStart()">
+              <button class="primary output-run-trigger" type="button" onclick="runStart()">
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l13-7.5a1 1 0 0 0 0-1.72l-13-7.5A1 1 0 0 0 7 4.5Z"/></svg>開始執行
               </button>
               <button class="danger" type="button" onclick="runStop()">
                 <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>停止
               </button>
-              <button type="button">
+              <button type="button" onclick="retryFailedReports()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>重試失敗
               </button>
               <span class="sep"></span>
@@ -105,8 +105,9 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg>開啟產出資料夾 ▾
                 </button>
                 <div class="menu-pop down">
-                  <button type="button" onclick="menuPick('開啟 Output 資料夾')">Output 資料夾</button>
-                  <button type="button" onclick="menuPick('開啟 PDF 資料夾')">PDF 資料夾</button>
+                  <button type="button" onclick="openOutputFolder('owner-data')">業主資料包</button>
+                  <button type="button" onclick="openOutputFolder('output')">Output 資料夾</button>
+                  <button type="button" onclick="openOutputFolder('pdf')">PDF 資料夾</button>
                 </div>
               </span>
             </div>
@@ -150,14 +151,14 @@
           <input class="rec-date" placeholder="起 YYYYMMDD">
           <span class="rec-dash">–</span>
           <input class="rec-date" placeholder="迄 YYYYMMDD">
-          <button class="ghost sm" type="button">刷新</button>
+          <button class="ghost sm" type="button" onclick="reloadRecords()">刷新</button>
         </div>
 
         <div class="rec-main">
           <div class="sheet rec-list">
             <table>
-              <thead><tr><th>報告編號</th><th>日期</th><th>流水號</th><th>焊口</th><th>狀態</th></tr></thead>
-              <tbody id="recRows"><tr><td colspan="5" class="empty">尚無紀錄</td></tr></tbody>
+              <thead><tr><th class="rec-pick-cell"><label class="rec-output-check all" title="勾選目前列表"><input id="recOutputAll" type="checkbox" onchange="toggleVisibleRecordOutputs(this.checked)"><span></span></label></th><th>報告編號</th><th>日期</th><th>流水號</th><th>焊口</th><th>狀態</th></tr></thead>
+              <tbody id="recRows"><tr><td colspan="6" class="empty">尚無紀錄</td></tr></tbody>
             </table>
           </div>
 
@@ -168,9 +169,9 @@
                 <span class="rec-meta" id="recMeta">選一筆紀錄</span>
               </div>
               <div class="rec-detail-actions">
-                <button class="ghost sm" type="button" onclick="logLine('info','（皮）編輯紀錄')">編輯</button>
-                <button class="ghost sm" type="button" onclick="logLine('info','（皮）開資料夾')">開資料夾</button>
-                <button class="ghost sm" type="button" onclick="logLine('info','（皮）開 PDF')">PDF</button>
+                <button class="ghost sm" type="button" onclick="editCurrentRecord()">編輯</button>
+                <button class="ghost sm" type="button" onclick="openRecordFolder()">開資料夾</button>
+                <button class="ghost sm" type="button" onclick="openRecordPdf()">PDF</button>
               </div>
             </div>
             <div class="rec-summary" id="recSummary"></div>
@@ -180,17 +181,24 @@
 
         <div class="sheet rec-foot">
           <span id="recCount">共 0 筆</span>
+          <span id="recOutputCount" class="rec-selected-count">已勾選 0 筆</span>
+          <span id="outputRunStatus" class="output-run-status" hidden aria-live="polite">
+            <i class="mini-spinner"></i>
+            <span id="outputRunText">準備產出</span>
+            <button id="outputRunOpenBtn" class="output-run-open" type="button" onclick="openLastOutputDestination()" hidden>開啟</button>
+          </span>
           <span class="grow"></span>
-          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存變更')">儲存變更</button>
+          <button class="primary sm" type="button" onclick="saveRecordChanges()">儲存變更</button>
           <span class="rec-sep"></span>
-          <button class="ghost sm" type="button" onclick="toast('（皮）匯出紀錄清單 Excel')">匯出紀錄</button>
-          <button class="ghost sm" type="button" onclick="toast('（皮）匯出材料彙總 — 彙總各修改單用料 → Excel，貼回外部採購收料表')">匯出材料彙總</button>
+          <button class="ghost sm" type="button" onclick="exportRecords()">匯出紀錄</button>
+          <button class="ghost sm" type="button" onclick="exportRecordMaterials()">匯出材料彙總</button>
           <span class="menu-wrap">
-            <button class="ghost sm" type="button" onclick="toggleMenu(this)">輸出中心 ▾</button>
+            <button id="outputCenterMenuBtn" class="ghost sm output-run-trigger" type="button" onclick="toggleMenu(this)">輸出中心 ▾</button>
             <div class="menu-pop">
-              <button type="button" onclick="menuPick('現場統計單 (xlsx)')">現場統計單 (xlsx)</button>
-              <button type="button" onclick="menuPick('統計 PDF')">統計 PDF</button>
-              <button type="button" onclick="menuPick('before / after 照片 PDF')">照片 PDF</button>
+              <button class="output-run-trigger" type="button" onclick="runOutputCenter('owner-data')">產生業主資料包</button>
+              <button class="output-run-trigger" type="button" onclick="runOutputCenter('developer')">產生開發檢查包</button>
+              <button class="output-run-trigger" type="button" onclick="runOutputCenter('both')">兩種都產生</button>
+              <button type="button" onclick="openOutputFolder('owner-data')">開啟業主資料包</button>
             </div>
           </span>
         </div>
@@ -206,13 +214,13 @@
           </div>
           <div class="rec-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="pbSearch" placeholder="搜尋 料號 / 零件 / 尺寸 / 材質…" oninput="renderPricebook()">
+            <input id="pbSearch" placeholder="搜尋 料號 / 零件 / 尺寸 / 材質…" oninput="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()">
           </div>
-          <select id="pbPart" onchange="renderPricebook()"></select>
-          <select id="pbSize" onchange="renderPricebook()"></select>
-          <select id="pbSch" onchange="renderPricebook()"></select>
-          <select id="pbMat" onchange="renderPricebook()"></select>
-          <select id="pbCat" onchange="renderPricebook()"></select>
+          <select id="pbPart" onchange="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()"></select>
+          <select id="pbSize" onchange="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()"></select>
+          <select id="pbSch" onchange="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()"></select>
+          <select id="pbMat" onchange="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()"></select>
+          <select id="pbCat" onchange="PB_LIMIT=PB_PAGE_SIZE;renderPricebook()"></select>
           <button class="ghost sm" type="button" onclick="renderPricebook()">刷新</button>
         </div>
 
@@ -226,7 +234,7 @@
           <span id="pbCount">共 0 筆</span>
           <span class="grow"></span>
           <button class="primary sm" type="button" onclick="openRegModal()">＋ 登記材料</button>
-          <button class="sm" type="button" onclick="logLine('info','（皮）複製選取料號')">複製</button>
+          <button class="sm" type="button" onclick="copyProjectPartIds()">複製</button>
           <span class="rec-sep"></span>
           <span class="menu-wrap">
             <button class="ghost sm" type="button" onclick="toggleMenu(this)">匯入匯出 ▾</button>
@@ -236,7 +244,7 @@
               <button type="button" onclick="exportMaterials('project')">匯出本案配件 Excel</button>
             </div>
           </span>
-          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存總庫')">儲存</button>
+          <button class="primary sm" type="button" onclick="savePricebookNote()">儲存</button>
         </div>
       </div>
     </section>
@@ -262,7 +270,7 @@
         <div class="sheet rec-foot">
           <span id="billCount">共 0 筆</span>
           <span class="grow"></span>
-          <button class="sm" type="button" onclick="logLine('info','（皮）建立請款批次')">建立批次</button>
+          <button class="sm" type="button" onclick="openBatch()">建立批次</button>
           <span class="menu-wrap">
             <button class="ghost sm" type="button" onclick="toggleMenu(this)">請款批次 ▾</button>
             <div class="menu-pop">
@@ -273,7 +281,7 @@
           <span class="rec-sep"></span>
           <button class="ghost sm" type="button">匯出報表</button>
           <button class="sm" type="button">請款單</button>
-          <button class="primary sm" type="button" onclick="logLine('ok','（皮）儲存請款狀態')">儲存</button>
+          <button class="primary sm" type="button" onclick="saveBillingStatus()">儲存</button>
         </div>
       </div>
     </section>
@@ -310,18 +318,23 @@
           <div class="set-grid">
             <div class="set-card">
               <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg></span>
-              <span class="body"><strong>DWG LIST</strong><span id="setDwgPath">已自動載入 · DWG_LIST.xlsx</span></span>
-              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickDwg()">更換</button></span>
+              <span class="body"><strong>DWG LIST</strong><span id="setDwgPath">尚未設定</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickPath('dwg')">更換</button></span>
+            </div>
+            <div class="set-card">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/><path d="M14 14h3M14 17h3"/></svg></span>
+              <span class="body"><strong>焊口表</strong><span id="setWeldPath">尚未設定</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickPath('weld')">更換</button></span>
             </div>
             <div class="set-card">
               <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-7.5L10 4H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1Z"/></svg></span>
-              <span class="body"><strong>Output 資料夾</strong><span>…\工務修改單\output</span></span>
-              <span class="ctrl"><button class="ghost sm" type="button">更換</button></span>
+              <span class="body"><strong>Output 資料夾</strong><span id="setOutPath">尚未設定</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickPath('output')">更換</button></span>
             </div>
             <div class="set-card">
               <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/></svg></span>
-              <span class="body"><strong>PDF 資料夾</strong><span>…\工務修改單\pdf</span></span>
-              <span class="ctrl"><button class="ghost sm" type="button">更換</button></span>
+              <span class="body"><strong>PDF 資料夾</strong><span id="setPdfPath">尚未設定</span></span>
+              <span class="ctrl"><button class="ghost sm" type="button" onclick="pickPath('pdf')">更換</button></span>
             </div>
           </div>
         </div>
@@ -336,8 +349,8 @@
             <span id="hCounts">專案：…\GitHub\工務修改單　·　records 4 · details 12 · materials 10 · 附件 3　·　錯誤 0 / 提醒 2 / 資訊 1</span>
           </div>
           <div class="hactions">
-            <button class="primary sm" type="button" onclick="logLine('info','（皮）重新檢查健康')">重新檢查</button>
-            <button class="sm" type="button" onclick="logLine('ok','（皮）修復可自動修復項')">修復</button>
+            <button class="primary sm" type="button" onclick="reloadHealth()">重新檢查</button>
+            <button class="sm" type="button" onclick="toast('自動修復尚未接入；請先依健康表逐項確認','warn')">修復</button>
             <span class="menu-wrap">
               <button class="ghost sm" type="button" onclick="toggleMenu(this)">診斷包 ▾</button>
               <div class="menu-pop down">
@@ -384,8 +397,8 @@
       <strong id="lbTitle">—</strong>
       <div class="lb-actions">
         <button class="ghost sm" type="button" onclick="enterAnnotate()">標註</button>
-        <button class="ghost sm" type="button" onclick="lbAct('取代')">取代</button>
-        <button class="ghost sm" type="button" onclick="lbAct('刪除')">刪除</button>
+        <button class="ghost sm" type="button" onclick="replaceLightboxPhoto()">取代</button>
+        <button class="ghost sm" type="button" onclick="deleteLightboxPhoto()">刪除</button>
         <button class="sm" type="button" onclick="closeLightbox()">關閉</button>
       </div>
     </div>
@@ -422,8 +435,8 @@
     </div>
     <div class="modal-foot">
       <span class="grow"></span>
-      <button class="sm" type="button" onclick="toast('（皮）建立新批次');closeBatch()">建立批次</button>
-      <button class="primary sm" type="button" onclick="toast('（皮）更新批次狀態','ok');closeBatch()">更新狀態</button>
+      <button class="sm" type="button" onclick="toast('請款批次正式流程尚未接入','warn');closeBatch()">建立批次</button>
+      <button class="primary sm" type="button" onclick="toast('請款批次狀態流程尚未接入','warn');closeBatch()">更新狀態</button>
     </div>
   </div>
 </div>
@@ -436,15 +449,16 @@
     </div>
     <div class="modal-body">
       <p id="regHint" class="reg-hint">先選一個材料類型：</p>
-      <div id="regStep1" class="reg-cats"></div>
+      <div id="regStep1" class="reg-group-list"></div>
       <div id="regStep2" style="display:none">
         <div class="reg-sub-bar">
           <button class="ghost sm" type="button" onclick="regBack()">← 選其他類型</button>
           <strong id="regCatName"></strong>
           <span class="grow"></span>
-          <input id="regSearch" placeholder="搜尋 尺寸 / 材質…" oninput="regRenderList()">
-          <select id="regSize" onchange="regRenderList()"></select>
-          <select id="regMat" onchange="regRenderList()"></select>
+          <input id="regSearch" placeholder="搜尋 尺寸 / 材質…" oninput="REG_LIMIT=MATERIAL_PAGE_SIZE;regRenderList()">
+          <select id="regType" onchange="REG_LIMIT=MATERIAL_PAGE_SIZE;regRefreshFiltersForType();regRenderList()"></select>
+          <select id="regSize" onchange="REG_LIMIT=MATERIAL_PAGE_SIZE;regRenderList()"></select>
+          <select id="regMat" onchange="REG_LIMIT=MATERIAL_PAGE_SIZE;regRenderList()"></select>
         </div>
         <div id="regList" class="reg-list"></div>
       </div>
@@ -457,28 +471,73 @@
   </div>
 </div>
 
+<div class="modal" id="matPickModal" onclick="if(event.target===this)closeMatPickModal()">
+  <div class="modal-dialog reg-dialog">
+    <div class="modal-head">
+      <strong id="matPickTitle">選擇本案配件</strong>
+      <button class="sm" type="button" onclick="closeMatPickModal()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <p id="matPickHint" class="reg-hint">先選一個材料類型：</p>
+      <div id="matPickStep1" class="reg-group-list"></div>
+      <div id="matPickStep2" style="display:none">
+        <div class="reg-sub-bar">
+          <button class="ghost sm" type="button" onclick="matPickBack()">← 選其他類型</button>
+          <strong id="matPickCatName"></strong>
+          <span class="grow"></span>
+          <input id="matPickSearch" placeholder="搜尋 料號 / 尺寸 / 材質…" oninput="matPickRenderList()">
+          <select id="matPickType" onchange="matPickRefreshFiltersForType();matPickRenderList()"></select>
+          <select id="matPickSize" onchange="matPickRenderList()"></select>
+          <select id="matPickMat" onchange="matPickRenderList()"></select>
+        </div>
+        <div id="matPickList" class="reg-list"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="ghost sm" type="button" onclick="openSupportBomModal()">管架編碼展開</button>
+      <button class="ghost sm" type="button" onclick="matPickPending()">新增待登記材料</button>
+      <span class="grow"></span>
+      <button class="primary sm" type="button" onclick="closeMatPickModal()">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="supportBomModal" onclick="if(event.target===this)closeSupportBomModal()">
+  <div class="modal-dialog support-dialog">
+    <div class="modal-head">
+      <strong>管架編碼展開</strong>
+      <button class="sm" type="button" onclick="closeSupportBomModal()">關閉</button>
+    </div>
+    <div class="modal-body">
+      <div class="support-form">
+        <input id="supportBomCode" placeholder="例：01-2B-03C" onkeydown="supportBomKey(event)">
+        <button class="primary sm" type="button" onclick="supportBomAnalyze()">展開</button>
+      </div>
+      <div id="supportBomStatus" class="support-status">輸入管架編碼後展開材料需求。</div>
+      <div id="supportBomPreview" class="support-preview"></div>
+    </div>
+    <div class="modal-foot">
+      <span id="supportBomFoot">尚未展開</span>
+      <span class="grow"></span>
+      <button class="primary sm" id="supportBomAddBtn" type="button" onclick="supportBomAddToRecord()" disabled>登記並加入材料</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
   document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active', p.id==='tab-'+name));
+  if((name==='records' || name==='billing') && mainApi){ reloadRecords(); }  // 從精靈出單回來即時反映
 }
 const statusMeta = {
   done:    {cls:'done',    label:'已產出'},
   pending: {cls:'pending', label:'未產出'},
   error:   {cls:'error',   label:'有錯'}
 };
-const dateFolders = [
-  {date:'20250820', open:true, items:[
-    {series:'P-1820-01', welds:3, status:'done',    sel:true},
-    {series:'P-1820-02', welds:2, status:'done',    sel:true},
-    {series:'P-1820-05', welds:5, status:'pending', sel:false}
-  ]},
-  {date:'20260112', open:false, items:[
-    {series:'P-2601-03', welds:1, status:'pending', sel:false}
-  ]}
-];
+const dateFolders = [];
 const ICON_CHECK = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`;
 function fmtDate(s){
   const dt = new Date(+s.slice(0,4), +s.slice(4,6)-1, +s.slice(6,8));
@@ -496,6 +555,10 @@ function aggStatus(f){
 function renderDates(){
   const list = document.getElementById('dateList');
   list.innerHTML = '';
+  if(!dateFolders.length){
+    list.innerHTML = '<div class="date-empty">尚無可產出的圖號<br>修改單精靈「存成草稿」後，這裡會依日期列出</div>';
+    return;
+  }
   dateFolders.forEach(f=>{
     const {d, wd} = fmtDate(f.date);
     const ag = aggStatus(f);
@@ -527,6 +590,11 @@ function renderDates(){
     kids.className = 'date-children';
     f.items.forEach(it=>{
       const sm = statusMeta[it.status] || statusMeta.pending;
+      const weldCodes = (it.weld_codes || []).filter(Boolean).map(v=>String(v));
+      const weldTitle = weldCodes.join('、');
+      const weldPreview = weldCodes.length
+        ? `<span class="weld-codes" title="${esc(weldTitle)}">${esc(weldCodes.slice(0,4).join('、'))}${weldCodes.length>4?'…':''}</span>`
+        : '';
       const ci = document.createElement('div');
       ci.className = 'child-item' + (it.sel ? ' sel' : '');
       ci.innerHTML =
@@ -534,7 +602,7 @@ function renderDates(){
         + `<div class="child-main">`
         +   `<div class="child-top"><span class="child-series">${it.series}</span>`
         +     `<button class="child-open" type="button" title="在紀錄管理開啟此圖號" onclick="event.stopPropagation();openRecordBySeries('${it.series}')">↗</button></div>`
-        +   `<div class="child-sub"><span class="weld-chip">${it.welds} 焊口</span><span class="st ${sm.cls}">${sm.label}</span></div>`
+        +   `<div class="child-sub"><span class="weld-chip">${it.welds} 焊口</span>${weldPreview}<span class="st ${sm.cls}">${sm.label}</span></div>`
         + `</div>`;
       ci.addEventListener('click', ()=>{ it.sel = !it.sel; renderDates(); });
       kids.appendChild(ci);
@@ -552,9 +620,9 @@ function updateDateSummary(){
   document.getElementById('dateSummary').textContent = `已選 ${sel} · 共 ${total} 張圖號`;
 }
 renderDates();
-/* ── 紀錄管理（皮，示意資料） ── */
-const PB = 'file:///C:/Users/a0976/Downloads/Testing_form/attachments_media/20260317/0107_17r4_18r4_19a4/before.jpg';
-const PA = 'file:///C:/Users/a0976/Downloads/Testing_form/attachments_media/20260317/0107_17r4_18r4_19a4/after.jpg';
+/* ── 紀錄管理（精靈草稿資料） ── */
+const PB = 'img/illus-empty.png';
+const PA = 'img/illus-done.png';
 function mkPhotos(n){
   const out = [];
   for(let i=0;i<n;i++){ out.push(i%2===0 ? {label:'修改前 '+(Math.floor(i/2)+1), src:PB} : {label:'修改後 '+(Math.floor(i/2)+1), src:PA}); }
@@ -586,6 +654,61 @@ const records = [
 ];
 let recSel = 0;
 let recSub = 'welds';
+const recordOutputSelection = new Set();
+let visibleRecordIndexes = [];
+function recordOutputKey(r){ return String(r?.id || r?.folder || `${r?.date || ''}|${r?.series || ''}`); }
+function recDateShort(value){
+  const text = String(value || '').trim();
+  const digits = text.replace(/\D/g, '');
+  if(digits.length >= 8){ return `${digits.slice(4,6)}/${digits.slice(6,8)}`; }
+  if(text.length >= 5){ return text.slice(5); }
+  return text;
+}
+function recordToOutputItem(r){
+  return {
+    date: r?.date || '',
+    series: r?.series || '',
+    folder: r?.folder || '',
+    record_id: r?.id || ''
+  };
+}
+function selectedRecordOutputItems(){
+  return records
+    .filter(r=>recordOutputSelection.has(recordOutputKey(r)))
+    .map(recordToOutputItem);
+}
+function updateRecordOutputSummary(){
+  const liveKeys = new Set(records.map(recordOutputKey));
+  Array.from(recordOutputSelection).forEach(key=>{ if(!liveKeys.has(key)){ recordOutputSelection.delete(key); } });
+  const count = recordOutputSelection.size;
+  const el = document.getElementById('recOutputCount');
+  if(el){ el.textContent = `已勾選 ${count} 筆`; el.classList.toggle('on', count > 0); }
+  const all = document.getElementById('recOutputAll');
+  if(all){
+    const visibleKeys = visibleRecordIndexes.map(i=>recordOutputKey(records[i])).filter(Boolean);
+    const selected = visibleKeys.filter(key=>recordOutputSelection.has(key)).length;
+    all.checked = visibleKeys.length > 0 && selected === visibleKeys.length;
+    all.indeterminate = selected > 0 && selected < visibleKeys.length;
+  }
+}
+function toggleRecordOutput(index, checked){
+  const r = records[index];
+  if(!r){ return; }
+  const key = recordOutputKey(r);
+  if(checked){ recordOutputSelection.add(key); }
+  else{ recordOutputSelection.delete(key); }
+  renderRecords();
+}
+function toggleVisibleRecordOutputs(checked){
+  visibleRecordIndexes.forEach(index=>{
+    const r = records[index];
+    if(!r){ return; }
+    const key = recordOutputKey(r);
+    if(checked){ recordOutputSelection.add(key); }
+    else{ recordOutputSelection.delete(key); }
+  });
+  renderRecords();
+}
 function renderRecords(){
   const body = document.getElementById('recRows');
   if(!body){ return; }
@@ -593,23 +716,28 @@ function renderRecords(){
   const fs = document.getElementById('recStatus')?.value || '';
   body.innerHTML = '';
   let shown = 0;
+  visibleRecordIndexes = [];
   records.forEach((r,i)=>{
     if(q && !`${r.id} ${r.series} ${r.reason}`.toLowerCase().includes(q)){ return; }
     const sm = statusMeta[r.status] || statusMeta.pending;
     if(fs && fs!=='全部狀態' && sm.label!==fs){ return; }
     shown++;
+    visibleRecordIndexes.push(i);
     const bad = recordBad(r);
+    const outKey = recordOutputKey(r);
+    const outOn = recordOutputSelection.has(outKey);
     const tr = document.createElement('tr');
-    tr.className = 'rec-row' + (i===recSel ? ' selected' : '') + (bad ? ' bad' : '');
-    tr.innerHTML = `<td><code>${r.id}</code></td><td>${r.date.slice(5)}</td><td>${r.series}</td><td>${r.welds.length} 口</td><td><span class="st ${sm.cls}">${sm.label}</span>${bad ? ' <span class="warn-chip" title="有欄位需檢查">⚠</span>' : ''}</td>`;
+    tr.className = 'rec-row' + (i===recSel ? ' selected' : '') + (outOn ? ' output-selected' : '') + (bad ? ' bad' : '');
+    tr.innerHTML = `<td class="rec-pick-cell"><label class="rec-output-check" title="加入輸出中心"><input type="checkbox" ${outOn?'checked':''} onchange="event.stopPropagation();toggleRecordOutput(${i}, this.checked)" onclick="event.stopPropagation()"><span></span></label></td><td><code>${r.id}</code></td><td>${recDateShort(r.date)}</td><td>${r.series}</td><td>${r.welds.length} 口</td><td><span class="st ${sm.cls}">${sm.label}</span>${bad ? ' <span class="warn-chip" title="有欄位需檢查">⚠</span>' : ''}</td>`;
     tr.addEventListener('click', ()=>{ recSel=i; renderRecords(); renderRecDetail(); });
     body.appendChild(tr);
   });
   if(shown===0){
     const searching = !!(q || (fs && fs!=='全部狀態'));
-    body.innerHTML = `<tr><td colspan="5" class="empty">${emptyBlock(searching?'查無符合的紀錄':'尚無紀錄', searching?'illus-search-empty.png':'illus-empty.png')}</td></tr>`;
+    body.innerHTML = `<tr><td colspan="6" class="empty">${emptyBlock(searching?'查無符合的紀錄':'尚無紀錄', searching?'illus-search-empty.png':'illus-empty.png')}</td></tr>`;
   }
   document.getElementById('recCount').textContent = `共 ${records.length} 筆`;
+  updateRecordOutputSummary();
 }
 function metric(k,v){ return `<div class="metric"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
 function section(title, count, html, emptyMsg){
@@ -640,6 +768,7 @@ function renderRecDetail(){
       section('焊口明細', r.welds.length, recWeldTable(r.welds))
     + section('材料明細', r.mats.length, recMatTable(r.mats))
     + section('圖片明細', r.photos.length, r.photos.length ? recPhotoStrip(r.photos) : null, '尚無照片');
+  hydrateVisiblePhotoPreviews(r);
 }
 function money(n){ return n ? 'NT$ ' + Number(n).toLocaleString() : '—'; }
 function esc(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -658,19 +787,24 @@ function qtyValid(v){ const n = parseFloat(v); return !isNaN(n) && n > 0; }
 function fieldValid(field,value){
   if(field==='code'){ return codeValid(value); }
   if(field==='qty'){ return qtyValid(value); }
-  if(OPT[field]){ return OPT[field].includes(String(value)); }
+  if(['mark','size','mat','sch','part'].includes(field)){ return String(value ?? '').trim() !== ''; }
   return true;
 }
 function weldBad(w){ return !codeValid(w.code) || !fieldValid('mark',w.mark) || !fieldValid('size',w.size) || !fieldValid('mat',w.mat) || !fieldValid('sch',w.sch); }
-function matBad(m){ return !fieldValid('part',m.part) || !fieldValid('size',m.size) || !fieldValid('sch',m.sch) || !fieldValid('mat',m.mat) || !qtyValid(m.qty); }
+function matBad(m){
+  if(m.id){ return !qtyValid(m.qty); }
+  return !fieldValid('part',m.part) || !qtyValid(m.qty);
+}
 function recordBad(r){ return r.welds.some(weldBad) || r.mats.some(matBad); }
 
 function cellSelect(kind,i,field,value,optKey){
   const opts = OPT[optKey];
   const val = String(value ?? '');
-  const bad = !opts.includes(val);
-  let html = opts.map(o=>`<option value="${esc(o)}"${o===val?' selected':''}>${esc(o)}</option>`).join('');
-  if(bad){ html = `<option value="${esc(val)}" selected>${esc(val||'（空白）')}</option>` + html; }
+  const bad = !fieldValid(field, val);
+  let choices = opts.slice();
+  if(val && !choices.includes(val)){ choices = [val, ...choices]; }
+  let html = choices.map(o=>`<option value="${esc(o)}"${o===val?' selected':''}>${esc(o)}</option>`).join('');
+  if(!val){ html = `<option value="" selected>（空白）</option>` + html; }
   return `<td class="cell"><select class="edit sel${bad?' bad':''}" onchange="editCell('${kind}',${i},'${field}',this.value,this)">${html}</select></td>`;
 }
 function cellText(kind,i,field,value,valid){
@@ -685,6 +819,45 @@ function cellRO(content){
 function delCell(kind,i){
   return `<td class="rowdel"><button type="button" class="xbtn" title="刪除此列" onclick="delRow('${kind}',${i})">×</button></td>`;
 }
+function projectPartsForEdit(){
+  const reg = REGISTERED instanceof Set ? REGISTERED : new Set();
+  return [...reg].map(id=>materialById(id)).filter(p=>p && !isSupportRulePart(p));
+}
+function findProjectPart(id){
+  return materialById(id);
+}
+function applyProjectPartToMaterial(row, part){
+  row.id = String(part.id || '');
+  row.part = part.part || '';
+  row.size = part.size || '';
+  row.sch = part.sch || '';
+  row.mat = part.mat || '';
+  row.unit = part.unit || '';
+}
+function cellPartSelect(i,m){
+  const parts = projectPartsForEdit();
+  const val = String(m.id || '');
+  const matched = val && parts.some(p=>String(p.id)===val);
+  const generated = val && (String(val).startsWith('SUPPORT-') || m.source_designation);
+  const title = generated
+    ? `管架展開 · ${m.part || '未命名零件'}`
+    : val
+    ? `${val} · ${m.part || '未命名零件'}`
+    : (m.part ? `待登記 · ${m.part}` : '選擇本案配件');
+  const meta = generated
+    ? [m.source_designation, m.size, m.sch, m.mat].filter(Boolean).join(' / ')
+    : ([m.size, m.sch, m.mat].filter(Boolean).join(' / ') || (parts.length ? '點擊挑選' : '本案尚未登記配件'));
+  return `<td class="cell"><button type="button" class="matpick-btn${val&&!matched&&!generated?' bad':''}" onclick="openMatPickModal(${i})"><span>${esc(title)}</span><small>${esc(meta)}</small></button></td>`;
+}
+function editMaterialPart(i,id){
+  const r = records[recSel];
+  const row = r && r.mats ? r.mats[i] : null;
+  if(!row){ return; }
+  const part = findProjectPart(id);
+  if(part){ applyProjectPartToMaterial(row, part); }
+  else { row.id = ''; }
+  renderRecords(); renderRecDetail();
+}
 function recWeldTable(ws){
   const cols = `<colgroup><col style="width:18%"><col style="width:12%"><col style="width:11%"><col style="width:16%"><col style="width:13%"><col style="width:22%"><col style="width:8%"></colgroup>`;
   const rows = ws.map((w,i)=>`<tr>`
@@ -695,7 +868,7 @@ function recWeldTable(ws){
     + cellSelect('weld',i,'sch',w.sch,'sch')
     + cellRO(w.coef) + delCell('weld',i)
     + `</tr>`).join('');
-  return `<table class="edit-table">${cols}<thead><tr><th>焊口碼</th><th>標記</th><th>尺寸</th><th>材質</th><th>厚度</th><th>係數</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+  return `<table class="edit-table">${cols}<thead><tr><th>焊口碼</th><th>操作</th><th>尺寸</th><th>材質</th><th>厚度</th><th>係數</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
     + `<button type="button" class="addrow" onclick="addRow('weld')">＋ 新增焊口</button>`;
 }
 function editCell(kind,i,field,value,el){
@@ -709,8 +882,11 @@ function editCell(kind,i,field,value,el){
 }
 function addRow(kind){
   const r = records[recSel];
-  if(kind==='weld'){ r.welds.push({code:'',mark:'重焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0'}); }
-  else { r.mats.push({part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',qty:1}); }
+  if(kind==='weld'){ r.welds.push({code:'',mark:'新焊',size:'2"',mat:'SUS304',sch:'SCH40',coef:'1.0'}); }
+  else {
+    openMatPickModal(-1);
+    return;
+  }
   renderRecords(); renderRecDetail();
 }
 function delRow(kind,i){
@@ -719,38 +895,317 @@ function delRow(kind,i){
   renderRecords(); renderRecDetail();
 }
 function recMatTable(ms){
-  const cols = `<colgroup><col style="width:28%"><col style="width:14%"><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:10%"></colgroup>`;
+  const cols = `<colgroup><col style="width:30%"><col style="width:13%"><col style="width:12%"><col style="width:17%"><col style="width:12%"><col style="width:8%"><col style="width:8%"></colgroup>`;
   const rows = ms.map((m,i)=>`<tr>`
-    + cellSelect('mat',i,'part',m.part,'part')
-    + cellSelect('mat',i,'size',m.size,'size')
-    + cellSelect('mat',i,'sch',m.sch,'sch')
-    + cellSelect('mat',i,'mat',m.mat,'mat')
+    + cellPartSelect(i,m)
+    + (m.id ? cellRO(esc(m.size)) : cellSelect('mat',i,'size',m.size,'size'))
+    + (m.id ? cellRO(esc(m.sch)) : cellSelect('mat',i,'sch',m.sch,'sch'))
+    + (m.id ? cellRO(esc(m.mat)) : cellSelect('mat',i,'mat',m.mat,'mat'))
     + cellNum('mat',i,'qty',m.qty,qtyValid)
+    + cellRO(esc(m.unit || ''))
     + delCell('mat',i)
     + `</tr>`).join('');
-  return `<table class="edit-table">${cols}<thead><tr><th>零件</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-    + `<button type="button" class="addrow" onclick="addRow('mat')">＋ 新增材料</button>`;
+  return `<table class="edit-table">${cols}<thead><tr><th>零件</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th>單位</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    + `<div class="mat-actions"><button type="button" class="addrow" onclick="addRow('mat')">＋ 新增材料</button></div>`;
+}
+
+let MAT_PICK_ROW = -1;
+let MAT_PICK_CAT = '';
+function openMatPickModal(rowIndex){
+  if(!records[recSel]){ return; }
+  MAT_PICK_ROW = Number(rowIndex);
+  MAT_PICK_CAT = '';
+  document.getElementById('matPickTitle').textContent = MAT_PICK_ROW >= 0 ? '更換材料品項' : '新增材料品項';
+  matPickRenderCats();
+  matPickShowStep(1);
+  document.getElementById('matPickModal').classList.add('open');
+}
+function closeMatPickModal(){
+  document.getElementById('matPickModal').classList.remove('open');
+}
+function matPickShowStep(n){
+  document.getElementById('matPickStep1').style.display = n===1?'':'none';
+  document.getElementById('matPickStep2').style.display = n===2?'':'none';
+  const hint=document.getElementById('matPickHint'); if(hint){ hint.style.display = n===1?'':'none'; }
+}
+function matPickBack(){ MAT_PICK_CAT=''; matPickShowStep(1); }
+function matPickRenderCats(){
+  const parts = projectPartsForEdit();
+  const box = document.getElementById('matPickStep1');
+  if(!parts.length){
+    box.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:24px">本案配件尚未登記。可先到「材料價目」用「＋ 登記材料」建立本案配件，或用下方「管架編碼展開」帶入需求材料。</div>`;
+    return;
+  }
+  const cnt={};
+  parts.forEach(p=>{ const k=materialIcon(p); cnt[k]=(cnt[k]||0)+1; });
+  box.innerHTML = renderMaterialCategorySections(cnt, 'matPickCat', null);
+}
+function matPickCat(c){
+  MAT_PICK_CAT = c;
+  const items = projectPartsForEdit().filter(p=>materialIcon(p)===c);
+  document.getElementById('matPickCatName').textContent = pbChipLabel(c)+'（'+items.length+'）';
+  document.getElementById('matPickSearch').value='';
+  fillSelectValues('matPickType', ALL_TYPE_LABEL, items.map(materialSubtype), preferredMaterialSubtype(c, items), true);
+  matPickRefreshFiltersForType();
+  matPickShowStep(2);
+  matPickRenderList();
+}
+function matPickRefreshFiltersForType(){
+  const items=projectPartsForEdit().filter(p=>materialIcon(p)===MAT_PICK_CAT);
+  const typeValue=document.getElementById('matPickType')?.value || ALL_TYPE_LABEL;
+  const scoped=itemsBySelectedType(items, typeValue);
+  fillSelectValues('matPickSize','全部尺寸',scoped.map(p=>p.size), '', false);
+  fillSelectValues('matPickMat','全部材質',scoped.map(p=>p.mat), '', false);
+}
+function matPickRenderList(){
+  const q=(document.getElementById('matPickSearch').value||'').toLowerCase().trim();
+  const ft=document.getElementById('matPickType').value;
+  const fs=document.getElementById('matPickSize').value;
+  const fm=document.getElementById('matPickMat').value;
+  const items=projectPartsForEdit().filter(p=>{
+    if(materialIcon(p)!==MAT_PICK_CAT){ return false; }
+    if(ft&&ft!==ALL_TYPE_LABEL&&materialSubtype(p)!==ft){ return false; }
+    if(q && !materialSearchText(p).includes(q)){ return false; }
+    if(fs&&fs!=='全部尺寸'&&p.size!==fs){ return false; }
+    if(fm&&fm!=='全部材質'&&p.mat!==fm){ return false; }
+    return true;
+  });
+  document.getElementById('matPickList').innerHTML = items.map(p=>{
+    const selected = records[recSel]?.mats?.[MAT_PICK_ROW]?.id && String(records[recSel].mats[MAT_PICK_ROW].id)===String(p.id);
+    return `<button type="button" class="reg-item matpick-item${selected?' on':''}" onclick="matPickApply('${esc(String(p.id))}')"><img src="img/parts/${materialIcon(p)}.png" alt="" onerror="this.style.display='none'"><span class="reg-item-nm">${esc(p.part)}</span><span class="reg-item-meta">${esc(p.id)} · ${esc(p.size||'')}${p.sch?' · '+esc(p.sch):''}${p.mat?' · '+esc(p.mat):''}</span><span class="reg-item-src">${esc(p.unit||'')}</span></button>`;
+  }).join('') || `<div class="empty" style="padding:24px">此類查無符合</div>`;
+}
+function matPickApply(id){
+  const r = records[recSel];
+  const part = findProjectPart(id);
+  if(!r || !part){ return; }
+  let row;
+  if(MAT_PICK_ROW >= 0 && r.mats[MAT_PICK_ROW]){
+    row = r.mats[MAT_PICK_ROW];
+  }else{
+    row = {qty:1, remark:''};
+    r.mats.push(row);
+    MAT_PICK_ROW = r.mats.length - 1;
+  }
+  applyProjectPartToMaterial(row, part);
+  if(row.qty == null || row.qty === ''){ row.qty = 1; }
+  closeMatPickModal();
+  renderRecords(); renderRecDetail();
+}
+function matPickPending(){
+  const r = records[recSel];
+  if(!r){ return; }
+  const row = {id:'',part:'待登記材料',size:'',sch:'',mat:'',qty:1,unit:'',remark:'待登記'};
+  if(MAT_PICK_ROW >= 0 && r.mats[MAT_PICK_ROW]){ r.mats[MAT_PICK_ROW] = row; }
+  else { r.mats.push(row); }
+  closeMatPickModal();
+  renderRecords(); renderRecDetail();
+}
+
+let SUPPORT_BOM = null;
+function openSupportBomModal(){
+  if(!records[recSel]){ toast('請先選一筆紀錄','warn'); return; }
+  SUPPORT_BOM = null;
+  document.getElementById('supportBomCode').value = '';
+  document.getElementById('supportBomStatus').textContent = '輸入管架編碼後展開材料需求。';
+  document.getElementById('supportBomStatus').className = 'support-status';
+  document.getElementById('supportBomPreview').innerHTML = '';
+  document.getElementById('supportBomFoot').textContent = '尚未展開';
+  document.getElementById('supportBomAddBtn').disabled = true;
+  document.getElementById('supportBomModal').classList.add('open');
+  setTimeout(()=>document.getElementById('supportBomCode').focus(), 30);
+}
+function closeSupportBomModal(){
+  document.getElementById('supportBomModal').classList.remove('open');
+}
+function supportBomKey(e){
+  if(e.key === 'Enter'){ e.preventDefault(); supportBomAnalyze(); }
+}
+function supportBomStatus(text, cls){
+  const el=document.getElementById('supportBomStatus');
+  el.textContent = text;
+  el.className = 'support-status' + (cls ? ' '+cls : '');
+}
+async function supportBomAnalyze(){
+  const code=(document.getElementById('supportBomCode').value||'').trim();
+  if(!code){ supportBomStatus('請輸入管架編碼，例如 01-2B-03C。','warn'); return; }
+  if(!mainApi || typeof mainApi.support_bom !== 'function'){
+    supportBomStatus('桌面版後端尚未提供管架展開。','err');
+    return;
+  }
+  SUPPORT_BOM = null;
+  document.getElementById('supportBomAddBtn').disabled = true;
+  document.getElementById('supportBomPreview').innerHTML = '';
+  document.getElementById('supportBomFoot').textContent = '展開中...';
+  supportBomStatus('正在讀取管架編碼計算器...', '');
+  try{
+    const data = await mainApiCall('support_bom', code);
+    SUPPORT_BOM = data;
+    renderSupportBom(data);
+  }catch(err){
+    supportBomStatus('展開失敗：' + (err.message || err), 'err');
+    document.getElementById('supportBomFoot').textContent = '展開失敗';
+  }
+}
+function supportBomWarnHtml(data){
+  const warnings = data.warnings || [];
+  if(data.error){ return `<div class="support-warn err">${esc(data.error)}</div>`; }
+  if(!warnings.length){ return ''; }
+  return `<div class="support-warn">${warnings.map(esc).join('<br>')}</div>`;
+}
+function renderSupportBom(data){
+  const mats = Array.isArray(data.materials) ? data.materials : [];
+  const statusCls = data.error ? 'err' : (data.warnings && data.warnings.length ? 'warn' : 'ok');
+  supportBomStatus(`${data.designation || ''} 已展開 ${mats.length} 項材料，總重 ${data.total_weight || 0} kg。`, statusCls);
+  document.getElementById('supportBomFoot').textContent = mats.length ? `可加入 ${mats.length} 項材料` : '沒有可加入材料';
+  document.getElementById('supportBomAddBtn').disabled = !mats.length || !!data.error;
+  if(!mats.length){
+    document.getElementById('supportBomPreview').innerHTML = supportBomWarnHtml(data) || `<div class="empty" style="padding:18px">沒有展開出材料。</div>`;
+    return;
+  }
+  const rows = mats.map(m=>`<tr><td>${esc(m.part)}</td><td>${esc(m.size)}</td><td>${esc(m.sch)}</td><td>${esc(m.mat)}</td><td class="num">${esc(m.qty)}</td><td>${esc(m.unit)}</td><td>${esc(m.remark||'')}</td></tr>`).join('');
+  document.getElementById('supportBomPreview').innerHTML =
+    supportBomWarnHtml(data)
+    + `<table class="support-table"><thead><tr><th>材料</th><th>尺寸</th><th>SCH</th><th>材質</th><th>數量</th><th>單位</th><th>備註</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function supportBomAddToRecord(){
+  const r = records[recSel];
+  const mats = SUPPORT_BOM && Array.isArray(SUPPORT_BOM.materials) ? SUPPORT_BOM.materials : [];
+  if(!r || !mats.length){ toast('沒有可加入的管架材料','warn'); return; }
+  if(!mainApi || typeof mainApi.upsert_project_parts !== 'function'){
+    toast('桌面版後端尚未提供本案配件登記，無法加入管架材料','err');
+    return;
+  }
+  const btn=document.getElementById('supportBomAddBtn');
+  if(btn){ btn.disabled = true; }
+  supportBomStatus('正在寫入本案配件...', '');
+  try{
+    await mainApiCall('upsert_project_parts', mats);
+    const pr = await mainApiCall('pricebook');
+    if(Array.isArray(pr)){
+      PRICE.length=0;
+      pr.forEach(p=>PRICE.push(p));
+      mergePricebookOptions();
+    }
+    const parts = await mainApiCall('project_parts');
+    REGISTERED.clear();
+    (parts.registered||[]).forEach(x=>REGISTERED.add(String(x)));
+    touchRegisterCache();
+    pbFillFilters();
+  }catch(err){
+    if(btn){ btn.disabled = false; }
+    supportBomStatus('寫入本案配件失敗：' + (err.message || err), 'err');
+    toast('管架材料尚未加入紀錄；請先修正本案配件寫入問題','err');
+    return;
+  }
+  let added=0, skipped=0;
+  const existing = new Set((r.mats||[]).map(x=>`${x.id||''}|${x.source_designation||''}`));
+  mats.forEach(m=>{
+    const catalog = materialById(m.id) || m;
+    const note = [`管架 ${m.source_designation || SUPPORT_BOM.designation || ''}`, m.remark || ''].filter(Boolean).join('；');
+    const key = `${m.id||''}|${m.source_designation || SUPPORT_BOM.designation || ''}`;
+    if(existing.has(key)){ skipped += 1; return; }
+    existing.add(key);
+    r.mats.push({
+      id: m.id || '',
+      part: catalog.part || m.part || '',
+      size: catalog.size || m.size || '',
+      sch: catalog.sch || m.sch || '',
+      mat: catalog.mat || m.mat || '',
+      qty: m.qty || 1,
+      unit: catalog.unit || m.unit || '',
+      remark: note,
+      source_designation: m.source_designation || SUPPORT_BOM.designation || '',
+    });
+    added += 1;
+  });
+  closeSupportBomModal();
+  closeMatPickModal();
+  renderPricebook(); renderRecords(); renderRecDetail();
+  toast(`已加入 ${added} 項材料${skipped ? `，略過 ${skipped} 項已存在` : ''}`,'ok');
 }
 function recPhotoStrip(ps){
-  const cards = ps.map((p,i)=>`<div class="thumb" onclick="openLightbox(recSel, ${i})"><div class="thumb-img"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg><img src="${p.src}" alt="${p.label}" loading="lazy" onerror="this.remove()"><span class="zoom-cue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8.5v5M8.5 11h5"/></svg></span></div><span>${p.label}</span></div>`).join('');
+  const cards = ps.map((p,i)=>{
+    const src = photoThumbSrc(p);
+    return `<div class="thumb" onclick="openLightbox(recSel, ${i})"><div class="thumb-img"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>${src ? `<img src="${esc(src)}" alt="${esc(p.label)}" loading="lazy" onerror="this.remove()">` : '<span class="thumb-loading">載入中</span>'}<span class="zoom-cue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8.5v5M8.5 11h5"/></svg></span></div><span>${esc(p.label)}</span></div>`;
+  }).join('');
   return `<div class="thumb-row">${cards}</div>`;
+}
+function photoThumbSrc(photo){
+  const prepared = photo.viewSrc || photo.thumbSrc || '';
+  if(prepared){ return prepared; }
+  const raw = photo.src || '';
+  if(/^data:/i.test(raw)){ return raw; }
+  return mainApi ? '' : raw;
+}
+async function hydratePhotoPreview(photo){
+  if(!photo){ return false; }
+  const raw = photo.src || photo.file || '';
+  if(!raw || photo.viewSrc || photo.previewLoading){ return false; }
+  if(/^data:/i.test(raw)){ photo.viewSrc = raw; return true; }
+  if(!mainApi || typeof mainApi.image_data_url !== 'function'){ return false; }
+  photo.previewLoading = true;
+  try{
+    const data = await mainApiCall('image_data_url', raw);
+    photo.viewSrc = (data && data.url) || raw;
+    photo.previewError = false;
+    return true;
+  }catch(err){
+    photo.previewError = true;
+    return false;
+  }finally{
+    photo.previewLoading = false;
+  }
+}
+async function hydrateVisiblePhotoPreviews(record){
+  if(!record || !Array.isArray(record.photos) || !record.photos.length){ return; }
+  const changed = (await Promise.all(record.photos.map(hydratePhotoPreview))).some(Boolean);
+  if(changed && records[recSel] === record){
+    renderRecDetail();
+  }
 }
 let lbPhotos = [];
 let lbIndex = 0;
+let lbRecordIndex = -1;
 function openLightbox(recIndex, photoIndex){
   const r = records[recIndex];
   if(!r || !r.photos.length){ return; }
   lbPhotos = r.photos;
   lbIndex = photoIndex;
+  lbRecordIndex = recIndex;
   document.getElementById('lightbox').classList.add('open');
   renderLightbox();
 }
-function renderLightbox(){
+async function mainApiCall(method, ...args){
+  if(!mainApi || typeof mainApi[method] !== 'function'){ throw new Error('桌面版後端尚未連線'); }
+  const res = await mainApi[method](...args);
+  if(!res || res.ok !== true){ throw new Error((res && res.error) || '後端呼叫失敗'); }
+  return res.data;
+}
+async function resolveLightboxImage(photo){
+  const raw = photo.viewSrc || photo.src || photo.file || '';
+  if(!raw || /^data:/i.test(raw)){ return raw; }
+  if(mainApi && typeof mainApi.image_data_url === 'function'){
+    const data = await mainApiCall('image_data_url', raw);
+    photo.viewSrc = data.url || raw;
+    return photo.viewSrc;
+  }
+  return raw;
+}
+async function renderLightbox(){
   const p = lbPhotos[lbIndex];
   if(!p){ return; }
-  document.getElementById('lbImg').src = p.src;
+  const img = document.getElementById('lbImg');
+  img.removeAttribute('src');
   document.getElementById('lbTitle').textContent = p.label;
   document.getElementById('lbFoot').textContent = `${lbIndex+1} / ${lbPhotos.length}　·　← → 切換，Esc 關閉`;
+  try{
+    const src = await resolveLightboxImage(p);
+    if(lbPhotos[lbIndex] === p){ img.src = src; }
+  }catch(err){
+    toast('照片載入失敗：' + (err.message || err), 'warn');
+    img.src = p.src || '';
+  }
 }
 function lbNav(d){
   if(!lbPhotos.length){ return; }
@@ -758,7 +1213,50 @@ function lbNav(d){
   renderLightbox();
 }
 function closeLightbox(){ exitAnnotate(); document.getElementById('lightbox').classList.remove('open'); }
-function lbAct(name){ toast('（皮）' + name + '：' + ((lbPhotos[lbIndex]||{}).label||'') + ' — 之後接後端'); }
+function currentLightboxRecord(){
+  return records[lbRecordIndex] || null;
+}
+function applyPhotoUpdate(photo){
+  if(!photo){ return; }
+  const r = currentLightboxRecord();
+  if(r && r.photos && r.photos[lbIndex]){
+    r.photos[lbIndex] = photo;
+    lbPhotos = r.photos;
+  }else if(lbPhotos[lbIndex]){
+    lbPhotos[lbIndex] = photo;
+  }
+  updateRecSummary();
+  renderRecDetail();
+  renderLightbox();
+}
+async function replaceLightboxPhoto(){
+  const r = currentLightboxRecord();
+  if(!r){ return; }
+  try{
+    const picked = await mainApiCall('pick_file', 'image');
+    if(!picked || !picked.path){ return; }
+    const data = await mainApiCall('replace_photo', r.id, lbIndex, picked.path);
+    applyPhotoUpdate(data.photo);
+    toast('已取代照片','ok');
+  }catch(err){
+    toast('取代照片失敗：' + (err.message || err), 'err');
+  }
+}
+async function deleteLightboxPhoto(){
+  const r = currentLightboxRecord();
+  if(!r || !r.photos || !r.photos[lbIndex]){ return; }
+  try{
+    await mainApiCall('delete_photo', r.id, lbIndex);
+    r.photos.splice(lbIndex, 1);
+    lbPhotos = r.photos;
+    if(lbIndex >= lbPhotos.length){ lbIndex = Math.max(0, lbPhotos.length - 1); }
+    renderRecords(); renderRecDetail();
+    if(lbPhotos.length){ renderLightbox(); } else { closeLightbox(); }
+    toast('已從記錄移除照片；原檔保留','ok');
+  }catch(err){
+    toast('刪除照片失敗：' + (err.message || err), 'err');
+  }
+}
 document.addEventListener('keydown', e=>{
   if(!document.getElementById('lightbox').classList.contains('open')){ return; }
   if(e.key==='Escape'){ if(annoOn){ exitAnnotate(); } else { closeLightbox(); } return; }
@@ -798,7 +1296,7 @@ function annoArrow(a,b){
   ctx.lineTo(b.x-h*Math.cos(ang+Math.PI/6), b.y-h*Math.sin(ang+Math.PI/6));
   ctx.closePath(); ctx.fill();
 }
-function annoSave(){
+async function annoSave(){
   const img=document.getElementById('lbImg');
   const cv=document.getElementById('lbCanvas');
   const out=document.createElement('canvas');
@@ -808,13 +1306,19 @@ function annoSave(){
     ctx.drawImage(img,0,0,out.width,out.height);
     ctx.drawImage(cv,0,0,out.width,out.height);
     const url=out.toDataURL('image/png');
-    if(lbPhotos[lbIndex]){ lbPhotos[lbIndex].src=url; }
-    img.src=url;
-    renderRecDetail();
-    toast('已套用標註','ok');
+    const r = currentLightboxRecord();
+    if(mainApi && r){
+      const data = await mainApiCall('save_photo_annotation', r.id, lbIndex, url);
+      applyPhotoUpdate(data.photo);
+    }else{
+      if(lbPhotos[lbIndex]){ lbPhotos[lbIndex].src=url; lbPhotos[lbIndex].viewSrc=url; }
+      img.src=url;
+      renderRecDetail();
+    }
+    toast('已儲存標註','ok');
     exitAnnotate();
   }catch(err){
-    toast('此圖片來源不允許 canvas 合成（檔案版照片常見）；正式接後端後可存','warn');
+    toast('標註儲存失敗：' + (err.message || err), 'warn');
   }
 }
 (function wireLbCanvas(){
@@ -844,8 +1348,11 @@ function closeBatch(){ document.getElementById('batchModal').classList.remove('o
 /* ── 接後端：pywebview 就緒時用真資料覆蓋假資料 ── */
 let mainApi = null;
 function mergePricebookOptions(){
+  invalidateMaterialCache();
   ['part','size','sch','mat','cat','unit','src'].forEach(f=>{
     const set = new Set(OPT[f] || []);
+    const tx = MATERIAL_TAXONOMY && MATERIAL_TAXONOMY.options;
+    if(tx && Array.isArray(tx[f])){ tx[f].forEach(v=>{ if(v){ set.add(v); } }); }
     PRICE.forEach(p=>{ if(p[f]) set.add(p[f]); });
     OPT[f] = [...set];
   });
@@ -879,18 +1386,36 @@ async function exportMaterials(which){
     }
   }catch(e){ toast('匯出失敗', 'err'); }
 }
+async function copyProjectPartIds(){
+  const ids = [...REGISTERED].sort();
+  if(!ids.length){ toast('本案尚未登記配件','warn'); return; }
+  const text = ids.join('\n');
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      toast(`已複製 ${ids.length} 個本案料號`,'ok');
+    }else{
+      toast('此環境不支援剪貼簿；請改用匯出','warn');
+    }
+  }catch(e){ toast('複製失敗；請改用匯出','err'); }
+}
+function savePricebookNote(){
+  toast('總庫由匯入/登記即時更新；手動改列儲存尚未開放','warn');
+}
 window.addEventListener('pywebviewready', async ()=>{
   mainApi = window.pywebview.api;
   await loadFromBackend();
 });
 async function loadFromBackend(){
   const got = [];
+  try{ const r = await mainApi.material_taxonomy(); if(r && r.ok && r.data){ applyMaterialTaxonomy(r.data); got.push('材料規則'); } }catch(e){}
   try{ const r = await mainApi.pricebook(); if(r && r.ok && Array.isArray(r.data)){ PRICE.length=0; r.data.forEach(p=>PRICE.push(p)); mergePricebookOptions(); pbFillFilters(); renderPricebook(); if(r.data.length) got.push('總庫 '+r.data.length); } }catch(e){}
-  try{ const r = await mainApi.project_parts(); if(r && r.ok && r.data){ REGISTERED.clear(); (r.data.registered||[]).forEach(x=>REGISTERED.add(String(x))); renderPricebook(); if(REGISTERED.size) got.push('本案配件 '+REGISTERED.size); } }catch(e){}
+  try{ const r = await mainApi.project_parts(); if(r && r.ok && r.data){ REGISTERED.clear(); (r.data.registered||[]).forEach(x=>REGISTERED.add(String(x))); touchRegisterCache(); pbFillFilters(); renderPricebook(); if(REGISTERED.size) got.push('本案配件 '+REGISTERED.size); } }catch(e){}
   try{ const r = await mainApi.dates(); if(r && r.ok && Array.isArray(r.data)){ dateFolders.length=0; r.data.forEach(d=>dateFolders.push(d)); renderDates(); if(r.data.length) got.push('日期 '+r.data.length); } }catch(e){}
   try{ const r = await mainApi.records(); if(r && r.ok && Array.isArray(r.data)){ records.length=0; r.data.forEach(x=>records.push(x)); recSel=0; renderRecords(); renderRecDetail(); } }catch(e){}
   try{ const r = await mainApi.billing(); if(r && r.ok && r.data){ BILL.length=0; (r.data.rows||[]).forEach(x=>BILL.push(x)); if(Array.isArray(r.data.batches)){ BATCHES.length=0; r.data.batches.forEach(x=>BATCHES.push(x)); } renderBilling(); } }catch(e){}
   try{ const r = await mainApi.health(); if(r && r.ok && r.data){ renderHealth(r.data); } }catch(e){}
+  try{ const r = await mainApi.app_settings(); if(r && r.ok && r.data){ const d=r.data, set=(id,v)=>{const el=document.getElementById(id); if(el&&v){ el.textContent=v; }}; set('setDwgPath',d.dwg_list); set('setWeldPath',d.weld_control_table); set('setOutPath',d.output_dir); set('setPdfPath',d.pdf_dir); } }catch(e){}
   toast('已連線後端' + (got.length ? '：'+got.join('、') : ''), 'ok');
 }
 function renderHealth(d){
@@ -907,30 +1432,80 @@ function renderHealth(d){
   const hi = document.getElementById('hIssues');
   if(hi){ hi.innerHTML = rows || `<tr><td colspan="5" class="empty">${emptyBlock('一切正常，未發現問題','illus-done.png')}</td></tr>`; }
 }
+async function reloadHealth(){
+  try{
+    const data = await mainApiCall('health');
+    renderHealth(data);
+    toast('健康檢查已更新','ok');
+  }catch(err){ toast('健康檢查失敗：' + (err.message || err), 'err'); }
+}
 renderRecords();
 renderRecDetail();
 
-/* ── 材料價目（皮，示意資料；正式接後端＝中央價目表） ── */
+/* ── 材料價目（中央價目表 / 本案配件） ── */
+let MATERIAL_TAXONOMY = null;
+let MATERIAL_PART_TYPES = [];
+let MATERIAL_CAT_CLASS = {};
+let MATERIAL_ICON_LABEL = {};
+function taxBlob(v){
+  return String(v||'').toUpperCase().replace(/[（]/g,'(').replace(/[）]/g,')').replace(/[\s_\-./]+/g,'');
+}
+function applyMaterialTaxonomy(data){
+  if(!data || typeof data !== 'object'){ return; }
+  MATERIAL_TAXONOMY = data;
+  MATERIAL_PART_TYPES = Array.isArray(data.part_types) ? data.part_types : [];
+  MATERIAL_CAT_CLASS = {};
+  (data.categories||[]).forEach(c=>{ if(c && c.label){ MATERIAL_CAT_CLASS[c.label] = c.class || 'other'; } });
+  MATERIAL_ICON_LABEL = {};
+  (data.icons||[]).forEach(i=>{ if(i && i.icon){ MATERIAL_ICON_LABEL[i.icon] = i.label || i.icon; } });
+  const opts = data.options || {};
+  ['cat','part','size','sch','mat'].forEach(f=>{
+    if(Array.isArray(opts[f])){
+      const set = new Set(OPT[f] || []);
+      opts[f].forEach(v=>{ if(v){ set.add(v); } });
+      OPT[f] = [...set];
+    }
+  });
+}
 Object.assign(OPT, {
-  cat:  ['配管','閥件','墊料','支架','其他'],
+  cat:  ['管材','彎頭','三通','大小頭','Olet','法蘭','墊片','螺栓','接頭','由令','短節','管帽','管塞','閘閥','球閥','球心閥','止回閥','蝶閥','刀閘閥','閥件','過濾器','視鏡','限流孔板','阻火器','噴嘴','混合器','其他'],
   unit: ['個','支','組','才','m','kg','式'],
   src:  ['合約','報價','手動','參考']
 });
-const PRICE = [
-  {id:'EL90-2-304', part:'90° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:300, src:'合約', date:'2025-06-01', remark:''},
-  {id:'EL45-2-304', part:'45° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:280, src:'合約', date:'2025-06-01', remark:''},
-  {id:'RED-32-304', part:'同心異徑', size:'3"x2"', sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:450, src:'報價', date:'2025-06-01', remark:''},
-  {id:'FLG-2-150',  part:'法蘭',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'配管', unit:'組', price:520, src:'合約', date:'2025-06-01', remark:'含螺絲墊片'},
-  {id:'GSK-2-PTFE', part:'墊片',     size:'2"',   sch:'150#',  mat:'PTFE',   cat:'墊料', unit:'個', price:60,  src:'參考', date:'2025-06-01', remark:''},
-  {id:'PIPE-2-304', part:'直管',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'m',  price:240, src:'合約', date:'2025-06-01', remark:''},
-  {id:'TEE-2-304',  part:'三通',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'配管', unit:'個', price:680, src:'報價', date:'2025-06-01', remark:''},
-  {id:'EL90-3-316', part:'90° 彎頭', size:'3"',   sch:'SCH10', mat:'SUS316', cat:'配管', unit:'個', price:540, src:'合約', date:'2025-06-01', remark:''},
-  {id:'GV-2-304',   part:'閘閥',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'},
-  {id:'BV-3-316',   part:'球閥',     size:'3"',   sch:'150#',  mat:'SUS316', cat:'閥件', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'}
+var PRICE = [
+  {id:'EL90-2-304', part:'90° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'彎頭', unit:'個', price:300, src:'合約', date:'2025-06-01', remark:''},
+  {id:'EL45-2-304', part:'45° 彎頭', size:'2"',   sch:'SCH40', mat:'SUS304', cat:'彎頭', unit:'個', price:280, src:'合約', date:'2025-06-01', remark:''},
+  {id:'RED-32-304', part:'同心異徑', size:'3"x2"', sch:'SCH40', mat:'SUS304', cat:'大小頭', unit:'個', price:450, src:'報價', date:'2025-06-01', remark:''},
+  {id:'FLG-2-150',  part:'法蘭',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'法蘭', unit:'組', price:520, src:'合約', date:'2025-06-01', remark:'含螺絲墊片'},
+  {id:'GSK-2-PTFE', part:'墊片',     size:'2"',   sch:'150#',  mat:'PTFE',   cat:'墊片', unit:'個', price:60,  src:'參考', date:'2025-06-01', remark:''},
+  {id:'PIPE-2-304', part:'直管',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'管材', unit:'m',  price:240, src:'合約', date:'2025-06-01', remark:''},
+  {id:'TEE-2-304',  part:'三通',     size:'2"',   sch:'SCH40', mat:'SUS304', cat:'三通', unit:'個', price:680, src:'報價', date:'2025-06-01', remark:''},
+  {id:'EL90-3-316', part:'90° 彎頭', size:'3"',   sch:'SCH10', mat:'SUS316', cat:'彎頭', unit:'個', price:540, src:'合約', date:'2025-06-01', remark:''},
+  {id:'GV-2-304',   part:'閘閥',     size:'2"',   sch:'150#',  mat:'SUS304', cat:'閘閥', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'},
+  {id:'BV-3-316',   part:'球閥',     size:'3"',   sch:'150#',  mat:'SUS316', cat:'球閥', unit:'個', price:0,   src:'',    date:'',           remark:'待報價'}
 ];
 function partImg(name){
   const n = String(name||'').replace(/\s+/g,'').toUpperCase();
+  if(MATERIAL_PART_TYPES.length){
+    const nb = taxBlob(name);
+    for(const t of MATERIAL_PART_TYPES){
+      const labels = [t.label, t.code].concat(t.aliases || []);
+      if(labels.some(x=>taxBlob(x) && nb.includes(taxBlob(x)))){
+        return t.icon || 'Other';
+      }
+    }
+  }
   const h = s => n.includes(s);
+  if(h('限流孔板')||h('ORIFICE')) return 'OrificePlate';
+  if(h('阻火')||h('ARRESTOR')||h('FLAME')) return 'FlameArrestor';
+  if(h('噴嘴')||h('NOZZLE')) return 'Nozzle';
+  if(h('混合器')||h('MIXER')) return 'StaticMixer';
+  if(h('BALLVALVE')||h('球閥')) return 'BallValve';
+  if(h('GLOBEVALVE')||h('球心閥')||h('截止閥')) return 'GlobeValve';
+  if(h('CHECKVALVE')||h('止回閥')) return 'CheckValve';
+  if(h('BUTTERFLYVALVE')||h('蝶閥')) return 'ButterflyValve';
+  if(h('KNIFEGATEVALVE')||h('刀閘閥')) return 'KnifeGateValve';
+  if(h('GATEVALVE')||h('閘閥')) return 'GateValve';
   if(h('彎頭')||h('ELBOW')) return 'Elbow';
   if(h('四通')||h('十字')||h('CROSS')) return 'Cross';
   if(h('三通')||h('TEE')) return 'Tee';
@@ -944,25 +1519,111 @@ function partImg(name){
   if(h('螺栓')||h('螺絲')||h('螺帽')||h('BOLT')||h('NUT')||h('STUD')||/^M\d/.test(n)) return 'BoltNut';
   if(h('鋼管')||(h('PIPE')&&!h('SUPPORT'))) return 'Pipe';
   if(h('COUPLING')||h('快速接頭')) return 'Coupling';
-  if(h('NIPPLE')) return 'Nipple';
+  if(h('NIPPLE')||h('短節')) return 'Nipple';
   if(h('SIGHTGLASS')||h('視鏡')||h('窺視')) return 'SightGlass';
   if(h('UNION')||h('由令')) return 'Union';
   if(h('BUSHING')||h('補心')) return 'Bushing';
   if(h('管帽')||h('CAP')||h('封頭')) return 'Cap';
   if(h('膨脹')||h('EXPANSION')) return 'ExpansionJoint';
   if(h('軟管')||h('HOSE')||h('撓性')) return 'FlexHose';
-  if(h('支撐')||h('管架')||h('SUPPORT')) return 'PipeSupport';
+  if(h('支撐管')) return 'Pipe';
+  if(h('管鞋')||h('鞍座')||h('PIPESHOE')) return 'PipeShoe';
+  if(h('管夾')||h('管束')||h('電工夾')||h('CLAMP')) return 'PipeClamp';
+  if(h('鋼板')||h('底板')||h('補強板')||h('加勁板')||h('PLATE')) return 'SteelPlate';
+  if(h('角鋼')||h('槽鋼')||h('H型鋼')||h('ANGLE')||h('CHANNEL')||h('HBEAM')) return 'SteelSection';
   if(h('PLUG')||h('管塞')) return 'plug';
   return 'Other';
 }
+const MATERIAL_PAGE_SIZE = 80;
+const PB_PAGE_SIZE = 200;
+let PB_LIMIT = PB_PAGE_SIZE;
+let PRICE_VERSION = 0;
+let REGISTER_VERSION = 0;
+let MATERIAL_CACHE = {priceVersion:-1, registerVersion:-1, byIcon:{}, byId:{}, iconCounts:{}, projectCounts:{}};
+function invalidateMaterialCache(){
+  PRICE_VERSION += 1;
+  MATERIAL_CACHE.priceVersion = -1;
+}
+function touchRegisterCache(){
+  REGISTER_VERSION += 1;
+  MATERIAL_CACHE.registerVersion = -1;
+}
+function materialIcon(p){
+  if(!p){ return 'Other'; }
+  if(!p._icon){ p._icon = p.icon || partImg(p.part); }
+  return p._icon;
+}
+function materialSearchText(p){
+  if(!p._search){ p._search = `${p.id||''} ${p.part||''} ${p.type||''} ${p.level||''} ${p.size||''} ${p.sch||''} ${p.mat||''} ${p.spec||''} ${p.src||''}`.toLowerCase(); }
+  return p._search;
+}
+function rebuildMaterialCache(){
+  if(MATERIAL_CACHE.priceVersion===PRICE_VERSION && MATERIAL_CACHE.registerVersion===REGISTER_VERSION){
+    return MATERIAL_CACHE;
+  }
+  const byIcon={}, byId={}, iconCounts={}, projectCounts={};
+  PRICE.forEach((p,i)=>{
+    p._idx = i;
+    byId[String(p.id)] = p;
+    const icon = materialIcon(p);
+    if(!byIcon[icon]){ byIcon[icon] = []; }
+    byIcon[icon].push(p);
+    iconCounts[icon] = (iconCounts[icon] || 0) + 1;
+    if(REGISTERED.has(String(p.id))){
+      projectCounts[icon] = (projectCounts[icon] || 0) + 1;
+    }
+  });
+  MATERIAL_CACHE = {priceVersion:PRICE_VERSION, registerVersion:REGISTER_VERSION, byIcon, byId, iconCounts, projectCounts};
+  return MATERIAL_CACHE;
+}
+function materialItemsByIcon(icon){
+  return rebuildMaterialCache().byIcon[icon] || [];
+}
+function materialById(id){
+  return rebuildMaterialCache().byId[String(id)] || null;
+}
+function isProjectOnlyPart(p){ return !!(p && p.project_only); }
+function isSupportRulePart(p){
+  if(!p || isProjectOnlyPart(p)){ return false; }
+  const type=String(p.type||'').trim();
+  const level=String(p.level||'').trim();
+  const part=String(p.part||'').trim();
+  const cat=String(p.cat||'').trim();
+  return level==='組件' || /^Type\d+/i.test(type) || (/^Type\d+/i.test(part) && ['管架','管夾','管鞋','滑板','管托'].includes(cat));
+}
+function masterPriceItems(){ return PRICE.filter(p=>!isProjectOnlyPart(p) && !isSupportRulePart(p)); }
+function projectPriceItems(){ return PRICE.filter(p=>REGISTERED.has(String(p.id)) && !isSupportRulePart(p)); }
+function registerableMaterialItemsByIcon(icon){
+  return materialItemsByIcon(icon).filter(p=>!isProjectOnlyPart(p) && !isSupportRulePart(p));
+}
+function priceItemsForCurrentView(){
+  return PBVIEW==='project' ? projectPriceItems() : masterPriceItems();
+}
+function iconCountsFor(items){
+  const counts={};
+  items.forEach(p=>{ const icon=materialIcon(p); counts[icon]=(counts[icon]||0)+1; });
+  return counts;
+}
 function pbCatClass(cat){
-  return {'配管':'pipe','閥件':'valve','墊料':'gasket','螺栓':'bolt','法蘭':'flange'}[cat] || 'other';
+  if(MATERIAL_CAT_CLASS[cat]){ return MATERIAL_CAT_CLASS[cat]; }
+  return {
+    '管材':'pipe','彎頭':'elbow','三通':'tee','大小頭':'reducer','Olet':'olet',
+    '法蘭':'flange','墊片':'gasket','螺栓':'bolt','接頭':'coupling','由令':'coupling',
+    '短節':'nipple','管帽':'cap','管塞':'plug','閘閥':'valve','球閥':'valve',
+    '球心閥':'valve','止回閥':'valve','蝶閥':'valve','刀閘閥':'valve','控制閥':'valve',
+    '閥件':'valve','過濾器':'strainer','視鏡':'sight','限流孔板':'instrument',
+    '阻火器':'safety','噴嘴':'nozzle','混合器':'mixer','伸縮接頭':'flex','軟管':'flex',
+    '管鞋':'support','管夾':'support','管托':'support','滑板':'support',
+    '型鋼':'steel','角鋼':'steel','槽鋼':'steel','H型鋼':'steel',
+    '鋼板':'plate','底板':'plate','補強板':'plate','加勁板':'plate',
+    '焊材':'weld','其他':'other'
+  }[cat] || 'other';
 }
 function pbRow(p,i){
   const on = REGISTERED.has(String(p.id));
   const td = v => `<td>${esc(v==null?'':v)}</td>`;
   const regCell = `<td class="pb-reg-cell"><input type="checkbox" class="pb-reg"${on?' checked':''} title="登記到本案配件" onchange="toggleReg('${esc(String(p.id))}',this.checked,this)"></td>`;
-  const thumb = `<td class="pb-thumb-cell"><img class="pb-thumb" src="img/parts/${partImg(p.part)}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>`;
+  const thumb = `<td class="pb-thumb-cell"><img class="pb-thumb" src="img/parts/${materialIcon(p)}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'"></td>`;
   return `<tr class="${on?'pb-on':''}">` + regCell + thumb
     + `<td class="mono">${esc(p.id)}</td>`
     + `<td class="pb-nm">${esc(p.part)}</td>`
@@ -973,29 +1634,35 @@ function pbRow(p,i){
 function pbEdit(i,field,value,el){
   PRICE[i][field] = value;
 }
-function pbDel(i){ PRICE.splice(i,1); renderPricebook(); }
+function pbDel(i){ PRICE.splice(i,1); invalidateMaterialCache(); renderPricebook(); }
 function pbAddRow(){
   const id='N'+Date.now();
-  PRICE.unshift({id:id,part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',cat:'配管',unit:'個',src:'本案新增',remark:''});
+  PRICE.unshift({id:id,part:'90° 彎頭',size:'2"',sch:'SCH40',mat:'SUS304',cat:'彎頭',unit:'個',src:'本案新增',remark:''});
   REGISTERED.add(id);
+  invalidateMaterialCache();
+  touchRegisterCache();
   renderPricebook();
 }
 let PBVIEW='project';
-const REGISTERED=new Set();
+var REGISTERED=new Set();
 function pbSetView(v){
   PBVIEW=v;
+  PB_LIMIT=PB_PAGE_SIZE;
+  PB_CAT='';
   const m=document.getElementById('pbvMaster'), p=document.getElementById('pbvProject');
   if(m){ m.classList.toggle('on', v==='master'); }
   if(p){ p.classList.toggle('on', v==='project'); }
+  pbFillFilters();
   renderPricebook();
 }
 function updatePbCounts(){
-  const pc=document.getElementById('pbcProject'); if(pc){ pc.textContent=REGISTERED.size; }
-  const mc=document.getElementById('pbcMaster'); if(mc){ mc.textContent=PRICE.length; }
+  const pc=document.getElementById('pbcProject'); if(pc){ pc.textContent=projectPriceItems().length; }
+  const mc=document.getElementById('pbcMaster'); if(mc){ mc.textContent=masterPriceItems().length; }
 }
 async function toggleReg(id,on,el){
   id=String(id);
   if(on){ REGISTERED.add(id); } else { REGISTERED.delete(id); }
+  touchRegisterCache();
   if(el){ const row=el.closest('tr')||el.closest('.reg-item'); if(row){ row.classList.toggle('pb-on',on); row.classList.toggle('on',on); } }
   try{
     const api=window.pywebview&&window.pywebview.api;
@@ -1003,12 +1670,13 @@ async function toggleReg(id,on,el){
              else if(!on&&api.unregister_parts){ await api.unregister_parts([id]); } }
   }catch(e){}
   updatePbCounts();
+  pbRenderChips();
   const fc=document.getElementById('regFootCount'); if(fc){ fc.textContent=`本案已登記 ${REGISTERED.size} 項`; }
   const modal=document.getElementById('regModal');
   const modalOpen=modal && modal.classList.contains('open');
   if(!modalOpen){
     const cc=document.getElementById('pbCount');
-    if(cc && PBVIEW!=='project'){ cc.textContent=`總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`; }
+    if(cc && PBVIEW!=='project'){ cc.textContent=`總庫 ${masterPriceItems().length} · 本案已登記 ${REGISTERED.size}`; }
     if(PBVIEW==='project'){ renderPricebook(); }
   }
 }
@@ -1017,32 +1685,43 @@ function renderPricebook(){
   const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
   const fpart=gv('pbPart'), fsize=gv('pbSize'), fsch=gv('pbSch'), fmat=gv('pbMat'), fcat=gv('pbCat');
   const cols = `<colgroup><col style="width:4%"><col style="width:4%"><col style="width:7%"><col style="width:17%"><col style="width:8%"><col style="width:6%"><col style="width:13%"><col style="width:7%"><col style="width:6%"><col style="width:10%"><col style="width:18%"></colgroup>`;
-  const head = `<thead><tr><th class="pb-reg-h" title="登記本案">✓</th><th></th><th>料號</th><th>零件類型</th><th>尺寸</th><th>SCH</th><th>材質</th><th>類別</th><th>單位</th><th>來源</th><th>備註</th></tr></thead>`;
-  const narrowed = !!(q || PB_CAT || (fpart&&fpart!=='全部零件') || (fsize&&fsize!=='全部尺寸') || (fsch&&fsch!=='全部 SCH') || (fmat&&fmat!=='全部材質') || (fcat&&fcat!=='全部類別'));
+  const head = `<thead><tr><th class="pb-reg-h" title="登記本案">✓</th><th></th><th>料號</th><th>零件類型</th><th>尺寸</th><th>SCH</th><th>材質</th><th>料別</th><th>單位</th><th>來源</th><th>備註</th></tr></thead>`;
+  const narrowed = !!(q || PB_CAT || (fpart&&fpart!=='全部零件') || (fsize&&fsize!=='全部尺寸') || (fsch&&fsch!=='全部 SCH') || (fmat&&fmat!=='全部材質') || (fcat&&fcat!=='全部料別'));
   const wrap = inner => `<table class="edit-table">${cols}${head}<tbody>${inner}</tbody></table>`;
-  if(PBVIEW==='master' && !narrowed){          // 總庫視圖未縮小範圍 → 不倒 896 筆，先請點分類
-    document.getElementById('pbTable').innerHTML = wrap(`<tr><td colspan="11" class="empty">${emptyBlock('點上方零件分類（或用搜尋 / 篩選）挑選 — 不會一次載入 896 筆','illus-search-empty.png')}</td></tr>`);
-    document.getElementById('pbCount').textContent = `總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`;
+  if(PBVIEW==='master' && !narrowed){          // 總庫視圖未縮小範圍 → 先請點分類
+    document.getElementById('pbTable').innerHTML = wrap(`<tr><td colspan="11" class="empty">${emptyBlock('點上方零件分類（或用搜尋 / 篩選）挑選 — 不會一次載入整個總庫','illus-search-empty.png')}</td></tr>`);
+    document.getElementById('pbCount').textContent = `總庫 ${masterPriceItems().length} · 本案已登記 ${REGISTERED.size}`;
     updatePbCounts(); return;
   }
-  let shown = 0;
-  const body = PRICE.map((p,i)=>({p,i})).filter(({p})=>{
+  const matched = PRICE.map((p,i)=>({p,i})).filter(({p})=>{
+    if(PBVIEW==='master' && isProjectOnlyPart(p)){ return false; }
+    if(isSupportRulePart(p)){ return false; }
     if(PBVIEW==='project' && !REGISTERED.has(String(p.id))){ return false; }
-    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat} ${p.src}`.toLowerCase().includes(q)){ return false; }
+    if(q && !materialSearchText(p).includes(q)){ return false; }
     if(fpart && fpart!=='全部零件' && p.part!==fpart){ return false; }
     if(fsize && fsize!=='全部尺寸' && p.size!==fsize){ return false; }
     if(fsch && fsch!=='全部 SCH' && p.sch!==fsch){ return false; }
     if(fmat && fmat!=='全部材質' && p.mat!==fmat){ return false; }
-    if(fcat && fcat!=='全部類別' && p.cat!==fcat){ return false; }
-    if(PB_CAT && partImg(p.part)!==PB_CAT){ return false; }
+    if(fcat && fcat!=='全部料別' && p.cat!==fcat){ return false; }
+    if(PB_CAT && materialIcon(p)!==PB_CAT){ return false; }
     return true;
-  }).map(({p,i})=>{ shown++; return pbRow(p,i); }).join('');
+  });
+  const visible = matched.slice(0, PB_LIMIT);
+  const bodyRows = visible.map(({p,i})=>pbRow(p,i)).join('');
+  const moreRow = matched.length > visible.length
+    ? `<tr><td colspan="11" class="empty"><button type="button" class="reg-more" onclick="pbMore()">載入更多 ${Math.min(PB_PAGE_SIZE, matched.length-visible.length)} 筆（${visible.length} / ${matched.length}）</button></td></tr>`
+    : '';
+  const body = bodyRows + moreRow;
   const emptyMsg = PBVIEW==='project' ? '本案尚未登記配件 — 按右下「＋ 登記材料」選類型挑選加入' : '查無符合的料號';
   document.getElementById('pbTable').innerHTML = wrap(body || `<tr><td colspan="11" class="empty">${emptyBlock(emptyMsg,'illus-search-empty.png')}</td></tr>`);
   document.getElementById('pbCount').textContent = PBVIEW==='project'
-    ? `本案配件 ${REGISTERED.size} 項`
-    : `顯示 ${shown} / 總庫 ${PRICE.length} · 本案已登記 ${REGISTERED.size}`;
+    ? `本案配件 ${projectPriceItems().length} 項`
+    : `顯示 ${visible.length} / 符合 ${matched.length} · 總庫 ${masterPriceItems().length} · 本案已登記 ${REGISTERED.size}`;
   updatePbCounts();
+}
+function pbMore(){
+  PB_LIMIT += PB_PAGE_SIZE;
+  renderPricebook();
 }
 function pbNatCmp(a,b){
   const na=parseInt(String(a).replace(/[^0-9]/g,''),10), nb=parseInt(String(b).replace(/[^0-9]/g,''),10);
@@ -1052,7 +1731,7 @@ function pbNatCmp(a,b){
 function pbFillFilter(id, allLabel, field){
   const sel=document.getElementById(id); if(!sel){ return; }
   const cur=sel.value;
-  const vals=[...new Set(PRICE.map(p=>p[field]).filter(Boolean))].sort(pbNatCmp);
+  const vals=[...new Set(priceItemsForCurrentView().map(p=>p[field]).filter(Boolean))].sort(pbNatCmp);
   sel.innerHTML=`<option>${allLabel}</option>`+vals.map(v=>`<option>${esc(v)}</option>`).join('');
   if([...sel.options].some(o=>o.value===cur)){ sel.value=cur; }
 }
@@ -1061,33 +1740,75 @@ function pbFillFilters(){
   pbFillFilter('pbSize','全部尺寸','size');
   pbFillFilter('pbSch','全部 SCH','sch');
   pbFillFilter('pbMat','全部材質','mat');
-  pbFillFilter('pbCat','全部類別','cat');
+  pbFillFilter('pbCat','全部料別','cat');
   pbRenderChips();
 }
 let PB_CAT='';
 function pbChipLabel(img){
+  if(MATERIAL_ICON_LABEL[img]){ return MATERIAL_ICON_LABEL[img]; }
   return {Elbow:'彎頭',Valve:'閥件',Flange:'法蘭',Reducer:'大小頭',BoltNut:'螺栓',
     Cross:'四通',Tee:'三通',Pipe:'鋼管',Gasket:'墊片',Olet:'Olet',Strainer:'過濾器',
     Coupling:'接頭',Nipple:'短節',SightGlass:'視鏡',Cap:'管帽',Union:'由令',
-    Bushing:'補心',ExpansionJoint:'伸縮',FlexHose:'軟管',PipeSupport:'管架',
+    Bushing:'補心',ExpansionJoint:'伸縮',FlexHose:'軟管',
+    SteelSection:'型鋼',SteelPlate:'鋼板',BasePlate:'底板',
+    PipeShoe:'管鞋',PipeClamp:'管夾',SlidePlate:'滑板',
+    BallValve:'球閥',GateValve:'閘閥',GlobeValve:'球心閥',CheckValve:'止回閥',
+    ButterflyValve:'蝶閥',KnifeGateValve:'刀閘閥',OrificePlate:'限流孔板',
+    FlameArrestor:'阻火器',Nozzle:'噴嘴',StaticMixer:'混合器',
     plug:'管塞',Other:'其他'}[img]||img;
+}
+function materialIconGroup(icon){
+  const groups = [
+    ['配管', ['Pipe','Elbow','Tee','Cross','Reducer','Olet','Flange','Gasket','Coupling','Union','Bushing','Nipple','Cap','plug']],
+    ['閥件', ['GateValve','BallValve','GlobeValve','CheckValve','ButterflyValve','KnifeGateValve','Valve']],
+    ['螺栓 / 緊固', ['BoltNut']],
+    ['支撐零件', ['PipeShoe','PipeClamp','SlidePlate']],
+    ['鋼構 / 鋼板', ['SteelSection','SteelPlate','BasePlate']],
+    ['特殊件', ['Strainer','SightGlass','OrificePlate','FlameArrestor','Nozzle','StaticMixer','ExpansionJoint','FlexHose','Electrode','Other']]
+  ];
+  for(let i=0;i<groups.length;i++){
+    if(groups[i][1].includes(icon)){ return {name:groups[i][0], order:i}; }
+  }
+  return {name:'其他', order:99};
+}
+function renderMaterialCategorySections(counts, onclickName, projectCounts){
+  const cats=Object.keys(counts).sort((a,b)=>{
+    const ga=materialIconGroup(a), gb=materialIconGroup(b);
+    if(ga.order!==gb.order){ return ga.order-gb.order; }
+    return (counts[b]||0)-(counts[a]||0);
+  });
+  const groups={};
+  cats.forEach(c=>{
+    const g=materialIconGroup(c);
+    if(!groups[g.name]){ groups[g.name]={order:g.order, icons:[]}; }
+    groups[g.name].icons.push(c);
+  });
+  return Object.keys(groups).sort((a,b)=>groups[a].order-groups[b].order).map(name=>{
+    const cards = groups[name].icons.map(c=>{
+      const on = projectCounts && projectCounts[c] ? `<b class="reg-cat-on">本案 ${projectCounts[c]}</b>` : '';
+      return `<button type="button" class="reg-cat" onclick="${onclickName}('${c}')"><img src="img/parts/${c}.png" alt="" onerror="this.style.display='none'"><span>${esc(pbChipLabel(c))}</span><i>${counts[c]}</i>${on}</button>`;
+    }).join('');
+    return `<div class="reg-group"><h4>${esc(name)}</h4><div class="reg-cats">${cards}</div></div>`;
+  }).join('');
 }
 function pbRenderChips(){
   const box=document.getElementById('pbChips'); if(!box){ return; }
-  const cnt={};
-  PRICE.forEach(p=>{ const k=partImg(p.part); cnt[k]=(cnt[k]||0)+1; });
+  const source=priceItemsForCurrentView();
+  const cnt=iconCountsFor(source);
   const cats=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  let h=`<button class="pbchip${PB_CAT===''?' on':''}" type="button" onclick="pbSetCat('')"><span class="pbchip-all">全部</span><i>${PRICE.length}</i></button>`;
+  let h=`<button class="pbchip${PB_CAT===''?' on':''}" type="button" onclick="pbSetCat('')"><span class="pbchip-all">全部</span><i>${source.length}</i></button>`;
   h+=cats.map(c=>`<button class="pbchip${PB_CAT===c?' on':''}" type="button" onclick="pbSetCat('${c}')" title="${esc(pbChipLabel(c))}"><img src="img/parts/${c}.png" alt="" onerror="this.style.display='none'"><span>${esc(pbChipLabel(c))}</span><i>${cnt[c]}</i></button>`).join('');
   box.innerHTML=h;
 }
-function pbSetCat(c){ PB_CAT=(PB_CAT===c?'':c); pbRenderChips(); renderPricebook(); }
+function pbSetCat(c){ PB_CAT=(PB_CAT===c?'':c); PB_LIMIT=PB_PAGE_SIZE; pbRenderChips(); renderPricebook(); }
 (function pbInit(){ pbFillFilters(); renderPricebook(); })();
 
 /* ── 登記材料 浮動視窗（本案配件 → ＋登記材料 → 選類型 → 篩選挑選）── */
+const ALL_TYPE_LABEL='全部料別';
 let REG_CAT='';
+let REG_LIMIT=MATERIAL_PAGE_SIZE;
 function openRegModal(){
-  if(!PRICE.length){ toast('總庫是空的，先匯入材料','warn'); return; }
+  if(!masterPriceItems().length){ toast('總庫是空的，先匯入材料','warn'); return; }
   REG_CAT=''; regRenderCats(); regShowStep(1);
   document.getElementById('regFootCount').textContent = `本案已登記 ${REGISTERED.size} 項`;
   document.getElementById('regModal').classList.add('open');
@@ -1103,38 +1824,82 @@ function regShowStep(n){
 }
 function regBack(){ REG_CAT=''; regShowStep(1); }
 function regRenderCats(){
-  const cnt={};
-  PRICE.forEach(p=>{ const k=partImg(p.part); cnt[k]=(cnt[k]||0)+1; });
-  const cats=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  document.getElementById('regStep1').innerHTML = cats.map(c=>{
-    const on=PRICE.filter(p=>partImg(p.part)===c && REGISTERED.has(String(p.id))).length;
-    return `<button type="button" class="reg-cat" onclick="regPick('${c}')"><img src="img/parts/${c}.png" alt="" onerror="this.style.display='none'"><span>${esc(pbChipLabel(c))}</span><i>${cnt[c]}</i>${on?`<b class="reg-cat-on">本案 ${on}</b>`:''}</button>`;
-  }).join('');
+  const cnt={}, projectCounts={};
+  masterPriceItems().forEach(p=>{
+    const icon=materialIcon(p);
+    cnt[icon]=(cnt[icon]||0)+1;
+    if(REGISTERED.has(String(p.id))){ projectCounts[icon]=(projectCounts[icon]||0)+1; }
+  });
+  document.getElementById('regStep1').innerHTML = renderMaterialCategorySections(cnt, 'regPick', projectCounts);
+}
+function materialSubtype(p){
+  if(!p){ return ''; }
+  const rawType = String(p.type || '').trim();
+  if(rawType && !/^Type\d+/i.test(rawType) && rawType !== '管架展開'){
+    return rawType;
+  }
+  return p.cat || p.part || '';
+}
+function preferredMaterialSubtype(icon, items){
+  const vals=[...new Set(items.map(materialSubtype).filter(Boolean))];
+  const label=pbChipLabel(icon);
+  if(vals.includes(label)){ return label; }
+  if(icon==='BoltNut' && vals.includes('螺栓')){ return '螺栓'; }
+  return '';
+}
+function fillSelectValues(id, allLabel, vals, preferred, defaultFirst){
+  const sel=document.getElementById(id); if(!sel){ return ''; }
+  const cur=preferred || sel.value;
+  const unique=[...new Set(vals.filter(Boolean))].sort(pbNatCmp);
+  sel.innerHTML=`<option>${allLabel}</option>`+unique.map(v=>`<option>${esc(v)}</option>`).join('');
+  if(unique.includes(cur)){ sel.value=cur; }
+  else if(defaultFirst && unique.length){ sel.value=unique[0]; }
+  return sel.value;
+}
+function itemsBySelectedType(items, typeValue){
+  return items.filter(p=>!typeValue || typeValue===ALL_TYPE_LABEL || materialSubtype(p)===typeValue);
+}
+function regRefreshFiltersForType(){
+  const items=registerableMaterialItemsByIcon(REG_CAT);
+  const typeValue=document.getElementById('regType')?.value || ALL_TYPE_LABEL;
+  const scoped=itemsBySelectedType(items, typeValue);
+  fillSelectValues('regSize','全部尺寸',scoped.map(p=>p.size), '', false);
+  fillSelectValues('regMat','全部材質',scoped.map(p=>p.mat), '', false);
 }
 function regPick(c){
   REG_CAT=c;
-  const items=PRICE.filter(p=>partImg(p.part)===c);
+  REG_LIMIT=MATERIAL_PAGE_SIZE;
+  const items=registerableMaterialItemsByIcon(c);
   document.getElementById('regCatName').textContent = pbChipLabel(c)+'（'+items.length+'）';
-  const fill=(id,label,field)=>{ const sel=document.getElementById(id); const vals=[...new Set(items.map(p=>p[field]).filter(Boolean))].sort(pbNatCmp); sel.innerHTML=`<option>${label}</option>`+vals.map(v=>`<option>${esc(v)}</option>`).join(''); };
-  fill('regSize','全部尺寸','size'); fill('regMat','全部材質','mat');
   document.getElementById('regSearch').value='';
+  fillSelectValues('regType', ALL_TYPE_LABEL, items.map(materialSubtype), preferredMaterialSubtype(c, items), true);
+  regRefreshFiltersForType();
   regShowStep(2); regRenderList();
 }
 function regRenderList(){
   const q=(document.getElementById('regSearch').value||'').toLowerCase().trim();
-  const fs=document.getElementById('regSize').value, fm=document.getElementById('regMat').value;
-  const items=PRICE.filter(p=>{
-    if(partImg(p.part)!==REG_CAT){ return false; }
-    if(q && !`${p.id} ${p.part} ${p.size} ${p.mat}`.toLowerCase().includes(q)){ return false; }
+  const ft=document.getElementById('regType').value, fs=document.getElementById('regSize').value, fm=document.getElementById('regMat').value;
+  const items=registerableMaterialItemsByIcon(REG_CAT).filter(p=>{
+    if(ft&&ft!==ALL_TYPE_LABEL&&materialSubtype(p)!==ft){ return false; }
+    if(q && !materialSearchText(p).includes(q)){ return false; }
     if(fs&&fs!=='全部尺寸'&&p.size!==fs){ return false; }
     if(fm&&fm!=='全部材質'&&p.mat!==fm){ return false; }
     return true;
   });
-  document.getElementById('regList').innerHTML = items.map(p=>{
+  const visible=items.slice(0, REG_LIMIT);
+  const rows = visible.map(p=>{
     const on=REGISTERED.has(String(p.id));
-    return `<label class="reg-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleReg('${esc(String(p.id))}',this.checked,this)"><img src="img/parts/${partImg(p.part)}.png" alt="" onerror="this.style.display='none'"><span class="reg-item-nm">${esc(p.part)}</span><span class="reg-item-meta">${esc(p.size||'')}${p.sch?' · '+esc(p.sch):''}${p.mat?' · '+esc(p.mat):''}</span></label>`;
-  }).join('') || `<div class="empty" style="padding:24px">此類查無符合</div>`;
+    return `<label class="reg-item${on?' on':''}"><input type="checkbox" ${on?'checked':''} onchange="toggleReg('${esc(String(p.id))}',this.checked,this)"><img src="img/parts/${materialIcon(p)}.png" alt="" onerror="this.style.display='none'"><span class="reg-item-nm">${esc(p.part)}</span><span class="reg-item-meta">${esc(p.size||'')}${p.sch?' · '+esc(p.sch):''}${p.mat?' · '+esc(p.mat):''}</span></label>`;
+  }).join('');
+  const more = items.length > visible.length
+    ? `<button type="button" class="reg-more" onclick="regMore()">載入更多 ${Math.min(MATERIAL_PAGE_SIZE, items.length-visible.length)} 筆（${visible.length} / ${items.length}）</button>`
+    : (items.length ? `<div class="reg-more done">已顯示 ${items.length} 筆</div>` : '');
+  document.getElementById('regList').innerHTML = rows ? rows + more : `<div class="empty" style="padding:24px">此類查無符合</div>`;
   document.getElementById('regFootCount').textContent = `本案已登記 ${REGISTERED.size} 項`;
+}
+function regMore(){
+  REG_LIMIT += MATERIAL_PAGE_SIZE;
+  regRenderList();
 }
 
 /* ── 請款追蹤（只追狀態；不算金額，狀態/日期/備註可編輯） ── */
@@ -1182,6 +1947,12 @@ function renderBillStats(){
       metric('總筆數', BILL.length) + metric('未請款', cnt('未請款')) + metric('已請款', cnt('已請款'))
     + metric('已結案', cnt('已結案')) + metric('部分請款', cnt('部分請款')) + metric('保留', cnt('保留'));
 }
+async function saveBillingStatus(){
+  try{
+    const data = await mainApiCall('save_billing', BILL);
+    toast(`已儲存 ${data.count} 筆請款狀態`,'ok');
+  }catch(err){ toast('儲存請款狀態失敗：' + (err.message || err), 'err'); }
+}
 (function billInit(){
   const sel = document.getElementById('billStatus');
   if(sel){ sel.innerHTML = '<option>全部狀態</option>' + OPT.bill.map(x=>`<option>${esc(x)}</option>`).join(''); }
@@ -1207,7 +1978,7 @@ function toggleMenu(btn){
   if(!isOpen){ wrap.classList.add('open'); }
 }
 function closeMenus(){ document.querySelectorAll('.menu-wrap.open').forEach(w=>w.classList.remove('open')); }
-function menuPick(label){ toast('（皮）' + label); closeMenus(); }
+function menuPick(label){ toast(label + ' 尚未接入正式流程', 'warn'); closeMenus(); }
 document.addEventListener('click', e=>{ if(!e.target.closest('.menu-wrap')){ closeMenus(); } });
 
 function openRecordBySeries(series){
@@ -1219,15 +1990,277 @@ function openRecordBySeries(series){
   renderRecDetail();
   toast('已開啟 ' + series + ' 的記錄');
 }
-function openWizard(){
-  toast('開啟修改單精靈…');
-  window.open('../co_wizard_web/index.html', '_blank');
+async function openWizard(){
+  if(mainApi && mainApi.open_wizard){
+    toast('開啟修改單精靈…');
+    try{ const r = await mainApi.open_wizard(); if(!(r && r.ok)){ toast('精靈啟動失敗：'+((r&&r.error)||''),'err'); } }
+    catch(e){ toast('精靈啟動失敗','err'); }
+  } else {
+    window.open('../co_wizard_web/index.html', '_blank');   // 瀏覽器預覽 fallback
+  }
+}
+async function reloadRecords(){
+  if(!mainApi){ return; }
+  try{
+    const r = await mainApi.records();
+    if(r && r.ok && Array.isArray(r.data)){ records.length=0; r.data.forEach(x=>records.push(x)); if(recSel>=records.length){ recSel=0; } renderRecords(); renderRecDetail(); }
+    await reloadDates(false);
+    const b = await mainApi.billing();
+    if(b && b.ok && b.data){ BILL.length=0; (b.data.rows||[]).forEach(x=>BILL.push(x)); renderBilling(); }
+    toast('已重新整理紀錄','ok');
+  }catch(e){}
 }
 
-/* 以下為皮的占位互動；之後接後端橋 */
-function pickDwg(){ toast('（皮）選擇 DWG LIST — 待接後端'); }
-function runStart(){ toast('開始執行 — 待接後端', 'ok'); logLine('ok','（皮）開始執行 — 待接後端'); }
-function runStop(){ toast('已要求停止', 'warn'); logLine('err','（皮）已要求停止'); }
+async function reloadDates(showToast=true){
+  if(!mainApi || !mainApi.dates){ return false; }
+  try{
+    const r = await mainApi.dates();
+    if(r && r.ok && Array.isArray(r.data)){
+      dateFolders.length = 0;
+      r.data.forEach(d=>dateFolders.push(d));
+      renderDates();
+      if(showToast){ toast('已重新整理產出清單','ok'); }
+      return true;
+    }
+  }catch(e){}
+  if(showToast){ toast('重新整理產出清單失敗','err'); }
+  return false;
+}
+
+async function pickPath(kind){
+  if(!mainApi){ toast('桌面版才能選路徑','warn'); return; }
+  try{
+    const r = await mainApi.pick_path(kind);
+    if(!(r && r.ok) || !r.data || !r.data.path){ return; }
+    const path = r.data.path;
+    const key = kind==='dwg' ? 'dwg_list' : (kind==='weld' ? 'weld_control_table' : (kind==='output' ? 'output_dir' : 'pdf_dir'));
+    await mainApi.save_setting(key, path);
+    const id = {dwg:'setDwgPath', weld:'setWeldPath', output:'setOutPath', pdf:'setPdfPath'}[kind];
+    const el = document.getElementById(id); if(el){ el.textContent = path; }
+    toast('已更新路徑','ok');
+  }catch(e){ toast('選路徑失敗','err'); }
+}
+function selectedOutputItems(){
+  const recordItems = selectedRecordOutputItems();
+  if(recordItems.length){ return recordItems; }
+  const out = [];
+  dateFolders.forEach(f=>f.items.forEach(it=>{ if(it.sel){ out.push({...it, date:f.date}); } }));
+  return out;
+}
+function outputReportTypeLabel(type){
+  return {
+    'owner-data':'業主資料包',
+    'developer':'開發檢查包',
+    'both':'完整輸出'
+  }[type] || type;
+}
+let outputCenterBusy = false;
+let outputCenterStartedAt = 0;
+let outputCenterTimer = null;
+let outputCenterFinishTimer = null;
+let lastOutputOpenKind = 'owner-data';
+let lastOutputPath = '';
+function setOutputProgress(width, text, running=false){
+  const fill = document.getElementById('progFill');
+  const pct = document.getElementById('progPct');
+  const bar = fill ? fill.closest('.progress') : null;
+  if(fill){ fill.style.width = width; }
+  if(pct){ pct.textContent = text; }
+  if(bar){ bar.classList.toggle('running', running); }
+}
+function setOutputRunStatus(mode, msg, openKind='', path=''){
+  const box = document.getElementById('outputRunStatus');
+  const txt = document.getElementById('outputRunText');
+  const btn = document.getElementById('outputRunOpenBtn');
+  if(!box || !txt){ return; }
+  box.classList.remove('done','err');
+  if(!mode){
+    box.hidden = true;
+    if(btn){ btn.hidden = true; }
+    return;
+  }
+  box.hidden = false;
+  if(mode === 'done'){ box.classList.add('done'); }
+  if(mode === 'err'){ box.classList.add('err'); }
+  txt.textContent = msg || '';
+  box.title = path || msg || '';
+  txt.title = path || msg || '';
+  if(openKind){
+    lastOutputOpenKind = openKind;
+    lastOutputPath = path || '';
+  }
+  if(btn){ btn.hidden = !(mode === 'done' && openKind); }
+}
+function setOutputRunButtonsBusy(busy){
+  document.querySelectorAll('.output-run-trigger').forEach(btn=>{ btn.disabled = busy; });
+  const menu = document.getElementById('outputCenterMenuBtn');
+  if(menu){ menu.textContent = busy ? '產生中…' : '輸出中心 ▾'; }
+}
+function outputRunLabel(items){
+  return items.slice(0,3).map(it=>it.series || it.record_id || it.folder || it.date).filter(Boolean).join('、')
+    + (items.length > 3 ? ` 等 ${items.length} 筆` : '');
+}
+function outputDestinationFromFiles(reportType, files){
+  const f = files || {};
+  if(f.owner_data_package){
+    return {kind:'owner-data', label:'業主資料包', path:f.owner_data_package};
+  }
+  if(f.statistics_xlsx){
+    return {kind:'site-output', label:'開發檢查包', path:f.statistics_xlsx};
+  }
+  if(f.report_set){
+    return {kind:'site-output', label:'輸出中心', path:f.report_set};
+  }
+  return {kind: reportType === 'developer' ? 'site-output' : 'owner-data', label:outputReportTypeLabel(reportType), path:''};
+}
+function compactOutputPath(path){
+  const text = String(path || '').trim();
+  if(!text){ return '輸出路徑：staging/site_output_center_web'; }
+  const parts = text.split(/[\\/]+/).filter(Boolean);
+  if(parts.length <= 4){ return text; }
+  return '…' + parts.slice(-4).join('\\');
+}
+function startOutputRunUi(reportType, items){
+  outputCenterBusy = true;
+  outputCenterStartedAt = Date.now();
+  clearInterval(outputCenterTimer);
+  clearTimeout(outputCenterFinishTimer);
+  closeMenus();
+  setOutputRunButtonsBusy(true);
+  setOutputProgress('18%', '執行中', true);
+  setOutputRunStatus('run', `正在產生${outputReportTypeLabel(reportType)} · ${items.length} 筆`);
+  outputCenterTimer = setInterval(()=>{
+    const sec = Math.max(1, Math.floor((Date.now() - outputCenterStartedAt) / 1000));
+    const width = Math.min(86, 18 + sec * 4);
+    setOutputProgress(width + '%', sec + 's', true);
+    setOutputRunStatus('run', `正在產生${outputReportTypeLabel(reportType)} · ${items.length} 筆 · ${sec} 秒`);
+  }, 1000);
+}
+function finishOutputRunUi(ok, msg, dest=null){
+  clearInterval(outputCenterTimer);
+  outputCenterTimer = null;
+  outputCenterBusy = false;
+  setOutputRunButtonsBusy(false);
+  setOutputProgress(ok ? '100%' : '0%', ok ? '100%' : '0%', false);
+  setOutputRunStatus(ok ? 'done' : 'err', msg, ok && dest ? dest.kind : '', ok && dest ? dest.path : '');
+  clearTimeout(outputCenterFinishTimer);
+  outputCenterFinishTimer = setTimeout(()=>setOutputRunStatus(null), ok ? 20000 : 8000);
+}
+async function openLastOutputDestination(){
+  if(!lastOutputOpenKind){ return; }
+  await openOutputFolder(lastOutputOpenKind);
+}
+async function runOutputCenter(reportType='owner-data'){
+  if(outputCenterBusy){
+    toast('資料包仍在產生中，請等目前這批完成','warn');
+    return;
+  }
+  const items = selectedOutputItems();
+  if(!items.length){
+    toast('先在左側紀錄勾選要產出的資料','warn');
+    logLine('info','尚未勾選資料，未開始執行');
+    return;
+  }
+  if(!mainApi){ toast('桌面版才能產出報告','warn'); return; }
+  const label = items.map(it=>`${it.date}/${it.series}`).join('、');
+  startOutputRunUi(reportType, items);
+  logLine('info', `開始產出 ${outputReportTypeLabel(reportType)}：${label}`);
+  try{
+    const data = await mainApiCall('export_output_center', reportType, items);
+    const files = data.files || {};
+    if(files.owner_data_package){ logLine('ok', `業主資料包：${files.owner_data_package}`); }
+    if(files.owner_data_index_xlsx){ logLine('ok', `業主索引 Excel：${files.owner_data_index_xlsx}`); }
+    if(files.statistics_xlsx){ logLine('ok', `現場統計單：${files.statistics_xlsx}`); }
+    const dest = outputDestinationFromFiles(reportType, files);
+    finishOutputRunUi(true, `已完成 · ${dest.label} → ${compactOutputPath(dest.path)}`, dest);
+    toast(`已產出 ${outputReportTypeLabel(reportType)} → ${compactOutputPath(dest.path)}`, 'ok');
+    await reloadDates(false);
+  }catch(err){
+    finishOutputRunUi(false, '產出失敗，請看執行日誌');
+    toast('產出失敗：' + (err.message || err), 'err');
+    logLine('err', '產出失敗：' + (err.message || err));
+  }
+}
+function runStart(){
+  runOutputCenter('owner-data');
+}
+function retryFailedReports(){
+  let count = 0;
+  dateFolders.forEach(f=>f.items.forEach(it=>{ const on = it.status==='error'; it.sel = on; if(on){ count++; } }));
+  renderDates();
+  if(count){ toast(`已選取 ${count} 筆失敗圖號，可按開始執行`,'ok'); }
+  else { toast('目前沒有失敗圖號','ok'); }
+}
+function runStop(){
+  if(outputCenterBusy){
+    toast('資料包正在產生；目前後端不支援中止，請等這批完成', 'warn');
+    logLine('info','停止：目前資料包產出無法中止，等待後端回傳');
+    return;
+  }
+  toast('目前沒有執行中的批次', 'warn');
+  logLine('info','停止：目前沒有執行中的批次');
+}
+function currentRecordOrWarn(){
+  const r = records[recSel];
+  if(!r){ toast('請先選一筆紀錄','warn'); return null; }
+  return r;
+}
+function editCurrentRecord(){
+  const r = currentRecordOrWarn();
+  if(!r){ return; }
+  const el = document.querySelector('#recBody .edit');
+  if(el){ el.focus(); toast('可直接編輯明細；完成後按「儲存變更」','ok'); }
+  else { toast('這筆目前沒有可編輯欄位','warn'); }
+}
+async function openRecordFolder(){
+  const r = currentRecordOrWarn();
+  if(!r){ return; }
+  try{
+    const data = await mainApiCall('open_record_folder', r.id);
+    toast('已開啟資料夾：' + data.path, 'ok');
+  }catch(err){ toast('開資料夾失敗：' + (err.message || err), 'err'); }
+}
+async function openRecordPdf(){
+  const r = currentRecordOrWarn();
+  if(!r){ return; }
+  try{
+    const data = await mainApiCall('open_record_pdf', r.id);
+    toast('已開啟 PDF：' + data.path, 'ok');
+  }catch(err){ toast('開 PDF 失敗：' + (err.message || err), 'err'); }
+}
+async function saveRecordChanges(){
+  const r = currentRecordOrWarn();
+  if(!r){ return; }
+  try{
+    const data = await mainApiCall('save_record', r);
+    records[recSel] = data;
+    renderRecords(); renderRecDetail();
+    await reloadDates(false);
+    toast('已儲存到 change_order.json','ok');
+  }catch(err){ toast('儲存失敗：' + (err.message || err), 'err'); }
+}
+async function exportRecords(){
+  try{
+    const data = await mainApiCall('export_records');
+    if(data && data.cancelled){ return; }
+    toast(`已匯出 ${data.count} 筆紀錄：${data.path}`,'ok');
+  }catch(err){ toast('匯出紀錄失敗：' + (err.message || err), 'err'); }
+}
+async function exportRecordMaterials(){
+  try{
+    const data = await mainApiCall('export_record_materials');
+    if(data && data.cancelled){ return; }
+    toast(`已匯出 ${data.count} 筆材料：${data.path}`,'ok');
+  }catch(err){ toast('匯出材料彙總失敗：' + (err.message || err), 'err'); }
+}
+async function openOutputFolder(kind){
+  closeMenus();
+  try{
+    const data = await mainApiCall('open_output_folder', kind);
+    toast('已開啟資料夾：' + data.path, 'ok');
+    logLine('dir', '開啟資料夾：' + data.path);
+  }catch(err){ toast('開啟資料夾失敗：' + (err.message || err), 'err'); }
+}
 function logLine(kind,msg){
   const icons={
     info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',

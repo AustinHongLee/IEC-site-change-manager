@@ -292,8 +292,8 @@ settings.json
 
 ## 附錄：掃描腳本
 
-完整性掃描腳本位於 `_audit_data.py`，可隨時重跑：
+完整性掃描腳本位於 `tools/audit_data.py`，可隨時重跑：
 
 ```bash
-.venv\Scripts\python.exe _audit_data.py
+.venv\Scripts\python.exe tools\audit_data.py
 ```

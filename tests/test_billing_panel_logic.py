@@ -233,6 +233,17 @@ def test_record_manager_output_center_content_label_lists_selected_outputs():
         "photo_grid_pdf": False,
     }) == "未選擇"
 
+    assert RecordManagerPanel._format_output_center_selected_content_label("owner-data", {
+        "statistics_xlsx": True,
+        "summary_pdf": True,
+        "photo_grid_pdf": True,
+    }) == "業主資料包（資料夾 + 索引 Excel）"
+    assert RecordManagerPanel._format_output_center_selected_content_label("both", {
+        "statistics_xlsx": True,
+        "summary_pdf": False,
+        "photo_grid_pdf": True,
+    }) == "業主資料包（資料夾 + 索引 Excel）、現場統計單 Excel、照片 PDF"
+
 
 def test_record_manager_output_center_output_dir_normalization_uses_default():
     default_dir = "C:/project/staging/site_output_center_gui"

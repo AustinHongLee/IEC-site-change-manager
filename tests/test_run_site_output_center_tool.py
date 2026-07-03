@@ -6,6 +6,14 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+from pypdf import PdfWriter
+
+
+def _write_blank_pdf(path: Path) -> None:
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+    with open(path, "wb") as f:
+        writer.write(f)
 
 
 def test_run_site_output_center_cli_outputs_formal_names(tmp_path):
@@ -84,3 +92,53 @@ def test_run_site_output_center_refuses_to_overwrite_unmarked_folder(tmp_path):
 
     assert result.returncode != 0
     assert "拒絕覆寫非輸出中心資料夾" in result.stderr
+
+
+def test_run_site_output_center_cli_can_export_owner_data_package(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    attachments = tmp_path / "attachments"
+    folder = attachments / "20260702" / "720_3r2_3a2"
+    folder.mkdir(parents=True)
+    (folder / "GroupWeld.txt").write_text("3r3\n3a3\n", encoding="utf-8")
+    (folder / "note.txt").write_text("因現場管線干涉，切除原焊口並新增焊口。", encoding="utf-8")
+    Image.new("RGB", (80, 160), (220, 80, 60)).save(folder / "before_1.jpg")
+    Image.new("RGB", (180, 80), (80, 160, 90)).save(folder / "after_1.jpg")
+    _write_blank_pdf(folder / "720.CA-2007-100-AA1B-NA-1.pdf")
+    output_dir = tmp_path / "site_output"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "tools" / "run_site_output_center.py"),
+            "--project-root",
+            str(tmp_path),
+            "--attachments-root",
+            str(attachments),
+            "--output",
+            str(output_dir),
+            "--report-type",
+            "owner-data",
+            "--json",
+        ],
+        cwd=repo,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["ok"] is True
+    assert data["content"]["report_type"] == "owner-data"
+    assert data["content"]["owner_data_package"] is True
+    assert data["files"]["statistics_xlsx"] == ""
+    package = Path(data["files"]["owner_data_package"])
+    index = Path(data["files"]["owner_data_index_xlsx"])
+    assert package.name == "owner_data_report"
+    assert index.name == "owner_data_index.xlsx"
+    assert (package / "CO-720-3r2-3a2" / "before").is_dir()
+    assert (package / "CO-720-3r2-3a2" / "after").is_dir()
+    assert (package / "CO-720-3r2-3a2" / "pdf").is_dir()
+    assert index.exists()

@@ -41,7 +41,8 @@ REQUIRED_INTERNAL_ASSETS = (
     ("template", "dir"),
     ("control/image", "dir"),
     ("control/wizard_data.json", "file"),
-    ("material_pricebook_seed.json", "file"),
+    ("records/material_taxonomy.json", "file"),
+    ("records/seed/material_pricebook_seed.json", "file"),
 )
 
 
@@ -292,6 +293,7 @@ def _run_diagnostics_probe(exe_path: Path, expected_internal: Path, timeout: int
             bool(paths.get("template_6_exists"))
             and bool(paths.get("template_27_exists"))
             and bool(paths.get("wizard_data_exists"))
+            and bool(paths.get("material_taxonomy_exists"))
             and bool(paths.get("material_pricebook_seed_exists"))
         )
         result["ok"] = resource_dir == expected and required_exists

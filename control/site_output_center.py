@@ -24,6 +24,7 @@ def run_site_output_center(
     render_statistics: bool = True,
     render_summary_pdf: bool = True,
     render_photo_grid_pdf: bool = True,
+    report_type: str = "developer",
 ) -> dict[str, Any]:
     return run_site_output_bundle(
         output_dir,
@@ -37,6 +38,7 @@ def run_site_output_center(
         render_statistics=render_statistics,
         render_summary_pdf=render_summary_pdf,
         render_photo_grid_pdf=render_photo_grid_pdf,
+        report_type=report_type,
     )
 
 

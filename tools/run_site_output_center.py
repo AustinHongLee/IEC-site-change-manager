@@ -32,6 +32,12 @@ def main() -> int:
     ap.add_argument("--no-statistics", action="store_true", help="不輸出現場統計單 Excel")
     ap.add_argument("--no-summary-pdf", action="store_true", help="不輸出 summary PDF overlay")
     ap.add_argument("--no-photo-grid-pdf", action="store_true", help="不輸出 before/after 照片 PDF")
+    ap.add_argument(
+        "--report-type",
+        choices=["developer", "owner-data", "both"],
+        default="developer",
+        help="報告型態：developer=內部檢查輸出；owner-data=業主資料包；both=兩者都產出",
+    )
     ap.add_argument("--png", action="store_true", help="PDF 成功後嘗試用 Poppler 轉 PNG 供目視檢查")
     ap.add_argument("--include", action="append", default=[], metavar="DATE/FOLDER", help="只輸出指定 attachments 子資料夾，可重複指定")
     ap.add_argument("--json", action="store_true", help="輸出 JSON result")
@@ -61,6 +67,7 @@ def _run(args) -> dict:
         render_statistics=not args.no_statistics,
         render_summary_pdf=not args.no_summary_pdf,
         render_photo_grid_pdf=not args.no_photo_grid_pdf,
+        report_type=args.report_type,
     )
 
 

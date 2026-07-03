@@ -4,6 +4,7 @@ import base64
 import json
 from datetime import datetime
 
+import pytest
 from openpyxl import Workbook
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
@@ -31,6 +32,27 @@ def _write_fixture(path):
     wb.close()
 
 
+def _write_pdf(path, pages=1):
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=300, height=200)
+    with open(path, "wb") as f:
+        writer.write(f)
+
+
+def _tiny_png_data_url():
+    from io import BytesIO
+
+    from PIL import Image
+
+    buf = BytesIO()
+    Image.new("RGB", (12, 8), (255, 255, 255)).save(buf, format="PNG")
+    raw = buf.getvalue()
+    return "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
+
+
 def _bridge(tmp_path):
     wb = tmp_path / "weld_control.xlsx"
     _write_fixture(wb)
@@ -40,6 +62,13 @@ def _bridge(tmp_path):
     })
     builder = ChangeOrderBuilder(lookup=WeldLookup(manager=manager), clock=_fixed_clock)
     return ChangeOrderBridge(builder=builder, attachments_root=tmp_path / "records")
+
+
+def _bridge_with_records(tmp_path):
+    bridge = _bridge(tmp_path)
+    bridge.records_dir = tmp_path / "records_data"
+    bridge.records_dir.mkdir()
+    return bridge
 
 
 def test_envelope_shape(tmp_path):
@@ -100,8 +129,8 @@ def test_build_returns_codes_status_issues(tmp_path):
     payload = {
         "series": "0100", "date": "20260624", "reason": "現場干涉",
         "welds": [
-            {"kind": "existing", "base": "5", "op": "加長"},
-            {"kind": "new", "op": "加長", "spec": {"size": '1"', "material": "SUS304"}},
+            {"kind": "existing", "base": "5", "op": "重焊"},
+            {"kind": "new", "op": "新焊", "spec": {"size": '1"', "material": "SUS304"}},
         ],
     }
     res = _bridge(tmp_path).build(payload)
@@ -109,6 +138,7 @@ def test_build_returns_codes_status_issues(tmp_path):
     co = res["data"]["co"]
     assert co["series"] == "100"                    # 邊界正規化
     assert [w["code"] for w in co["welds"]] == ["5b", "1001"]   # 既有重焊→5b、新→1001
+    assert [w["op"] for w in co["welds"]] == ["重焊", "新焊"]
     assert res["data"]["status"] == "待補"          # 還沒照片/pdf
     codes = {i["code"] for i in res["data"]["issues"]}
     assert "missing_before_photo" in codes
@@ -118,7 +148,7 @@ def test_export_blocks_when_not_complete_then_succeeds(tmp_path):
     b = _bridge(tmp_path)
     base = {
         "series": "100", "date": "20260624",
-        "welds": [{"kind": "existing", "base": "5", "op": "加長"}],
+        "welds": [{"kind": "existing", "base": "5", "op": "重焊"}],
     }
     # finalize 在未完整時被擋
     blocked = b.export(base, finalize=True)
@@ -162,6 +192,60 @@ def test_list_staging_returns_image_files_only(tmp_path):
     assert {row["path"] for row in rows} == {str(photo), str(diagram)}
 
 
+def test_project_parts_returns_registered_material_rows(tmp_path):
+    bridge = _bridge_with_records(tmp_path)
+    (bridge.records_dir / "material_pricebook.json").write_text(json.dumps({"items": [
+        {"id": "0001", "零件類型": "無縫鋼管", "尺寸": "DN15", "SCH": "SCH80",
+         "材質": "A106 GR.B", "類別": "配管", "單位": "米", "來源": "管制"},
+        {"id": "0002", "零件類型": "90°彎頭", "尺寸": "DN15", "SCH": "SCH80",
+         "材質": "A105", "類別": "配管", "單位": "個", "來源": "管制"},
+    ]}, ensure_ascii=False), encoding="utf-8")
+    (bridge.records_dir / "project_parts.json").write_text(
+        json.dumps({"registered": ["0002", "missing"]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    res = bridge.project_parts()
+
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["registered"] == ["0002", "missing"]
+    assert data["count"] == 1
+    assert data["items"] == [{
+        "id": "0002",
+        "part": "90°彎頭",
+        "size": "DN15",
+        "sch": "SCH80",
+        "mat": "A105",
+        "cat": "配管",
+        "unit": "個",
+        "src": "管制",
+        "remark": "",
+    }]
+
+
+def test_build_preserves_material_component_id(tmp_path):
+    payload = {
+        "series": "100",
+        "date": "20260701",
+        "materials": [{
+            "component_id": "0002",
+            "component": "90°彎頭",
+            "size": "DN15",
+            "schedule": "SCH80",
+            "material": "A105",
+            "qty": "2",
+            "unit": "個",
+            "remark": "",
+        }],
+    }
+
+    res = _bridge(tmp_path).build(payload)
+
+    assert res["ok"] is True
+    assert res["data"]["co"]["materials"][0]["component_id"] == "0002"
+
+
 def test_save_annotated_writes_png_and_returns_path(tmp_path):
     raw = b"\x89PNG\r\n\x1a\nannotated"
     data_url = "data:image/png;base64," + base64.b64encode(raw).decode("ascii")
@@ -174,3 +258,80 @@ def test_save_annotated_writes_png_and_returns_path(tmp_path):
     assert os.path.basename(saved).startswith("before_photo_")
     assert os.path.dirname(saved).endswith("_annotated")
     assert open(saved, "rb").read() == raw
+
+
+def test_image_data_url_reads_absolute_image_path(tmp_path):
+    raw = b"fake-jpeg-bytes"
+    photo = tmp_path / "photo name.jpg"
+    photo.write_bytes(raw)
+
+    res = _bridge(tmp_path).image_data_url(str(photo))
+
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["name"] == "photo name.jpg"
+    assert data["path"] == str(photo.resolve())
+    assert data["url"].startswith("data:image/jpeg;base64,")
+    assert base64.b64decode(data["url"].split(",", 1)[1]) == raw
+
+
+def test_image_data_url_accepts_file_url(tmp_path):
+    raw = b"png-bytes"
+    photo = tmp_path / "space photo.png"
+    photo.write_bytes(raw)
+
+    res = _bridge(tmp_path).image_data_url(photo.as_uri())
+
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["name"] == "space photo.png"
+    assert data["url"].startswith("data:image/png;base64,")
+    assert base64.b64decode(data["url"].split(",", 1)[1]) == raw
+
+
+def test_image_data_url_resolves_relative_exported_photo(tmp_path):
+    raw = b"webp-bytes"
+    photo = tmp_path / "records" / "100_20260624_01" / "after_1.webp"
+    photo.parent.mkdir(parents=True)
+    photo.write_bytes(raw)
+
+    res = _bridge(tmp_path).image_data_url("100_20260624_01/after_1.webp")
+
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["path"] == str(photo.resolve())
+    assert data["url"].startswith("data:image/webp;base64,")
+    assert base64.b64decode(data["url"].split(",", 1)[1]) == raw
+
+
+def test_pdf_page_data_url_renders_first_page(tmp_path):
+    pytest.importorskip("fitz")
+    pdf = tmp_path / "drawing.pdf"
+    _write_pdf(pdf, pages=2)
+
+    res = _bridge(tmp_path).pdf_page_data_url(str(pdf), 0)
+
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["name"] == "drawing.pdf"
+    assert data["page_index"] == 0
+    assert data["page_count"] == 2
+    assert data["url"].startswith("data:image/png;base64,")
+    assert base64.b64decode(data["url"].split(",", 1)[1]).startswith(b"\x89PNG")
+
+
+def test_save_pdf_annotation_returns_readable_pdf_and_keeps_source(tmp_path):
+    pytest.importorskip("fitz")
+    from pypdf import PdfReader
+
+    pdf = tmp_path / "drawing.pdf"
+    _write_pdf(pdf, pages=2)
+
+    res = _bridge(tmp_path).save_pdf_annotation(_tiny_png_data_url(), str(pdf), 0)
+
+    assert res["ok"] is True
+    saved = res["data"]["path"]
+    assert saved.endswith(".pdf")
+    assert os.path.dirname(saved).endswith("_annotated")
+    assert os.path.exists(pdf)
+    assert len(PdfReader(saved).pages) == 2

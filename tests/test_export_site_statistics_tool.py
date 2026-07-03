@@ -31,9 +31,9 @@ def test_cli_export_site_statistics_creates_workbook(tmp_path):
     assert "已匯出現場修改統計單" in result.stdout
     wb = load_workbook(output, read_only=True)
     try:
-        assert "總覽" in wb.sheetnames
-        assert "照片索引" in wb.sheetnames
-        assert "照片表" in wb.sheetnames
+        assert "目錄" in wb.sheetnames
+        assert "開發_照片索引" in wb.sheetnames
+        assert "報告_照片表" in wb.sheetnames
     finally:
         wb.close()
 

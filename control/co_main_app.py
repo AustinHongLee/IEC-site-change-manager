@@ -69,6 +69,14 @@ def main() -> int:
 
     bridge._save_file_fn = _save_file
 
+    def _pick_folder():
+        result = window.create_file_dialog(webview.FOLDER_DIALOG)
+        if not result:
+            return None
+        return result if isinstance(result, str) else (result[0] if result else None)
+
+    bridge._pick_folder_fn = _pick_folder
+
     debug = os.environ.get("CO_MAIN_DEBUG", "0") == "1"  # 開發時設 CO_MAIN_DEBUG=1 可開 DevTools
     try:
         webview.start(debug=debug)

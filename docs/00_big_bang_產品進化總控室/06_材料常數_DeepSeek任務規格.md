@@ -54,7 +54,7 @@
 
 > 此表來源＝ `control/wizard_data.json`，程式端由 `control/material_constants.py` 統一載入。
 > 若日後該檔更新，以該檔為準；可隨時用
-> `python tools/validate_pricebook.py material_pricebook_seed.json --list-vocab` 重新匯出最新版。
+> `python tools/validate_pricebook.py records/seed/material_pricebook_seed.json --list-vocab` 重新匯出最新版。
 
 ### 零件類型（32 種，照抄括號與英文）
 ```
@@ -148,14 +148,14 @@ SCH 5   SCH 10   SCH 20   SCH 40   SCH 80   SCH 160   XXS
 1. 把輸出存成 `material_pricebook_seed.json`。
 2. 在 repo 根目錄執行：
    ```
-   python tools/validate_pricebook.py material_pricebook_seed.json
+   python tools/validate_pricebook.py records/seed/material_pricebook_seed.json
    ```
 3. 看到 `✓ 通過驗證閘門`、`ERROR: 0` 才算完成；有 ERROR 全部修掉再交。
    WARNING 要逐條看過、確認是預期內（例如刻意保留的別名/SCH 組合）。
 4. 交給李宗鴻/Codex 覆核後，再用安全匯入工具併入 `records/material_pricebook.json`：
    ```
-   python tools/import_pricebook_seed.py material_pricebook_seed.json
-   python tools/import_pricebook_seed.py material_pricebook_seed.json --apply
+   python tools/import_pricebook_seed.py records/seed/material_pricebook_seed.json
+   python tools/import_pricebook_seed.py records/seed/material_pricebook_seed.json --apply
    ```
    第一行只 dry-run，會列出既有項目、將新增、已存在略過；第二行才實際寫入。
    一般使用者也可以在「材料價目表」面板按「匯入骨架」，走同一套驗證與二次確認流程。
