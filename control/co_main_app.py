@@ -22,7 +22,20 @@ if str(_HERE) not in sys.path:
 _INDEX = _HERE / "co_main_web" / "index.html"
 
 
-def main() -> int:
+def _health_check() -> int:
+    from app_info import format_app_identity
+
+    print(format_app_identity())
+    try:
+        import webview  # noqa: F401
+    except ImportError:
+        print("✗ 需要 pywebview：請先  pip install pywebview")
+        return 2
+    print("pywebview: OK")
+    return 0
+
+
+def _run_main_window() -> int:
     try:
         import webview  # pywebview
     except ImportError:
@@ -88,6 +101,30 @@ def main() -> int:
             "  解法：到 Microsoft 下載「Evergreen WebView2 Runtime」安裝後再試。"
         )
         return 3
+
+
+def _run_wizard_window() -> int:
+    from co_wizard_app import main as wizard_main
+
+    return wizard_main()
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    from console_io import configure_utf8_stdio
+
+    configure_utf8_stdio()
+
+    parser = argparse.ArgumentParser(description="工務修改單新版 GUI")
+    parser.add_argument("--wizard", action="store_true", help="改以新修改單精靈視窗啟動")
+    parser.add_argument("--health-check", action="store_true", help="檢查 pywebview 依賴，不開視窗")
+    args = parser.parse_args(argv)
+
+    if args.health_check:
+        return _health_check()
+    if args.wizard:
+        return _run_wizard_window()
+    return _run_main_window()
 
 
 if __name__ == "__main__":

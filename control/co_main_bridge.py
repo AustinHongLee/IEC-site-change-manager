@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import functools
 import json
+import subprocess
+import sys
 import traceback
 import re
 from pathlib import Path
@@ -36,6 +38,16 @@ from support_bom import analyze_support_bom
 from utils import atomic_write_json
 
 API_VERSION = "main-0.1"
+
+
+def _wizard_launch_command(root: Path) -> tuple[list[str], str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--wizard"], "frozen"
+
+    app = root / "control" / "co_wizard_app.py"
+    if not app.exists():
+        raise FileNotFoundError(f"找不到精靈啟動器：{app}")
+    return [sys.executable, str(app)], "source"
 
 
 def _enveloped(fn: Callable) -> Callable:
@@ -1194,13 +1206,9 @@ class MainBridge:
     @_enveloped
     def open_wizard(self) -> dict:
         """開修改單精靈（subprocess 另開原生視窗、獨立行程；接真橋、能出單寫 change_order.json）。"""
-        import subprocess
-        import sys
-        app = self.root / "control" / "co_wizard_app.py"
-        if not app.exists():
-            raise FileNotFoundError(f"找不到精靈啟動器：{app}")
-        subprocess.Popen([sys.executable, str(app)], cwd=str(self.root))
-        return {"launched": True, "app": str(app)}
+        command, mode = _wizard_launch_command(self.root)
+        subprocess.Popen(command, cwd=str(self.root))
+        return {"launched": True, "mode": mode, "command": command}
 
     # ---- 設定：路徑（config 預設 + records/app_settings.json 覆蓋）---------- #
     @_enveloped

@@ -10,6 +10,7 @@ from pypdf import PdfWriter
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
 from co_main_bridge import MainBridge  # noqa: E402
+import co_main_bridge  # noqa: E402
 from material_taxonomy import material_family, normalize_material, normalize_schedule, normalize_size  # noqa: E402
 
 
@@ -469,6 +470,37 @@ def test_open_record_folder_and_pdf_use_injected_opener(tmp_path):
     assert folder_res["ok"] and folder_res["data"]["path"] == str(folder)
     assert pdf_res["ok"] and pdf_res["data"]["path"] == str(folder / "drawing.pdf")
     assert opened == [str(folder), str(folder / "drawing.pdf")]
+
+
+def test_open_wizard_uses_script_launcher_in_source_mode(tmp_path, monkeypatch):
+    app = tmp_path / "control" / "co_wizard_app.py"
+    app.parent.mkdir()
+    app.write_text("# smoke\n", encoding="utf-8")
+    calls = []
+
+    monkeypatch.setattr(co_main_bridge.sys, "frozen", False, raising=False)
+    monkeypatch.setattr(co_main_bridge.sys, "executable", "python.exe")
+    monkeypatch.setattr(co_main_bridge.subprocess, "Popen", lambda command, cwd=None: calls.append((command, cwd)))
+
+    res = MainBridge(tmp_path).open_wizard()
+
+    assert res["ok"] is True
+    assert res["data"]["mode"] == "source"
+    assert calls == [(["python.exe", str(app)], str(tmp_path))]
+
+
+def test_open_wizard_uses_wizard_arg_when_frozen(tmp_path, monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(co_main_bridge.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(co_main_bridge.sys, "executable", r"C:\dist\IEC-site-change-manager.exe")
+    monkeypatch.setattr(co_main_bridge.subprocess, "Popen", lambda command, cwd=None: calls.append((command, cwd)))
+
+    res = MainBridge(tmp_path).open_wizard()
+
+    assert res["ok"] is True
+    assert res["data"]["mode"] == "frozen"
+    assert calls == [([r"C:\dist\IEC-site-change-manager.exe", "--wizard"], str(tmp_path))]
 
 
 def test_export_records_and_material_summary(tmp_path):

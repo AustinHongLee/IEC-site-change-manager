@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
 import app_info
+import co_main_app
 
 
 def test_app_info_formats_shared_identity():
@@ -50,3 +51,16 @@ def test_health_check_prints_app_identity():
 
     assert result.returncode == 0
     assert app_info.format_app_identity() in result.stdout
+
+
+def test_co_main_app_wizard_arg_delegates_to_wizard(monkeypatch):
+    calls = []
+
+    def fake_run_wizard_window():
+        calls.append("wizard")
+        return 17
+
+    monkeypatch.setattr(co_main_app, "_run_wizard_window", fake_run_wizard_window)
+
+    assert co_main_app.main(["--wizard"]) == 17
+    assert calls == ["wizard"]
