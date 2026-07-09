@@ -5,6 +5,7 @@
 目前策略：
 
 - 先用 PyInstaller `onedir`。
+- 新版 HTML GUI 走 pywebview / WebView2；正式 spec 前先跑 `packaging/spike`。
 - 依賴與打包資產放在 PyInstaller 預設 `_internal/`。
 - 公司版正式要求 Microsoft Excel；沒有 Excel 或 Excel COM 不可用的電腦不支援使用。
 - `project_guard` 會忽略本工具的 exe 與 `_internal/`，讓空白資料夾仍可被判定為第一次開啟。
@@ -42,3 +43,16 @@ python tools\build_release.py --archive
 ```powershell
 dist\IEC-site-change-manager\IEC-site-change-manager.exe --health-check
 ```
+
+## 新版 GUI 打包 spike
+
+正式切換到新版 HTML GUI 前，先跑最小 pywebview spike：
+
+```powershell
+python packaging\spike\pywebview_smoke_app.py --health-check
+python -m PyInstaller --noconfirm --clean packaging\spike\pywebview_smoke.spec
+dist\pywebview-smoke\pywebview-smoke.exe --health-check
+dist\pywebview-smoke\pywebview-smoke.exe
+```
+
+`dist\pywebview-smoke` 能在乾淨 Windows 電腦開窗且 `js_api.ping()` 回 `pong` 後，才把 hiddenimports 與資產清單搬進正式 web spec。
