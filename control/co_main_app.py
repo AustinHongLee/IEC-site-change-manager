@@ -47,7 +47,9 @@ def _run_main_window() -> int:
         return 4
 
     from co_main_bridge import MainBridge
-    bridge = MainBridge(_HERE.parent)  # 專案根目錄，底下有 records/（舊系統資料）
+    from resources import resolve_project_dir
+
+    bridge = MainBridge(resolve_project_dir())
 
     window = webview.create_window(
         "工務修改單 · 新版 GUI",

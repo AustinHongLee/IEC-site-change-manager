@@ -50,6 +50,42 @@ def test_project_path_stays_on_exe_folder_when_resources_are_internal(monkeypatc
     )
 
 
+def test_co_main_app_uses_project_dir_for_bridge_root(monkeypatch, tmp_path):
+    import co_main_app
+
+    captured = {}
+    project = tmp_path / "project"
+    project.mkdir()
+
+    class FakeBridge:
+        def __init__(self, root):
+            captured["root"] = root
+
+    class FakeWindow:
+        def create_file_dialog(self, *args, **kwargs):
+            return None
+
+    class FakeWebview:
+        OPEN_DIALOG = object()
+        SAVE_DIALOG = object()
+        FOLDER_DIALOG = object()
+
+        def create_window(self, *args, **kwargs):
+            return FakeWindow()
+
+        def start(self, **kwargs):
+            captured["started"] = True
+
+    monkeypatch.setattr(co_main_app, "_INDEX", tmp_path / "index.html")
+    co_main_app._INDEX.write_text("<html></html>", encoding="utf-8")
+    monkeypatch.setitem(sys.modules, "webview", FakeWebview())
+    monkeypatch.setattr("co_main_bridge.MainBridge", FakeBridge)
+    monkeypatch.setattr("resources.resolve_project_dir", lambda: str(project))
+
+    assert co_main_app._run_main_window() == 0
+    assert captured["root"] == str(project)
+
+
 def test_record_and_log_paths_stay_on_project_dir_when_frozen(monkeypatch, tmp_path):
     import log_config
     import record_manager

@@ -108,8 +108,16 @@ def collect_support_bundle(
                 "template_27_exists": Path(TEMPLATE_PATH_27).is_file(),
                 "wizard_data_path": WIZARD_DATA_PATH,
                 "wizard_data_exists": Path(WIZARD_DATA_PATH).is_file(),
+                "settings_template_path": resource_path("settings.template.json"),
+                "settings_template_exists": Path(resource_path("settings.template.json")).is_file(),
+                "co_main_web_index_path": resource_path("control", "co_main_web", "index.html"),
+                "co_main_web_index_exists": Path(resource_path("control", "co_main_web", "index.html")).is_file(),
+                "co_wizard_web_index_path": resource_path("control", "co_wizard_web", "index.html"),
+                "co_wizard_web_index_exists": Path(resource_path("control", "co_wizard_web", "index.html")).is_file(),
                 "material_taxonomy_path": resource_path("records", "material_taxonomy.json"),
                 "material_taxonomy_exists": Path(resource_path("records", "material_taxonomy.json")).is_file(),
+                "material_catalog_rules_path": resource_path("records", "material_catalog_rules.json"),
+                "material_catalog_rules_exists": Path(resource_path("records", "material_catalog_rules.json")).is_file(),
                 "material_pricebook_seed_path": resource_path("records", "seed", "material_pricebook_seed.json"),
                 "material_pricebook_seed_exists": Path(
                     resource_path("records", "seed", "material_pricebook_seed.json")

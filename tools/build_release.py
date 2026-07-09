@@ -34,7 +34,7 @@ from check_release_package import (
 from console_io import configure_utf8_stdio
 
 
-DEFAULT_SPEC = _ROOT / "packaging" / "IEC-site-change-manager.spec"
+DEFAULT_SPEC = _ROOT / "packaging" / "IEC-site-change-manager-web.spec"
 DEFAULT_ARCHIVE_DIR = _ROOT / "dist" / "releases"
 GENERATED_BUILD_INFO = _ROOT / "packaging" / "generated" / "build_info.json"
 BUILD_INFO_SCHEMA = "build_info.v1"

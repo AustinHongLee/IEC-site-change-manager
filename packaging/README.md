@@ -16,8 +16,10 @@
 建置：
 
 ```powershell
-python -m PyInstaller --noconfirm --clean packaging\IEC-site-change-manager.spec
+python -m PyInstaller --noconfirm --clean packaging\IEC-site-change-manager-web.spec
 ```
+
+舊 PyQt GUI 的 spec 仍保留在 `packaging\IEC-site-change-manager.spec`，只作為 legacy fallback；正式交付預設使用 `IEC-site-change-manager-web.spec`。
 
 建置加交付前檢查：
 

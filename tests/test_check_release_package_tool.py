@@ -45,12 +45,23 @@ def write_build_info(
 def make_package(root: Path):
     repo = Path(__file__).resolve().parents[1]
     package = root / "IEC-site-change-manager"
+    (package / "_internal").mkdir(parents=True)
+    (package / "_internal" / "settings.template.json").write_text("{}", encoding="utf-8")
     (package / "_internal" / "template").mkdir(parents=True)
     (package / "_internal" / "control" / "image").mkdir(parents=True)
     (package / "_internal" / "control" / "wizard_data.json").write_text("{}", encoding="utf-8")
+    (package / "_internal" / "control" / "co_main_web" / "img").mkdir(parents=True)
+    (package / "_internal" / "control" / "co_main_web" / "index.html").write_text("", encoding="utf-8")
+    (package / "_internal" / "control" / "co_main_web" / "style.css").write_text("", encoding="utf-8")
+    (package / "_internal" / "control" / "co_wizard_web").mkdir(parents=True)
+    (package / "_internal" / "control" / "co_wizard_web" / "index.html").write_text("", encoding="utf-8")
+    (package / "_internal" / "control" / "co_wizard_web" / "style.css").write_text("", encoding="utf-8")
     (package / "_internal" / "records").mkdir(parents=True)
     (package / "_internal" / "records" / "material_taxonomy.json").write_text(
         '{"schema_version":"material_taxonomy.v1"}', encoding="utf-8"
+    )
+    (package / "_internal" / "records" / "material_catalog_rules.json").write_text(
+        '{"schema_version":"material_catalog_rules.v1"}', encoding="utf-8"
     )
     (package / "_internal" / "records" / "seed").mkdir(parents=True)
     (package / "_internal" / "records" / "seed" / "material_pricebook_seed.json").write_text(

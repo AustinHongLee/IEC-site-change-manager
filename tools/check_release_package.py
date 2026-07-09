@@ -38,10 +38,17 @@ DEFAULT_EXE_NAME = "IEC-site-change-manager.exe"
 ALLOWED_TOP_LEVEL = {DEFAULT_EXE_NAME, "_internal", *DISTRIBUTION_ARTIFACT_NAMES}
 BUILD_INFO_SCHEMA = "build_info.v1"
 REQUIRED_INTERNAL_ASSETS = (
+    ("settings.template.json", "file"),
     ("template", "dir"),
     ("control/image", "dir"),
     ("control/wizard_data.json", "file"),
+    ("control/co_main_web/index.html", "file"),
+    ("control/co_main_web/style.css", "file"),
+    ("control/co_main_web/img", "dir"),
+    ("control/co_wizard_web/index.html", "file"),
+    ("control/co_wizard_web/style.css", "file"),
     ("records/material_taxonomy.json", "file"),
+    ("records/material_catalog_rules.json", "file"),
     ("records/seed/material_pricebook_seed.json", "file"),
 )
 
@@ -293,7 +300,11 @@ def _run_diagnostics_probe(exe_path: Path, expected_internal: Path, timeout: int
             bool(paths.get("template_6_exists"))
             and bool(paths.get("template_27_exists"))
             and bool(paths.get("wizard_data_exists"))
+            and bool(paths.get("settings_template_exists"))
+            and bool(paths.get("co_main_web_index_exists"))
+            and bool(paths.get("co_wizard_web_index_exists"))
             and bool(paths.get("material_taxonomy_exists"))
+            and bool(paths.get("material_catalog_rules_exists"))
             and bool(paths.get("material_pricebook_seed_exists"))
         )
         result["ok"] = resource_dir == expected and required_exists
