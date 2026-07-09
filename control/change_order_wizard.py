@@ -41,6 +41,7 @@ from change_order_builder import ChangeOrderBuilder
 from change_order_store import export_change_order
 from staging_manager import scan_staging
 from theme import Colors, Fonts, build_stylesheet, make_hint_label, make_separator, set_button_role
+from weld_codec import parse as parse_weld_code
 
 
 HISTORY_PREVIEW_ROLE = Qt.ItemDataRole.UserRole.value + 1
@@ -87,6 +88,13 @@ class ChangeOrderWizard(QDialog):
             normalize_series_raw(self.series_edit.text()),
             self.date_edit.text().strip(),
             scenario=Scenario.NORMAL,
+        )
+        builder.reserve_existing_weld_ids(
+            co,
+            self._historical_weld_codes(
+                co.series,
+                exclude_ids=[self.last_saved_path.parent.name] if self.last_saved_path else [],
+            ),
         )
         builder.set_reason(co, self.reason_edit.toPlainText())
         for request in self.requests:
@@ -1223,6 +1231,34 @@ class ChangeOrderWizard(QDialog):
         if not self.attachments_root.exists():
             return []
         return [path.name for path in self.attachments_root.iterdir() if path.is_dir()]
+
+    def _historical_weld_codes(self, series: Any, *, exclude_ids: list[str] | None = None) -> list[str]:
+        if not self.attachments_root.exists():
+            return []
+
+        normalized = normalize_series_raw(series)
+        excluded = {str(value).strip() for value in (exclude_ids or []) if str(value).strip()}
+        scheme = getattr(self.builder_template, "scheme", None)
+        codes: list[str] = []
+        for folder in self.attachments_root.iterdir():
+            if not folder.is_dir() or "_" not in folder.name or folder.name in excluded:
+                continue
+            folder_series = folder.name.split("_", 1)[0]
+            if normalize_series_raw(folder_series) != normalized:
+                continue
+            record_path = folder / "change_order.json"
+            try:
+                co = ChangeOrder.load_json(record_path)
+            except Exception:
+                continue
+            if co.series and normalize_series_raw(co.series) != normalized:
+                continue
+            for weld in co.welds:
+                code = str(weld.code or "").strip()
+                parsed = parse_weld_code(code, scheme=scheme) if scheme is not None else parse_weld_code(code)
+                if code and parsed.parsed:
+                    codes.append(code)
+        return codes
 
     def _photo_entries(self) -> list[tuple[str, int]]:
         return (

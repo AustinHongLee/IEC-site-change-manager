@@ -418,7 +418,7 @@
 
 <script>
 const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
-const state = { series:'', date:today, reason:'', welds:[], photos:[], drawing_pdf:null, materials:[] };
+const state = { series:'', date:today, reason:'', welds:[], photos:[], drawing_pdf:null, materials:[], current_id:'', current_signature:'' };
 const pageMeta = {
   basic:['基本資料','建立修改單的圖號、日期與原因'],
   welds:['焊口','從來源清單挑既有焊口，或新增原圖沒有的焊口'],
@@ -629,6 +629,20 @@ function syncState(){
   state.series = val('series');
   state.date = val('date');
   state.reason = val('reason');
+}
+
+function recordSignature(){
+  const weldPart = state.welds
+    .map(w=>[w.kind || '', w.base || '', w.op || '', JSON.stringify(w.spec || {})].join(':'))
+    .join('|');
+  return [state.series || '', state.date || '', weldPart].join('::');
+}
+
+function resetCurrentRecordIfChanged(){
+  if(state.current_id && state.current_signature && state.current_signature !== recordSignature()){
+    state.current_id = '';
+    state.current_signature = '';
+  }
 }
 
 function syncNavStatus(){
@@ -1104,6 +1118,7 @@ async function removeMaterial(index){
 async function rebuild(){
   if(!api){ return; }
   syncState();
+  resetCurrentRecordIfChanged();
   syncNavStatus();
   updateHints();
   let result;
@@ -1668,6 +1683,10 @@ async function doExport(finalize){
       toast(`正式建立被擋：${labels}`, true);
       renderStatus(result.status, result.issues || []);
       return;
+    }
+    if(result.id){
+      state.current_id = result.id;
+      state.current_signature = recordSignature();
     }
     toast(`${finalize ? '已正式建立' : '已存草稿'}：${result.id}`);
     byId('status').innerHTML = `已出單 <code>${escapeHtml(result.id)}</code>　${escapeHtml(result.folder)}`;

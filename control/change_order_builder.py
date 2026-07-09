@@ -141,10 +141,17 @@ class ChangeOrderBuilder:
         co.id = generate_id(co.series or "", co.date or "", existing_ids)
         return co
 
+    def reserve_existing_weld_ids(self, co: ChangeOrder, weld_ids: Iterable[str]) -> ChangeOrder:
+        reserved = getattr(co, "_reserved_existing_weld_ids", [])
+        reserved.extend(_clean(value) for value in (weld_ids or []))
+        co._reserved_existing_weld_ids = [value for value in reserved if value]
+        return co
+
     def _existing_ids(self, co: ChangeOrder) -> list[str]:
         ids: list[str] = []
         if self.lookup is not None:
             ids.extend(self.lookup.existing_weld_ids(co.series))
+        ids.extend(getattr(co, "_reserved_existing_weld_ids", []))
         ids.extend(w.code for w in co.welds if _clean(w.code))
         return [str(weld_id) for weld_id in ids]
 

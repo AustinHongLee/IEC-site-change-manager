@@ -164,6 +164,64 @@ def test_build_returns_codes_status_issues(tmp_path):
     assert "missing_before_photo" in codes
 
 
+def test_build_reserves_historical_weld_codes_for_same_series(tmp_path):
+    bridge = _bridge(tmp_path)
+    root = tmp_path / "records"
+    history = root / "100_20260623_01"
+    history.mkdir(parents=True)
+    (history / "change_order.json").write_text(json.dumps({
+        "id": "100_20260623_01",
+        "series": "100",
+        "date": "20260623",
+        "welds": [{"code": "5b"}, {"code": "1001"}],
+    }, ensure_ascii=False), encoding="utf-8")
+    other = root / "1000_20260623_01"
+    other.mkdir()
+    (other / "change_order.json").write_text(json.dumps({
+        "id": "1000_20260623_01",
+        "series": "1000",
+        "welds": [{"code": "5z"}, {"code": "1999"}],
+    }, ensure_ascii=False), encoding="utf-8")
+
+    res = bridge.build({
+        "series": "0100",
+        "date": "20260624",
+        "welds": [
+            {"kind": "existing", "base": "5", "op": "重焊"},
+            {"kind": "new", "op": "新焊", "spec": {"size": '1"', "material": "SUS304"}},
+        ],
+    })
+
+    assert res["ok"] is True
+    assert [w["code"] for w in res["data"]["co"]["welds"]] == ["5c", "1002"]
+
+
+def test_build_excludes_current_record_from_historical_weld_reservations(tmp_path):
+    bridge = _bridge(tmp_path)
+    root = tmp_path / "records"
+    current = root / "100_20260624_01"
+    current.mkdir(parents=True)
+    (current / "change_order.json").write_text(json.dumps({
+        "id": "100_20260624_01",
+        "series": "100",
+        "date": "20260624",
+        "welds": [{"code": "5b"}, {"code": "1001"}],
+    }, ensure_ascii=False), encoding="utf-8")
+
+    res = bridge.build({
+        "current_id": "100_20260624_01",
+        "series": "0100",
+        "date": "20260624",
+        "welds": [
+            {"kind": "existing", "base": "5", "op": "重焊"},
+            {"kind": "new", "op": "新焊", "spec": {"size": '1"', "material": "SUS304"}},
+        ],
+    })
+
+    assert res["ok"] is True
+    assert [w["code"] for w in res["data"]["co"]["welds"]] == ["5b", "1001"]
+
+
 def test_export_blocks_when_not_complete_then_succeeds(tmp_path):
     b = _bridge(tmp_path)
     base = {

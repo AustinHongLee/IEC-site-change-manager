@@ -41,6 +41,8 @@ from change_order import (
 )
 from change_order_builder import ChangeOrderBuilder
 from change_order_store import export_change_order
+from weld_codec import parse as parse_weld_code
+from weld_lookup import normalize_series_raw
 
 API_VERSION = "1.0"
 
@@ -69,8 +71,16 @@ def _enum_value(value: Any) -> Any:
 
 
 def _norm_series(series: Any) -> str:
-    text = "" if series is None else str(series).strip()
-    return text.lstrip("0") or "0"
+    return normalize_series_raw(series)
+
+
+def _payload_record_ids(payload: dict[str, Any]) -> list[str]:
+    ids = []
+    for key in ("id", "current_id", "record_id"):
+        text = str((payload or {}).get(key) or "").strip()
+        if text:
+            ids.append(text)
+    return ids
 
 
 def _as_op(value: Any) -> Any:
@@ -424,6 +434,10 @@ class ChangeOrderBridge:
             (p.get("date") or "").strip(),
             scenario=Scenario.NORMAL,
         )
+        self.builder.reserve_existing_weld_ids(
+            co,
+            self._historical_weld_codes(co.series, exclude_ids=_payload_record_ids(p)),
+        )
         self.builder.set_reason(co, p.get("reason"))
 
         for w in (p.get("welds") or []):
@@ -452,6 +466,38 @@ class ChangeOrderBridge:
         if not root.exists():
             return []
         return [x.name for x in root.iterdir() if x.is_dir()]
+
+    def _historical_weld_codes(self, series: Any, *, exclude_ids: Any = None) -> list[str]:
+        root = self.attachments_root
+        if not root.exists():
+            return []
+
+        normalized = _norm_series(series)
+        excluded = {str(value).strip() for value in (exclude_ids or []) if str(value).strip()}
+        codes: list[str] = []
+        scheme = getattr(self.builder, "scheme", None)
+        for folder in root.iterdir():
+            if not folder.is_dir() or "_" not in folder.name or folder.name in excluded:
+                continue
+            folder_series = folder.name.split("_", 1)[0]
+            if _norm_series(folder_series) != normalized:
+                continue
+            record_path = folder / "change_order.json"
+            try:
+                data = json.loads(record_path.read_text(encoding="utf-8-sig"))
+            except Exception:
+                continue
+            record_series = data.get("series")
+            if record_series is not None and _norm_series(record_series) != normalized:
+                continue
+            for weld in (data.get("welds") or []):
+                if not isinstance(weld, dict):
+                    continue
+                code = str(weld.get("code") or "").strip()
+                parsed = parse_weld_code(code, scheme=scheme) if scheme is not None else parse_weld_code(code)
+                if code and parsed.parsed:
+                    codes.append(code)
+        return codes
 
     def _weld_source_status(self, lookup: Any, series: str) -> dict:
         if lookup is None:

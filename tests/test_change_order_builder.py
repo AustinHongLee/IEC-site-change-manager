@@ -109,6 +109,19 @@ def test_add_new_welds_merge_current_order_codes_to_avoid_collision(tmp_path):
     assert [w.code for w in co.welds] == ["1001", "1002"]
 
 
+def test_reserved_history_weld_ids_prevent_cross_order_collision(tmp_path):
+    builder = _builder_for_fixture(tmp_path)
+    co = builder.start("0202", "20260624")
+    builder.reserve_existing_weld_ids(co, ["2b", "1001"])
+
+    rework = builder.add_existing_weld(co, "2", Op.REWORK)
+    new = builder.add_new_weld(co, Op.NEW, {"size": '3"', "material": "CS"})
+
+    assert rework.code == "2c"
+    assert rework.rework_index == 3
+    assert new.code == "1002"
+
+
 def test_validate_reports_hard_bottom_missing_items_and_clears_after_fill(tmp_path):
     builder = _builder_for_fixture(tmp_path)
     co = builder.start("0202", "20260624")
