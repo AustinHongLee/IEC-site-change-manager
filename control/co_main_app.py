@@ -123,14 +123,35 @@ def _run_wizard_window() -> int:
 def main(argv: list[str] | None = None) -> int:
     import argparse
     from console_io import configure_utf8_stdio
+    from app_info import format_version_cli
 
     configure_utf8_stdio()
 
     parser = argparse.ArgumentParser(description="工務修改單新版 GUI")
     parser.add_argument("--wizard", action="store_true", help="改以新修改單精靈視窗啟動")
     parser.add_argument("--health-check", action="store_true", help="檢查 pywebview 依賴，不開視窗")
+    parser.add_argument("--version", action="version", version=format_version_cli(), help="顯示版本資訊")
+    parser.add_argument("--diagnostics", action="store_true", help="產生支援診斷包，不開視窗")
+    parser.add_argument("--diagnostics-output", type=str, default="", help="支援診斷包輸出資料夾")
+    parser.add_argument("--diagnostics-probe", action="store_true", help="產生支援診斷包並深度探測輸出環境")
     args = parser.parse_args(argv)
 
+    if args.diagnostics or args.diagnostics_probe:
+        _bootstrap_logging()
+        from diagnostics import collect_support_bundle
+        from resources import resolve_project_dir
+
+        result = collect_support_bundle(
+            resolve_project_dir(),
+            output_dir=args.diagnostics_output or None,
+            probe_com_application=args.diagnostics_probe,
+            probe_libreoffice_version=args.diagnostics_probe,
+        )
+        print(f"支援診斷包: {result['bundle_path']}")
+        print(f"啟動判斷: {result['startup_action']}")
+        if args.diagnostics_probe:
+            print("深度探測: enabled")
+        return 0
     if args.health_check:
         _bootstrap_logging()
         return _health_check()

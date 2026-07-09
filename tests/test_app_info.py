@@ -53,6 +53,24 @@ def test_health_check_prints_app_identity():
     assert app_info.format_app_identity() in result.stdout
 
 
+def test_co_main_app_version_cli_exits_without_window():
+    repo = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+
+    result = subprocess.run(
+        [sys.executable, os.path.join(repo, "control", "co_main_app.py"), "--version"],
+        cwd=repo,
+        text=True,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "IEC Site Change Manager" in result.stdout
+    assert app_info.APP_VERSION in result.stdout
+
+
 def test_co_main_app_wizard_arg_delegates_to_wizard(monkeypatch):
     calls = []
 
