@@ -80,10 +80,30 @@ def test_envelope_shape(tmp_path):
 def test_existing_welds_filters_install_rows(tmp_path):
     res = _bridge(tmp_path).existing_welds("0100")
     assert res["ok"] is True
+    assert res["data"]["source"]["ok"] is True
+    assert res["data"]["source"]["sheet"] == "焊口編號明細"
+    assert res["data"]["source"]["count"] == 3
+    assert res["data"]["source"]["series_count"] == 2
     nos = [w["weld_no"] for w in res["data"]["welds"]]
     assert "5" in nos and "8V" not in nos          # 安裝列被濾
     row5 = next(w for w in res["data"]["welds"] if w["weld_no"] == "5")
     assert row5["material"] == "SUS304" and row5["size"] == '2"'
+
+
+def test_existing_welds_reports_source_failure_when_sheet_unreadable(tmp_path):
+    wb = tmp_path / "weld_control.xlsx"
+    _write_fixture(wb)
+    manager = WeldControlManager({
+        "file_path": str(wb), "sheet_name": "不存在的工作表",
+        "col_serial": "完全不存在的流水欄", "col_weld_no": "完全不存在的焊口欄",
+    })
+    builder = ChangeOrderBuilder(lookup=WeldLookup(manager=manager), clock=_fixed_clock)
+    res = ChangeOrderBridge(builder=builder, attachments_root=tmp_path / "records").existing_welds("0100")
+
+    assert res["ok"] is True
+    assert res["data"]["welds"] == []
+    assert res["data"]["source"]["ok"] is False
+    assert "載入失敗" in res["data"]["source"]["message"]
 
 
 def test_history_reads_records_for_series_newest_first_and_skips_bad_files(tmp_path):
@@ -173,6 +193,44 @@ def test_export_blocks_when_not_complete_then_succeeds(tmp_path):
 def test_pick_file_without_injection_returns_error_envelope(tmp_path):
     res = _bridge(tmp_path).pick_file("pdf")
     assert res["ok"] is False and "未注入" in res["error"]   # 不崩，給明確錯
+
+
+def test_auto_drawing_pdf_finds_series_pdf_and_avoids_prefix_bleed(tmp_path):
+    prefab = tmp_path / "prefab_pdf"
+    nested = prefab / "nested"
+    nested.mkdir(parents=True)
+    (prefab / "1000.CA-wrong.pdf").write_bytes(b"%PDF-1000")
+    (nested / "0100.CA-nested.pdf").write_bytes(b"%PDF-0100")
+    expected = prefab / "100.CA-2007-100-AA1B-NA.pdf"
+    expected.write_bytes(b"%PDF-100")
+
+    res = _bridge(tmp_path).auto_drawing_pdf("0100", str(prefab))
+
+    assert res["ok"] is True
+    assert res["data"]["found"] is True
+    assert res["data"]["path"] == str(expected)
+    assert res["data"]["name"] == expected.name
+
+    miss = _bridge(tmp_path).auto_drawing_pdf("10", str(prefab))
+    assert miss["ok"] is True
+    assert miss["data"]["found"] is False
+    assert miss["data"]["reason"] == "not_found"
+
+
+def test_auto_drawing_pdf_reports_missing_source_dir(tmp_path):
+    res = _bridge(tmp_path).auto_drawing_pdf("100", str(tmp_path / "missing"))
+
+    assert res["ok"] is True
+    assert res["data"]["found"] is False
+    assert res["data"]["reason"] == "missing_dir"
+
+
+def test_auto_drawing_pdf_requires_series(tmp_path):
+    res = _bridge(tmp_path).auto_drawing_pdf("", str(tmp_path))
+
+    assert res["ok"] is True
+    assert res["data"]["found"] is False
+    assert res["data"]["reason"] == "missing_series"
 
 
 def test_list_staging_returns_image_files_only(tmp_path):

@@ -15,12 +15,12 @@ def _write_weld_control_fixture(path):
     wb = Workbook()
     ws = wb.active
     ws.title = "焊口編號明細"
-    ws.append(["流水號", "銲口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性.1", "圖號"])
-    ws.append([202, "1", '2"', "SCH40", "SUS304", "BW", "焊口", "DWG-202"])
-    ws.append([202, "2", '1"', "SCH80", "CS", "SW", "管牙製作安裝", "DWG-202"])
-    ws.append([202, "9", '3"', "SCH10", "SUS316", "RF", "VALVE安裝", "DWG-202"])
-    ws.append([202, "10", '4"', "SCH20", "CS", "RF", "法蘭安裝", "DWG-202"])
-    ws.append([203, "1", '6"', "SCH40", "SUS304", "BW", "焊口", "DWG-203"])
+    ws.append(["流水號", "銲口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性.1", "圖號", "DB數", "I.D", "預算編號"])
+    ws.append([202, "1", '2"', "SCH40", "SUS304", "BW", "焊口", "DWG-202", 2, "52.5", "B-2"])
+    ws.append([202, "2", '1"', "SCH80", "CS", "SW", "管牙製作安裝", "DWG-202", 1, "26.6", "B-1"])
+    ws.append([202, "9", '3"', "SCH10", "SUS316", "RF", "VALVE安裝", "DWG-202", 3, "77.9", "B-3"])
+    ws.append([202, "10", '4"', "SCH20", "CS", "RF", "法蘭安裝", "DWG-202", 4, "102.3", "B-4"])
+    ws.append([203, "1", '6"', "SCH40", "SUS304", "BW", "焊口", "DWG-203", 6, "154.1", "B-6"])
     wb.save(path)
     wb.close()
 
@@ -62,6 +62,53 @@ def _lookup_for_backfill_fixture(tmp_path):
     return WeldLookup(manager=manager)
 
 
+def test_manager_auto_resolves_suffixed_sheet_and_prefers_new(tmp_path):
+    workbook = tmp_path / "weld_control_suffixed.xlsx"
+    wb = Workbook()
+    ws_old = wb.active
+    ws_old.title = "焊口編號明細-OLD"
+    ws_old.append(["流水號", "銲口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性.1"])
+    ws_old.append([149, "1", "1", "40S", "304L", "BW", "焊口"])
+    ws_new = wb.create_sheet("焊口編號明細-NEW")
+    ws_new.append(["流水號", "銲口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性.1"])
+    ws_new.append([149, "2", "2", "40S", "304L", "BW", "焊口"])
+    wb.save(workbook)
+    wb.close()
+
+    manager = WeldControlManager({
+        "file_path": str(workbook),
+        "sheet_name": "焊口編號明細",
+        "col_serial": "流水號",
+        "col_weld_no": "焊口編號",
+    })
+    assert manager.load(force_reload=True) is True
+    assert manager.sheet_name == "焊口編號明細-NEW"
+    assert manager._sheet_name == "焊口編號明細-NEW"
+    assert WeldLookup(manager=manager).existing_weld_ids("149") == ["2"]
+
+
+def test_manager_finds_shifted_header_row(tmp_path):
+    workbook = tmp_path / "weld_control_shifted_header.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "焊口編號明細"
+    ws.append(["焊口管制表"])
+    ws.append(["流水號", "銲口編號", "尺寸", "厚度", "材質", "銲接型式", "屬性.1"])
+    ws.append([149, "3", "3", "40S", "304L", "BW", "焊口"])
+    wb.save(workbook)
+    wb.close()
+
+    manager = WeldControlManager({
+        "file_path": str(workbook),
+        "sheet_name": "焊口編號明細",
+        "col_serial": "流水號",
+        "col_weld_no": "焊口編號",
+    })
+    assert manager.load(force_reload=True) is True
+    assert manager._header_row == 2
+    assert WeldLookup(manager=manager).existing_weld_ids("149") == ["3"]
+
+
 def test_normalize_series_raw_strips_leading_zeroes():
     assert normalize_series_raw("0202") == "202"
     assert normalize_series_raw("202") == "202"
@@ -85,6 +132,20 @@ def test_lookup_spec_maps_real_joint_row_to_spec(tmp_path):
         material="CS",
         weld_type="SW",
     )
+
+
+def test_lookup_info_includes_budget_db_metadata(tmp_path):
+    lookup = _lookup_for_fixture(tmp_path)
+
+    assert lookup.lookup_info("0202", "1") == {
+        "size": '2"',
+        "sch": "SCH40",
+        "material": "SUS304",
+        "weld_type": "BW",
+        "db": "2",
+        "budget_no": "B-2",
+        "inside_diameter": "52.5",
+    }
 
 
 def test_lookup_spec_returns_none_for_missing_or_non_real_rows(tmp_path):

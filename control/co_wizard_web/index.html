@@ -222,7 +222,11 @@
               </div>
             </div>
             <div class="section-line" style="padding:18px">
-              <button type="button" onclick="pickPdf()">選圖面 PDF</button>
+              <div class="toolbar">
+                <button type="button" onclick="pickPdf()">選圖面 PDF</button>
+                <button class="ghost" type="button" onclick="autoAttachPdf()">自動帶入流水號 PDF</button>
+                <span class="pdf-auto-status" id="pdfAutoStatus">尚未搜尋</span>
+              </div>
             </div>
             <table>
               <thead><tr><th>類型</th><th>檔名</th><th></th></tr></thead>
@@ -447,6 +451,7 @@ let projectParts=[];
 let selectedProjectPart=null;
 let materialEntryMode='project';
 let currentPage='basic';
+let autoPdfTriedFor='';
 
 window.addEventListener('pywebviewready', async ()=>{
   api = window.pywebview.api;
@@ -498,7 +503,11 @@ function wireInputs(){
       state[id==='series'?'series':id] = val(id);
       syncNavStatus();
       updateStepControls();
-      if(id === 'series'){ refreshHistory(); }
+      if(id === 'series'){
+        autoPdfTriedFor = '';
+        setPdfAutoStatus('尚未搜尋');
+        refreshHistory();
+      }
       rebuild();
     });
   });
@@ -522,6 +531,9 @@ function showPage(name){
   byId('pageTitle').textContent = pageMeta[name][0];
   byId('pageHint').textContent = pageMeta[name][1];
   updateStepControls();
+  if(name === 'files'){
+    setTimeout(()=>maybeAutoAttachPdf(), 0);
+  }
 }
 
 function currentStepIndex(){
@@ -658,7 +670,7 @@ async function loadWelds(){
   picked = null;
   pickedWeld = null;
   newWeldDefaults = {size:'', material:'', sch:'', weld_type:''};
-  renderPickList(result.welds || []);
+  renderPickList(result.welds || [], result.source || null);
   await refreshHistory();
   showPage('welds');
   await rebuild();
@@ -745,11 +757,19 @@ async function addStagingPhoto(path){
   await rebuild();
 }
 
-function renderPickList(welds){
+function renderPickList(welds, source){
   const body = byId('pickList');
-  byId('weldCount').textContent = welds.length ? `${welds.length} 筆` : '查無焊口';
+  const sourceOk = !source || source.ok !== false;
+  byId('weldCount').textContent = welds.length ? `${welds.length} 筆` : (sourceOk ? '查無焊口' : '來源需檢查');
+  if(!sourceOk){
+    const message = (source && source.message) || '焊口資料源讀取失敗';
+    body.innerHTML = `<tr><td colspan="5" class="empty source-empty"><strong>焊口表讀取失敗</strong><span>${escapeHtml(message)}</span></td></tr>`;
+    applyNewWeldDefaults({}, {force:true});
+    return;
+  }
   if(!welds.length){
-    body.innerHTML = '<tr><td colspan="5" class="empty">這張圖號查無焊口</td></tr>';
+    const message = (source && source.message) || '這張圖號查無焊口';
+    body.innerHTML = `<tr><td colspan="5" class="empty source-empty"><strong>這張圖號查無可用焊口</strong><span>${escapeHtml(message)}</span></td></tr>`;
     applyNewWeldDefaults({}, {force:true});
     return;
   }
@@ -877,11 +897,73 @@ async function pickPdf(){
   const result = await call('pick_file','pdf');
   if(!result.path){ return; }
   state.drawing_pdf = result.path;
+  autoPdfTriedFor = val('series') || state.series || autoPdfTriedFor;
+  setPdfAutoStatus(`已選擇：${fileName(result.path)}`);
   await rebuild();
+}
+
+function setPdfAutoStatus(message){
+  const el = byId('pdfAutoStatus');
+  if(el){ el.textContent = message; }
+}
+
+function autoPdfReasonText(reason){
+  return {
+    missing_series:'先填流水號',
+    not_configured:'尚未設定流水號圖面資料夾',
+    missing_dir:'流水號圖面資料夾不存在',
+    not_found:'找不到對應流水號 PDF'
+  }[reason] || '未找到圖面 PDF';
+}
+
+async function maybeAutoAttachPdf(){
+  syncState();
+  const series = state.series;
+  if(!series || state.drawing_pdf || autoPdfTriedFor === series){ return false; }
+  autoPdfTriedFor = series;
+  return autoAttachPdf({quietErrors:true, automatic:true});
+}
+
+async function autoAttachPdf(options={}){
+  const quietErrors = !!options.quietErrors;
+  const automatic = !!options.automatic;
+  syncState();
+  if(!state.series){
+    setPdfAutoStatus('先填流水號');
+    if(!quietErrors){ toast('先填流水號，再自動帶入圖面 PDF', true); }
+    return false;
+  }
+  if(!api || typeof api.auto_drawing_pdf !== 'function'){
+    setPdfAutoStatus('後端尚未支援自動 PDF');
+    if(!quietErrors){ toast('此版本後端尚未支援自動 PDF', true); }
+    return false;
+  }
+  autoPdfTriedFor = state.series;
+  setPdfAutoStatus('搜尋中...');
+  let result;
+  try{
+    result = await call('auto_drawing_pdf', state.series);
+  }catch(e){
+    setPdfAutoStatus('搜尋失敗');
+    return false;
+  }
+  if(result && result.found && result.path){
+    state.drawing_pdf = result.path;
+    setPdfAutoStatus(`已帶入：${fileName(result.path)}`);
+    await rebuild();
+    toast(`${automatic ? '已自動帶入' : '已帶入'}圖面 PDF：${fileName(result.path)}`);
+    return true;
+  }
+  const message = autoPdfReasonText(result && result.reason);
+  setPdfAutoStatus(message);
+  if(!quietErrors){ toast(message, true); }
+  return false;
 }
 
 async function clearPdf(){
   state.drawing_pdf = null;
+  autoPdfTriedFor = '';
+  setPdfAutoStatus('已清除，可重新搜尋');
   await rebuild();
 }
 

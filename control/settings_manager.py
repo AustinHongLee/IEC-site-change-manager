@@ -33,6 +33,11 @@ def _atomic_write_json(path: str, data: dict):
 
 # 預設設定
 DEFAULT_SETTINGS = {
+    # 專案資料（每個工作區只服務一個工程案）
+    "project": {
+        "name": "",
+    },
+
     # 路徑設定
     "paths": {
         "drawing_list": "",           # DWG LIST 檔案路徑
@@ -41,7 +46,7 @@ DEFAULT_SETTINGS = {
         "pdf_output": "",             # PDF 輸出目錄
         "last_browse_dir": "",        # 上次瀏覽的目錄
         "weld_control_table": "",     # 焊口管制表路徑（必填）
-        "prefab_drawing_dir": "",     # 預製圖 PDF 來源目錄
+        "prefab_drawing_dir": "",     # 流水號圖面 PDF 來源目錄
         "soffice_path": "",           # LibreOffice soffice.exe 路徑（非 COM PDF）
     },
     
@@ -347,15 +352,15 @@ def set_drawing_list_path(path: str):
     get_settings().set_path("drawing_list", path)
 
 
-# ========= 預製圖路徑相關函數 =========
+# ========= 流水號圖面 PDF 路徑相關函數 =========
 
 def get_prefab_drawing_dir() -> str:
-    """取得預製圖 PDF 來源目錄"""
+    """取得流水號圖面 PDF 來源目錄"""
     return get_settings().get_path("prefab_drawing_dir") or ""
 
 
 def set_prefab_drawing_dir(path: str):
-    """設定預製圖 PDF 來源目錄"""
+    """設定流水號圖面 PDF 來源目錄"""
     get_settings().set_path("prefab_drawing_dir", path)
 
 

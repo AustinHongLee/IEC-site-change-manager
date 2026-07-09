@@ -113,6 +113,7 @@ _IMAGE_MIME = {
     ".webp": "image/webp",
 }
 _PDF_EXTS = {".pdf"}
+_SERIES_PDF_DELIMITERS = {".", "-", "_", " ", "　"}
 
 
 # --------------------------------------------------------------------------- #
@@ -153,7 +154,11 @@ class ChangeOrderBridge:
         """源頭驅動：回該流水號可挑的既有焊口 + 規格（給前端做『挑』而非『打』）。"""
         s = _norm_series(series)
         lookup = getattr(self.builder, "lookup", None)
+        source = self._weld_source_status(lookup, s)
         welds = []
+        if not source.get("ok"):
+            return {"series": s, "welds": welds, "source": source}
+
         for wid in (lookup.existing_weld_ids(s) if lookup is not None else []):
             spec = lookup.lookup_spec(s, wid)
             welds.append({
@@ -163,7 +168,11 @@ class ChangeOrderBridge:
                 "material": getattr(spec, "material", None),
                 "weld_type": getattr(spec, "weld_type", None),
             })
-        return {"series": s, "welds": welds}
+        source["series_count"] = len(welds)
+        if not welds:
+            sheet = source.get("sheet") or "焊口表"
+            source["message"] = f"已讀取 {sheet}，但流水號 {s} 沒有可用焊口列"
+        return {"series": s, "welds": welds, "source": source}
 
     @_enveloped
     def history(self, series: Any) -> list[dict]:
@@ -233,6 +242,41 @@ class ChangeOrderBridge:
         if self._pick_file_fn is None:
             raise RuntimeError("檔案對話框未注入（此環境不支援選檔）")
         return {"path": self._pick_file_fn(kind)}
+
+    @_enveloped
+    def auto_drawing_pdf(self, series: Any, prefab_dir: str = "") -> dict:
+        """依流水號從設定的圖面 PDF 資料夾找對應圖面；只回來源路徑，不搬檔。"""
+        raw_series = str(series or "").strip()
+        if not raw_series:
+            return {"found": False, "reason": "missing_series", "path": "", "source_dir": ""}
+        normalized = _norm_series(raw_series)
+
+        root_text = str(prefab_dir or "").strip()
+        if not root_text:
+            try:
+                from settings_manager import get_prefab_drawing_dir
+
+                root_text = str(get_prefab_drawing_dir() or "").strip()
+            except Exception:
+                root_text = ""
+        if not root_text:
+            return {"found": False, "reason": "not_configured", "path": "", "source_dir": ""}
+
+        root = Path(root_text)
+        if not root.is_dir():
+            return {"found": False, "reason": "missing_dir", "path": "", "source_dir": str(root)}
+
+        pdf = _find_series_pdf(root, normalized)
+        if pdf is None:
+            return {"found": False, "reason": "not_found", "path": "", "source_dir": str(root)}
+
+        return {
+            "found": True,
+            "path": str(pdf),
+            "name": pdf.name,
+            "source_dir": str(root),
+            "series": normalized,
+        }
 
     @_enveloped
     def list_staging(self) -> list[dict]:
@@ -409,6 +453,62 @@ class ChangeOrderBridge:
             return []
         return [x.name for x in root.iterdir() if x.is_dir()]
 
+    def _weld_source_status(self, lookup: Any, series: str) -> dict:
+        if lookup is None:
+            return {
+                "ok": False,
+                "message": "修改單精靈尚未接上焊口查詢器",
+                "sheet": "",
+                "count": 0,
+                "series_count": 0,
+            }
+
+        manager = getattr(lookup, "manager", None)
+        if manager is None:
+            return {
+                "ok": False,
+                "message": "修改單精靈沒有焊口表管理器",
+                "sheet": "",
+                "count": 0,
+                "series_count": 0,
+            }
+
+        is_configured = getattr(manager, "is_configured", None)
+        if callable(is_configured) and not is_configured():
+            return {
+                "ok": False,
+                "message": "焊口表尚未設定，或設定的檔案不存在",
+                "sheet": getattr(manager, "sheet_name", "") or "",
+                "count": 0,
+                "series_count": 0,
+            }
+
+        loaded = True
+        load = getattr(manager, "load", None)
+        if callable(load):
+            loaded = bool(load())
+        if not loaded:
+            return {
+                "ok": False,
+                "message": "焊口表載入失敗，請到設定檢查路徑、工作表與欄位對應",
+                "sheet": getattr(manager, "sheet_name", "") or "",
+                "count": 0,
+                "series_count": 0,
+            }
+
+        cache = getattr(manager, "_cache", {}) or {}
+        sheet = getattr(manager, "_sheet_name", "") or getattr(manager, "sheet_name", "") or ""
+        serial_index = getattr(manager, "_serial_index", {}) or {}
+        raw_series_count = len(serial_index.get(series, []))
+        return {
+            "ok": True,
+            "message": f"已讀取 {sheet} · {len(cache)} 筆資料",
+            "sheet": sheet,
+            "count": len(cache),
+            "series_count": raw_series_count,
+            "header_row": getattr(manager, "_header_row", 1),
+        }
+
     def _staging_root(self) -> Path:
         nearby = self.attachments_root.parent / "staging"
         if nearby.exists():
@@ -528,6 +628,65 @@ def _path_from_file_value(value: str) -> Path:
             raw = raw[1:]
         return Path(raw)
     return Path(text)
+
+
+def _series_pdf_variants(series: str) -> list[str]:
+    text = _norm_series(series)
+    variants = [text]
+    if text.isdigit():
+        variants.extend([text.zfill(3), text.zfill(4)])
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in variants:
+        key = item.lower()
+        if item and key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out
+
+
+def _series_pdf_score(path: Path, variants: list[str], root: Path) -> tuple[int, int, str] | None:
+    stem = path.stem.strip().lower()
+    for index, variant in enumerate(variants):
+        prefix = variant.lower()
+        if stem == prefix:
+            return (0, _path_depth(path, root), path.name.lower())
+        if stem.startswith(prefix):
+            tail = stem[len(prefix):len(prefix) + 1]
+            if tail in _SERIES_PDF_DELIMITERS:
+                return (1 + index, _path_depth(path, root), path.name.lower())
+    return None
+
+
+def _path_depth(path: Path, root: Path) -> int:
+    try:
+        return max(0, len(path.relative_to(root).parts) - 1)
+    except ValueError:
+        return 99
+
+
+def _find_series_pdf(root: Path, series: str) -> Path | None:
+    variants = _series_pdf_variants(series)
+    matches: list[tuple[tuple[int, int, str], float, Path]] = []
+    try:
+        iterator = root.rglob("*.pdf")
+        for path in iterator:
+            if not path.is_file():
+                continue
+            score = _series_pdf_score(path, variants, root)
+            if score is None:
+                continue
+            try:
+                mtime = path.stat().st_mtime
+            except OSError:
+                mtime = 0
+            matches.append((score, -mtime, path))
+    except OSError:
+        return None
+    if not matches:
+        return None
+    matches.sort(key=lambda item: (item[0], item[1]))
+    return matches[0][2]
 
 
 def _decode_data_url(data_url: str, label: str) -> bytes:

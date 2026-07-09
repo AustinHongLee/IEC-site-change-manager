@@ -19,7 +19,7 @@ import os
 import json
 import hashlib
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 from resources import project_path
@@ -33,6 +33,15 @@ except ImportError:
 
 # 快取目錄
 CACHE_DIR = ".weld_cache"
+
+
+def _norm_label(value: Any) -> str:
+    """Normalize sheet/header labels for fuzzy matching."""
+    return str(value or "").replace(" ", "").replace("\n", "").strip().lower()
+
+
+def _header_text(value: Any) -> str:
+    return str(value).strip() if value is not None else ""
 
 
 class WeldControlManager:
@@ -59,6 +68,7 @@ class WeldControlManager:
         self._sheet_name = ""
         self._file_mtime: float = 0  # 檔案修改時間
         self._load_time: float = 0   # 載入時間（用於效能統計）
+        self._header_row: int = 1
         self._cache_dirty: bool = False  # 快取是否需要儲存
         self._auto_save_cache: bool = True  # 是否自動儲存快取
     
@@ -168,10 +178,12 @@ class WeldControlManager:
                 data = json.load(f)
             
             self._headers = data.get("headers", [])
-            self._col_map = {h: i for i, h in enumerate(self._headers)}
+            self._col_map = {h: i for i, h in enumerate(self._headers) if h}
             self._cache = data.get("cache", {})
             self._serial_index = data.get("serial_index", {})
             self._file_mtime = data.get("excel_mtime", 0)
+            self._sheet_name = data.get("sheet_name") or self.sheet_name
+            self._header_row = int(data.get("header_row") or 1)
             
             self._load_time = time.time() - start_time
             self._loaded = True
@@ -196,6 +208,8 @@ class WeldControlManager:
             
             data = {
                 "excel_mtime": self._file_mtime,
+                "sheet_name": self._sheet_name or self.sheet_name,
+                "header_row": self._header_row,
                 "headers": self._headers,
                 "cache": self._cache,
                 "serial_index": self._serial_index,
@@ -218,6 +232,75 @@ class WeldControlManager:
             if serial not in self._serial_index:
                 self._serial_index[serial] = []
             self._serial_index[serial].append(pk)
+
+    def _sheet_sort_key(self, sheet_name: str, order: int) -> tuple[int, int]:
+        desired = self.sheet_name
+        name_norm = _norm_label(sheet_name)
+        desired_norm = _norm_label(desired)
+        score = 0
+        if sheet_name == desired:
+            score += 1000
+        if desired_norm and name_norm == desired_norm:
+            score += 900
+        if desired_norm and name_norm.startswith(desired_norm):
+            score += 500
+        if desired_norm and desired_norm in name_norm:
+            score += 250
+
+        lower_name = sheet_name.lower()
+        if "new" in lower_name or "新版" in sheet_name or sheet_name.endswith("-NEW"):
+            score += 100
+        if "old" in lower_name or "舊" in sheet_name or sheet_name.endswith("-OLD"):
+            score -= 100
+        return (-score, order)
+
+    def _candidate_sheet_names(self, wb) -> List[str]:
+        ordered = sorted(
+            enumerate(wb.sheetnames),
+            key=lambda item: self._sheet_sort_key(item[1], item[0]),
+        )
+        return [name for _, name in ordered]
+
+    def _find_header_in_sheet(self, ws, scan_rows: int = 12) -> Optional[dict]:
+        from utils import resolve_col
+
+        pk_serial, pk_weld = self.pk_fields
+        max_row = ws.max_row or scan_rows
+        for row_no, row in enumerate(
+            ws.iter_rows(min_row=1, max_row=min(max_row, scan_rows), values_only=True),
+            start=1,
+        ):
+            headers = [_header_text(value) for value in (row or [])]
+            col_map = {}
+            for index, header in enumerate(headers):
+                if header and header not in col_map:
+                    col_map[header] = index
+            if not col_map:
+                continue
+
+            pk_serial_resolved = resolve_col(pk_serial, col_map.keys())
+            pk_weld_resolved = resolve_col(pk_weld, col_map.keys())
+            serial_idx = col_map.get(pk_serial_resolved)
+            weld_idx = col_map.get(pk_weld_resolved)
+            if serial_idx is None or weld_idx is None:
+                continue
+
+            return {
+                "row_no": row_no,
+                "headers": headers,
+                "col_map": col_map,
+                "serial_idx": serial_idx,
+                "weld_idx": weld_idx,
+            }
+        return None
+
+    def _resolve_sheet_and_header(self, wb) -> Optional[tuple[str, Any, dict]]:
+        for sheet_name in self._candidate_sheet_names(wb):
+            ws = wb[sheet_name]
+            header_info = self._find_header_in_sheet(ws)
+            if header_info:
+                return sheet_name, ws, header_info
+        return None
     
     def _load_from_excel(self) -> bool:
         """從 Excel 檔案載入"""
@@ -229,37 +312,32 @@ class WeldControlManager:
             start_time = time.time()
             
             wb = load_workbook(self.file_path, read_only=True, data_only=True)
-            
-            if self.sheet_name not in wb.sheetnames:
-                print(f"⚠️ 找不到工作表: {self.sheet_name}")
+
+            resolved = self._resolve_sheet_and_header(wb)
+            if resolved is None:
+                print(f"⚠️ 找不到可用的焊口工作表: {self.sheet_name}")
+                print(f"   可用工作表: {', '.join(wb.sheetnames)}")
                 wb.close()
                 return False
-            
-            ws = wb[self.sheet_name]
-            
-            # 讀取標題列
-            self._headers = [cell.value for cell in ws[1] if cell.value]
-            self._col_map = {h: i for i, h in enumerate(self._headers)}
-            
-            # 取得主鍵欄位索引（同義字模糊匹配：焊↔銲）
-            from utils import resolve_col
-            pk_serial, pk_weld = self.pk_fields
-            pk_serial_resolved = resolve_col(pk_serial, self._col_map)
-            pk_weld_resolved = resolve_col(pk_weld, self._col_map)
-            serial_idx = self._col_map.get(pk_serial_resolved)
-            weld_idx = self._col_map.get(pk_weld_resolved)
-            
-            if serial_idx is None or weld_idx is None:
-                print(f"⚠️ 找不到主鍵欄位: {pk_serial}, {pk_weld}")
-                print(f"   可用欄位: {', '.join(self._headers)}")
-                wb.close()
-                return False
+
+            sheet_name, ws, header_info = resolved
+            requested_sheet = self.sheet_name
+            if sheet_name != requested_sheet:
+                print(f"ℹ️ 自動改用焊口工作表: {sheet_name}（設定值: {requested_sheet}）")
+                self.config["sheet_name"] = sheet_name
+
+            self._sheet_name = sheet_name
+            self._header_row = int(header_info["row_no"])
+            self._headers = header_info["headers"]
+            self._col_map = header_info["col_map"]
+            serial_idx = header_info["serial_idx"]
+            weld_idx = header_info["weld_idx"]
             
             # 載入所有資料
             self._cache.clear()
             self._serial_index.clear()
             
-            for row in ws.iter_rows(min_row=2, values_only=True):
+            for row in ws.iter_rows(min_row=self._header_row + 1, values_only=True):
                 if not row or not row[serial_idx]:
                     continue
                 
@@ -274,6 +352,8 @@ class WeldControlManager:
                 # 儲存整列資料
                 row_data = {}
                 for i, h in enumerate(self._headers):
+                    if not h:
+                        continue
                     if i < len(row):
                         value = row[i]
                         # 確保可以 JSON 序列化
@@ -296,7 +376,10 @@ class WeldControlManager:
             self._file_mtime = self._get_file_mtime()
             self._load_time = time.time() - start_time
             
-            print(f"✅ 從 Excel 載入焊口: {len(self._cache)} 筆 ({self._load_time*1000:.1f}ms)")
+            print(
+                f"✅ 從 Excel 載入焊口: {len(self._cache)} 筆 "
+                f"({self._sheet_name}, 第 {self._header_row} 列標題, {self._load_time*1000:.1f}ms)"
+            )
             
             # 儲存快取
             self._save_to_cache()

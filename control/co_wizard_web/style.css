@@ -282,6 +282,15 @@
     flex-wrap:wrap;
   }
   .toolbar .grow{flex:1 1 240px;}
+  .pdf-auto-status{
+    flex:1 1 220px;
+    min-height:30px;
+    display:inline-flex;
+    align-items:center;
+    color:var(--muted);
+    font-size:12px;
+    overflow-wrap:anywhere;
+  }
   .pick-wrap{
     border:1px solid var(--line);
     border-radius:14px;
@@ -296,6 +305,16 @@
     padding:28px 16px;
     color:var(--muted);
     text-align:center;
+  }
+  .source-empty strong{
+    display:block;
+    color:var(--ink);
+    margin-bottom:6px;
+  }
+  .source-empty span{
+    display:block;
+    line-height:1.6;
+    overflow-wrap:anywhere;
   }
   .empty-illustration{
     width:132px;

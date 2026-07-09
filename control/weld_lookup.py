@@ -32,6 +32,21 @@ def _row_value(row: dict[str, Any], column_name: str) -> Any:
     return row.get(resolved)
 
 
+def _first_row_text(row: dict[str, Any], column_names: Iterable[str], *, exact_for_short_names: bool = True) -> Optional[str]:
+    for column_name in column_names:
+        short_name = len(column_name.replace(".", "").replace(" ", "")) <= 3
+        if exact_for_short_names and short_name:
+            text = _text(_exact_normalized_row_value(row, column_name))
+            if text is not None:
+                return text
+            continue
+        value = _row_value(row, column_name)
+        text = _text(value)
+        if text is not None:
+            return text
+    return None
+
+
 def _exact_normalized_row_value(row: dict[str, Any], column_name: str) -> Any:
     target = column_name.replace(" ", "").replace("\n", "").lower()
     for key in row.keys():
@@ -68,18 +83,39 @@ class WeldLookup:
 
     def lookup_spec(self, series: Any, base: Any) -> Spec | None:
         """Return the existing weld spec for ``(series, base)`` from real joint rows."""
+        info = self.lookup_info(series, base)
+        if info is not None:
+            return Spec(
+                size=info.get("size"),
+                sch=info.get("sch"),
+                material=info.get("material"),
+                weld_type=info.get("weld_type"),
+            )
+        return None
+
+    def lookup_info(self, series: Any, base: Any) -> dict[str, Optional[str]] | None:
+        """Return weld spec plus report-facing metadata from the control table."""
         weld_id = "" if base is None else str(base).strip()
         if not weld_id:
             return None
 
         for row in self._real_rows_by_series(series):
             if _text(_row_value(row, "焊口編號")) == weld_id:
-                return Spec(
-                    size=_text(_row_value(row, "尺寸")),
-                    sch=_text(_row_value(row, "厚度")),
-                    material=_text(_row_value(row, "材質")),
-                    weld_type=_text(_row_value(row, "銲接型式")),
+                budget_no = _first_row_text(row, ("預算編號", "Budget No", "BudgetNo", "Budget"))
+                db_value = _first_row_text(
+                    row,
+                    ("DB數", "DB", "D.B.", "DI", "D.I.", "Dia-Inch", "DIA INCH", "管徑吋數"),
                 )
+                inside_diameter = _first_row_text(row, ("I.D", "I.D.", "ID", "內徑"))
+                return {
+                    "size": _text(_row_value(row, "尺寸")),
+                    "sch": _text(_row_value(row, "厚度")),
+                    "material": _text(_row_value(row, "材質")),
+                    "weld_type": _text(_row_value(row, "銲接型式")),
+                    "db": db_value,
+                    "budget_no": budget_no,
+                    "inside_diameter": inside_diameter,
+                }
         return None
 
     def existing_weld_ids(self, series: Any) -> list[str]:
