@@ -723,6 +723,17 @@ def _weld_identity_from_code(
     code_changed: bool = True,
 ) -> dict[str, Any]:
     text = str(code or "").strip()
+    op = _weld_kind_label(mark, origin) or ""
+    origin_text = str(origin or "").strip()
+    if op == "新焊" or origin_text == "new":
+        return {"base": None, "origin": "new", "op": "新焊"}
+    if op == "重焊" or origin_text == "existing":
+        base = None
+        match = re.match(r"^\s*(\d+)", text)
+        if match:
+            base = match.group(1)
+        return {"base": base, "origin": "existing", "op": "重焊"}
+
     try:
         from weld_codec import parse as parse_weld_code
 
@@ -731,18 +742,11 @@ def _weld_identity_from_code(
         parsed = None
     if parsed is not None and getattr(parsed, "parsed", False):
         if getattr(parsed, "is_new", False):
-            fallback_op = _weld_kind_label(mark, origin) or ""
-            if not code_changed and fallback_op == "重焊":
-                return {"base": str(getattr(parsed, "raw", text) or text), "origin": "existing", "op": "重焊"}
             return {"base": None, "origin": "new", "op": "新焊"}
         base = getattr(parsed, "base", None)
         if base:
             return {"base": str(base), "origin": "existing", "op": "重焊"}
 
-    op = _weld_kind_label(mark, origin) or ""
-    origin_text = str(origin or "").strip()
-    if origin_text not in {"existing", "new"}:
-        origin_text = "new" if op == "新焊" else "existing" if op == "重焊" else origin_text
     match = re.match(r"^\s*(\d+)", text)
     return {
         "base": match.group(1) if match and origin_text == "existing" else None,

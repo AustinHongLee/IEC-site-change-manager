@@ -528,11 +528,11 @@ def test_save_record_recomputes_weld_identity_when_code_is_renamed(tmp_path):
     assert res["ok"] is True
     saved = json.loads((folder / "change_order.json").read_text(encoding="utf-8"))
     assert saved["welds"][0]["code"] == "20A"
-    assert saved["welds"][0]["base"] == "20"
-    assert saved["welds"][0]["origin"] == "existing"
-    assert saved["welds"][0]["op"] == "重焊"
+    assert saved["welds"][0]["base"] is None
+    assert saved["welds"][0]["origin"] == "new"
+    assert saved["welds"][0]["op"] == "新焊"
     assert res["data"]["welds"][0]["code"] == "20A"
-    assert res["data"]["welds"][0]["mark"] == "重焊"
+    assert res["data"]["welds"][0]["mark"] == "新焊"
 
 
 def test_open_record_folder_and_pdf_use_injected_opener(tmp_path):

@@ -293,8 +293,19 @@ def _owner_weld_line(row: dict[str, Any], *, series: Any, weld_lookup: Any) -> s
     return " / ".join(specs)
 
 
+def _has_explicit_new_weld_semantic(row: dict[str, Any]) -> bool:
+    for key in ("change_label", "change", "新增或修改", "op", "operation", "origin"):
+        raw = str(row.get(key, "") or "").strip().lower()
+        if raw in {"新增", "新焊", "新增焊口", "new"}:
+            return True
+    mark = str(row.get("mark", "") or "").strip().lower()
+    return mark in {"新增", "新焊", "新增焊口", "new"}
+
+
 def _lookup_weld_info(weld_lookup: Any, series: Any, row: dict[str, Any]) -> dict[str, Any]:
     if weld_lookup is None:
+        return {}
+    if _has_explicit_new_weld_semantic(row):
         return {}
     lookup_info = getattr(weld_lookup, "lookup_info", None)
     if not callable(lookup_info):

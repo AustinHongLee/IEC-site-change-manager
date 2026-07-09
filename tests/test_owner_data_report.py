@@ -292,12 +292,10 @@ def test_owner_data_report_weld_sheet_prefers_lookup_db_over_size_inference(tmp_
         wb.close()
 
 
-def test_owner_data_report_lookup_uses_renamed_weld_code_before_stale_base(tmp_path):
+def test_owner_data_report_does_not_lookup_explicit_new_weld_by_project_code(tmp_path):
     class FakeLookup:
         def lookup_info(self, series, base):
-            assert series == "0720"
-            assert base == "20"
-            return {"size": "1", "sch": "40S", "material": "304L", "db": "1"}
+            raise AssertionError("new weld project code should not be treated as an existing weld base")
 
     output = tmp_path / "out"
     report_set = _report_set(tmp_path)
@@ -307,7 +305,8 @@ def test_owner_data_report_lookup_uses_renamed_weld_code_before_stale_base(tmp_p
         "size": "1",
         "material": "304L",
         "thickness": "40S",
-        "mark": "a",
+        "mark": "新焊",
+        "db": "1",
     }]
     report_set["reports"][0]["welds"]["count"] = 1
 
@@ -317,6 +316,7 @@ def test_owner_data_report_lookup_uses_renamed_weld_code_before_stale_base(tmp_p
     try:
         assert wb["資料索引"]["H3"].value == '20A（1" / 304L / 40S / DB 1）\n（共1口）'
         assert wb["焊口統計"]["D3"].value == "20A"
+        assert wb["焊口統計"]["H3"].value == "新增"
         assert wb["焊口統計"]["J3"].value == "1"
     finally:
         wb.close()
