@@ -33,6 +33,7 @@ from material_taxonomy import (
 )
 from material_catalog_rules import all_catalog_rows, build_frontend_item, catalog_summary, query_catalog, rows_by_ids
 from support_bom import analyze_support_bom
+from utils import atomic_write_json
 
 API_VERSION = "main-0.1"
 
@@ -693,7 +694,7 @@ class MainBridge:
         raise FileNotFoundError(f"找不到修改單記錄：{record_id}")
 
     def _write_change_order(self, path: Path, data: dict) -> None:
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(str(path), data)
 
     def _photo_at(self, data: dict, index: int) -> dict:
         photos = data.get("photos")
@@ -919,10 +920,7 @@ class MainBridge:
                 "remark": row.get("remark") or "",
             }
         self.records_dir.mkdir(parents=True, exist_ok=True)
-        (self.records_dir / "billing.json").write_text(
-            json.dumps({"byId": by_id}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        atomic_write_json(str(self.records_dir / "billing.json"), {"byId": by_id})
         return {"saved": True, "count": len(by_id)}
 
     def _open_path(self, path: Path) -> None:
@@ -1287,7 +1285,7 @@ class MainBridge:
         key = str(key)
         saved[key] = value
         self.records_dir.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(str(p), saved)
         if key in {"dwg_list", "weld_control_table", "prefab_drawing_dir"}:
             settings_key = "drawing_list" if key == "dwg_list" else key
             self._write_settings_path(settings_key, value)
@@ -1364,7 +1362,7 @@ class MainBridge:
             meta["last_modified"] = datetime.datetime.now().isoformat()
         except Exception:
             pass
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(str(p), data)
 
     def _write_settings_project_name(self, value: Any) -> None:
         p = self.root / "settings.json"
@@ -1384,7 +1382,7 @@ class MainBridge:
             meta["last_modified"] = datetime.datetime.now().isoformat()
         except Exception:
             pass
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(str(p), data)
 
     def _write_settings_path(self, key: str, value: Any) -> None:
         p = self.root / "settings.json"
@@ -1404,7 +1402,7 @@ class MainBridge:
             meta["last_modified"] = datetime.datetime.now().isoformat()
         except Exception:
             pass
-        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(str(p), data)
 
     @_enveloped
     def pick_path(self, kind: str = "output") -> dict:
@@ -1500,12 +1498,19 @@ class MainBridge:
             import datetime
             stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             shutil.copy(p, self.records_dir / f"material_pricebook.{stamp}.bak.json")
-        p.write_text(
-            json.dumps({"items": merged, "history": [],
-                        "meta": {"version": "3.1", "kind": "總庫",
-                                 "count": len(merged), "priced": False}},
-                       ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        atomic_write_json(
+            str(p),
+            {
+                "items": merged,
+                "history": [],
+                "meta": {
+                    "version": "3.1",
+                    "kind": "總庫",
+                    "count": len(merged),
+                    "priced": False,
+                },
+            },
+        )
         return {"added": len(added), "total": len(merged)}
 
     # ---- 本案配件登記（總庫 → 本案子集，只記品項不記數量）------------------ #
@@ -1531,10 +1536,14 @@ class MainBridge:
         ids = sorted(set(str(x) for x in reg))
         if custom is None:
             custom = self._read_custom_project_parts()
-        self._project_parts_path().write_text(
-            json.dumps({"registered": ids, "custom": list(custom or []), "meta": {"count": len(ids), "custom_count": len(custom or [])}},
-                       ensure_ascii=False, indent=2),
-            encoding="utf-8")
+        atomic_write_json(
+            str(self._project_parts_path()),
+            {
+                "registered": ids,
+                "custom": list(custom or []),
+                "meta": {"count": len(ids), "custom_count": len(custom or [])},
+            },
+        )
 
     def _write_registered(self, reg) -> None:
         self._write_project_parts_doc(reg)

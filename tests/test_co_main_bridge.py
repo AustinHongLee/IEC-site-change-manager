@@ -589,6 +589,27 @@ def test_save_billing_status_round_trips(tmp_path):
     assert bill["data"]["rows"][0]["remark"] == "ok"
 
 
+def test_main_bridge_json_writes_leave_no_temp_files(tmp_path):
+    folder = tmp_path / "attachments" / "55_20260701_01"
+    folder.mkdir(parents=True)
+    (folder / "change_order.json").write_text(json.dumps({
+        "id": "55_20260701_01",
+        "date": "20260701",
+        "series": "55",
+    }, ensure_ascii=False), encoding="utf-8")
+    _write(tmp_path, "material_pricebook.json", {"items": [{"id": "PIPE-DN15-S40-CS"}]})
+
+    bridge = MainBridge(tmp_path)
+    assert bridge.save_setting("project_name", "測試工程")["ok"] is True
+    assert bridge.save_billing([{"rec": 0, "status": "未請款"}])["ok"] is True
+    assert bridge.register_parts(["PIPE-DN15-S40-CS"])["ok"] is True
+
+    assert not list(tmp_path.rglob("*.tmp"))
+    assert json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))["project"]["name"] == "測試工程"
+    assert json.loads((tmp_path / "records" / "billing.json").read_text(encoding="utf-8"))["byId"]["55_20260701_01"]["status"] == "未請款"
+    assert json.loads((tmp_path / "records" / "project_parts.json").read_text(encoding="utf-8"))["registered"] == ["PIPE-DN15-S40-CS"]
+
+
 def test_replace_photo_copies_file_and_updates_change_order(tmp_path):
     folder = tmp_path / "attachments" / "55_20260701_01"
     folder.mkdir(parents=True)
