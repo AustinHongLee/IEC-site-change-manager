@@ -61,6 +61,15 @@ DEFAULT_SETTINGS = {
         "sheet_name": "焊口編號明細",      # 工作表名稱
         "col_serial": "流水號",            # 流水號欄位名稱（主鍵1）
         "col_weld_no": "焊口編號",         # 焊口編號欄位名稱（主鍵2）
+        "col_size": "尺寸",                # 尺寸欄位
+        "col_thickness": "厚度",            # 厚度 / SCH 欄位
+        "col_material": "材質",             # 材質欄位
+        "col_weld_type": "銲接型式",        # 焊接型式欄位
+        "col_db": "DB數",                  # DB / DI 欄位
+        "col_inside_diameter": "I.D",       # 內徑欄位
+        "col_budget_no": "預算編號",        # 預算編號欄位
+        "col_attribute_1": "屬性.1",        # 第一層屬性欄位
+        "col_attribute_2": "屬性.2",        # 第二層屬性欄位
         "serial_format": "raw",            # 流水號格式: "raw"=原始, "pad4"=補零4位
         "auto_sync": True,                 # 自動同步新增焊口
         "check_duplicate": True,           # 檢查重複焊口
@@ -80,6 +89,9 @@ DEFAULT_SETTINGS = {
     "dwg_list": {
         "sheet_name": "DRAWING LIST",      # 工作表名稱
         "col_serial": "NO",                # 流水號欄位名稱（主鍵）
+        "col_dwg_no": "DWG NO",            # 圖號欄位
+        "col_line_no": "LINE NUMBER",      # Line No. 欄位
+        "col_date": "日期",                # 日期欄位（若來源有）
         "serial_format": "raw",            # 流水號格式: "raw"=原始, "pad4"=補零4位
         "enabled": True,                   # 是否啟用 DWG LIST 查詢
         # 動態欄位配置：定義要從 DWG LIST 取得的欄位
@@ -304,6 +316,15 @@ def get_weld_control_config() -> dict:
         "sheet_name": sm.get("weld_control", "sheet_name", "焊口編號明細"),
         "col_serial": sm.get("weld_control", "col_serial", "流水號"),
         "col_weld_no": sm.get("weld_control", "col_weld_no", "焊口編號"),
+        "col_size": sm.get("weld_control", "col_size", "尺寸"),
+        "col_thickness": sm.get("weld_control", "col_thickness", "厚度"),
+        "col_material": sm.get("weld_control", "col_material", "材質"),
+        "col_weld_type": sm.get("weld_control", "col_weld_type", "銲接型式"),
+        "col_db": sm.get("weld_control", "col_db", "DB數"),
+        "col_inside_diameter": sm.get("weld_control", "col_inside_diameter", "I.D"),
+        "col_budget_no": sm.get("weld_control", "col_budget_no", "預算編號"),
+        "col_attribute_1": sm.get("weld_control", "col_attribute_1", "屬性.1"),
+        "col_attribute_2": sm.get("weld_control", "col_attribute_2", "屬性.2"),
         "auto_sync": sm.get("weld_control", "auto_sync", True),
         "check_duplicate": sm.get("weld_control", "check_duplicate", True),
         "dynamic_columns": sm.get("weld_control", "dynamic_columns", []),
@@ -347,6 +368,9 @@ def get_dwg_list_config() -> dict:
         "file_path": get_drawing_list_path(),
         "sheet_name": sm.get("dwg_list", "sheet_name", "DRAWING LIST"),
         "col_serial": sm.get("dwg_list", "col_serial", "NO"),
+        "col_dwg_no": sm.get("dwg_list", "col_dwg_no", "DWG NO"),
+        "col_line_no": sm.get("dwg_list", "col_line_no", "LINE NUMBER"),
+        "col_date": sm.get("dwg_list", "col_date", "日期"),
         "serial_format": sm.get("dwg_list", "serial_format", "raw"),
         "enabled": sm.get("dwg_list", "enabled", True),
         "dynamic_columns": sm.get("dwg_list", "dynamic_columns", []),

@@ -11,6 +11,7 @@ import sys
 import time
 import json
 import pytest
+from openpyxl import Workbook
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
 
@@ -89,6 +90,53 @@ class TestUpsertRecord:
         assert "需重產" not in rec
         assert "需重產原因" not in rec
         assert "需重產時間" not in rec
+
+
+class TestDrawingMap:
+    def test_drawing_map_uses_configured_sheet_and_columns(self, tmp_path):
+        import record_manager
+
+        workbook = tmp_path / "dwg.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "新版圖號"
+        ws.append(["說明列"])
+        ws.append(["ISO流編", "Line No.", "圖號"])
+        ws.append([8, "AI-00001", "1-S11U-AI-00001-008"])
+        ws.append([15, "AP-US01", "1-S11U-AP-US01-002"])
+        wb.save(workbook)
+        wb.close()
+
+        mapping = record_manager._load_drawing_map_from_excel(str(workbook), {
+            "sheet_name": "新版圖號",
+            "col_serial": "ISO流編",
+            "col_line_no": "Line No.",
+            "col_dwg_no": "圖號",
+        })
+
+        assert mapping["0008"] == ("AI-00001", "1-S11U-AI-00001-008")
+        assert mapping["0015"] == ("AP-US01", "1-S11U-AP-US01-002")
+
+    def test_drawing_map_does_not_treat_line_no_as_serial_no(self, tmp_path):
+        import record_manager
+
+        workbook = tmp_path / "dwg_missing_serial.xlsx"
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "DRAWING LIST"
+        ws.append(["Line No.", "DWG NO"])
+        ws.append(["AI-00001", "1-S11U-AI-00001-008"])
+        wb.save(workbook)
+        wb.close()
+
+        mapping = record_manager._load_drawing_map_from_excel(str(workbook), {
+            "sheet_name": "DRAWING LIST",
+            "col_serial": "NO",
+            "col_line_no": "Line No.",
+            "col_dwg_no": "DWG NO",
+        })
+
+        assert mapping == {}
 
 
 class TestUpsertMaterialsRows:

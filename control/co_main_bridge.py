@@ -43,6 +43,149 @@ PDF_HEALTH_SCAN_FILE_LIMIT = 2000
 PDF_HEALTH_SCAN_DIR_LIMIT = 300
 
 
+SOURCE_SCHEMA_ROLES = {
+    "dwg": [
+        {
+            "key": "serial_column",
+            "setting_key": "col_serial",
+            "label": "ISO流編",
+            "default": "NO",
+            "aliases": ["流水號", "管線序號", "ISO流編", "Series NO", "NO", "Serial", "Series"],
+            "required": True,
+            "note": "用來把 DWG LIST 資料掛回修改單流水號。",
+        },
+        {
+            "key": "dwg_no_column",
+            "setting_key": "col_dwg_no",
+            "label": "圖號",
+            "default": "DWG NO",
+            "aliases": ["圖號", "圖面編號", "DWG NO", "DRAWING NO", "DRAWING"],
+            "required": False,
+            "note": "業主資料包的圖號 / DWG 欄位。",
+        },
+        {
+            "key": "line_no_column",
+            "setting_key": "col_line_no",
+            "label": "Line No.",
+            "default": "LINE NUMBER",
+            "aliases": ["Line No.", "LINE NO", "LINE NUMBER", "LINE   NUMBER", "管線編號"],
+            "required": False,
+            "note": "業主資料包的 Line No. 欄位。",
+        },
+        {
+            "key": "date_column",
+            "setting_key": "col_date",
+            "label": "日期",
+            "default": "日期",
+            "aliases": ["日期", "DATE", "施工日期", "配管完成日期"],
+            "required": False,
+            "note": "若來源表有日期，可作為報表索引參考。",
+        },
+    ],
+    "weld": [
+        {
+            "key": "serial_column",
+            "setting_key": "col_serial",
+            "label": "ISO流編",
+            "default": "流水號",
+            "aliases": ["流水號", "ISO流編", "Series NO", "NO", "Serial", "管線序號"],
+            "required": True,
+            "note": "用來查同一張 ISO / 流水號底下的焊口。",
+        },
+        {
+            "key": "weld_no_column",
+            "setting_key": "col_weld_no",
+            "label": "焊口編號",
+            "default": "焊口編號",
+            "aliases": ["焊口編號", "銲口編號", "焊口碼", "Weld No", "WELD NO"],
+            "required": True,
+            "note": "修改單精靈與業主資料包的焊口主鍵。",
+        },
+        {
+            "key": "size_column",
+            "setting_key": "col_size",
+            "label": "尺寸",
+            "default": "尺寸",
+            "aliases": ["尺寸", "SIZE", "口徑", "管徑"],
+            "required": False,
+            "note": "焊口摘要與焊口統計的尺寸欄。",
+        },
+        {
+            "key": "material_column",
+            "setting_key": "col_material",
+            "label": "材質",
+            "default": "材質",
+            "aliases": ["材質", "MATERIAL", "鋼種"],
+            "required": False,
+            "note": "焊口摘要與焊口統計的材質欄。",
+        },
+        {
+            "key": "thickness_column",
+            "setting_key": "col_thickness",
+            "label": "厚度/SCH",
+            "default": "厚度",
+            "aliases": ["厚度", "SCH", "Schedule", "管厚"],
+            "required": False,
+            "note": "焊口摘要與焊口統計的厚度 / SCH 欄。",
+        },
+        {
+            "key": "weld_type_column",
+            "setting_key": "col_weld_type",
+            "label": "焊接型式",
+            "default": "銲接型式",
+            "aliases": ["銲接型式", "焊接型式", "焊口型式", "WELD TYPE"],
+            "required": False,
+            "note": "修改單精靈帶入 BW / SW / FSW 等型式。",
+        },
+        {
+            "key": "db_column",
+            "setting_key": "col_db",
+            "label": "DB",
+            "default": "DB數",
+            "aliases": ["DB數", "DB", "D.B.", "DI", "D.I.", "Dia-Inch", "DIA INCH", "管徑吋數"],
+            "required": False,
+            "note": "業主焊口統計的 DB 數，保留 0.5 / 0.75 等小數。",
+        },
+        {
+            "key": "inside_diameter_column",
+            "setting_key": "col_inside_diameter",
+            "label": "I.D",
+            "default": "I.D",
+            "aliases": ["I.D", "I.D.", "ID", "內徑"],
+            "required": False,
+            "note": "需要內徑資訊時保留來源欄位。",
+        },
+        {
+            "key": "budget_no_column",
+            "setting_key": "col_budget_no",
+            "label": "預算編號",
+            "default": "預算編號",
+            "aliases": ["預算編號", "Budget No", "BudgetNo", "Budget", "預算"],
+            "required": False,
+            "note": "業主焊口統計與摘要的預算編號欄。",
+        },
+        {
+            "key": "attribute_1_column",
+            "setting_key": "col_attribute_1",
+            "label": "屬性.1",
+            "default": "屬性.1",
+            "aliases": ["屬性.1", "屬性1", "焊口屬性", "屬性"],
+            "required": False,
+            "note": "用來過濾實際焊口列，避免把閥件/法蘭安裝列算進去。",
+        },
+        {
+            "key": "attribute_2_column",
+            "setting_key": "col_attribute_2",
+            "label": "屬性.2",
+            "default": "屬性.2",
+            "aliases": ["屬性.2", "屬性2", "分類"],
+            "required": False,
+            "note": "保留第二層屬性/分類，供後續稽核與輸出使用。",
+        },
+    ],
+}
+
+
 def _wizard_launch_command(root: Path) -> tuple[list[str], str]:
     if getattr(sys, "frozen", False):
         return [sys.executable, "--wizard"], "frozen"
@@ -177,6 +320,29 @@ def _required_options(value: Any) -> list[str]:
     return [str(value)] if str(value or "").strip() else []
 
 
+def _source_role_defs(kind: str, cfg: dict | None = None) -> list[dict]:
+    cfg = cfg if isinstance(cfg, dict) else {}
+    roles = []
+    for role in SOURCE_SCHEMA_ROLES.get(kind, []):
+        value = str(cfg.get(role["setting_key"]) or "").strip()
+        default = str(role.get("default") or "").strip()
+        aliases = []
+        for item in [value, default, *role.get("aliases", [])]:
+            text = str(item or "").strip()
+            if text and text not in aliases:
+                aliases.append(text)
+        roles.append({
+            **role,
+            "value": value or default,
+            "aliases": aliases,
+        })
+    return roles
+
+
+def _source_required_options(roles: list[dict]) -> list[list[str]]:
+    return [role.get("aliases", []) for role in roles if role.get("required")]
+
+
 def _resolve_required_indexes(headers: list[Any], required: list[Any]) -> tuple[list[int], list[str], list[dict]]:
     header_map = {_norm_header(h): idx for idx, h in enumerate(headers) if str(h or "").strip()}
     header_text = {idx: str(h or "").strip() for idx, h in enumerate(headers) if str(h or "").strip()}
@@ -206,6 +372,27 @@ def _resolve_required_indexes(headers: list[Any], required: list[Any]) -> tuple[
     return indexes, missing, matched
 
 
+def _resolve_role_fields(headers: list[Any], roles: list[dict]) -> list[dict]:
+    fields = []
+    for role in roles:
+        _, missing, matched = _resolve_required_indexes(headers, [role.get("aliases", [])])
+        hit = matched[0] if matched else {}
+        actual = str(hit.get("actual") or "").strip()
+        fields.append({
+            "key": role.get("key", ""),
+            "label": role.get("label", ""),
+            "setting_key": role.get("setting_key", ""),
+            "expected": role.get("value") or role.get("default") or "",
+            "alias": hit.get("alias", ""),
+            "actual": actual,
+            "column": hit.get("column"),
+            "required": bool(role.get("required")),
+            "missing": bool(missing),
+            "note": role.get("note", ""),
+        })
+    return fields
+
+
 def _find_excel_header(ws: Any, required: list[Any], *, scan_rows: int = 12) -> dict | None:
     max_row = min(int(ws.max_row or scan_rows), scan_rows)
     best_missing: list[str] = []
@@ -224,7 +411,14 @@ def _find_excel_header(ws: Any, required: list[Any], *, scan_rows: int = 12) -> 
     return {"missing": best_missing} if best_missing else None
 
 
-def _excel_source_health(root: Path, path_value: Any, *, sheet_name: str, required: list[Any]) -> dict:
+def _excel_source_health(
+    root: Path,
+    path_value: Any,
+    *,
+    sheet_name: str,
+    required: list[Any],
+    roles: list[dict] | None = None,
+) -> dict:
     raw = str(path_value or "").strip()
     if not raw:
         return _source_problem("未設定", "尚未設定路徑")
@@ -260,6 +454,7 @@ def _excel_source_health(root: Path, path_value: Any, *, sheet_name: str, requir
                     return _source_problem("需檢查", f"找不到工作表：{sheet_name}；可用：{available}")
                 return _source_problem("需檢查", "缺少欄位：" + "、".join(last_missing))
             ws = wb[chosen]
+            role_fields = _resolve_role_fields(chosen_headers, roles or [])
             count = 0
             for row in ws.iter_rows(min_row=chosen_header_row + 1, values_only=True):
                 if all(idx < len(row) and str(row[idx] or "").strip() for idx in chosen_indexes):
@@ -283,7 +478,10 @@ def _excel_source_health(root: Path, path_value: Any, *, sheet_name: str, requir
                 "message": message,
                 "sheet": chosen,
                 "header_row": chosen_header_row,
-                "fields": chosen_matched,
+                "fields": role_fields or chosen_matched,
+                "missing_optional": [
+                    item for item in role_fields if item.get("missing") and not item.get("required")
+                ],
             }
         finally:
             wb.close()
@@ -312,6 +510,7 @@ def _excel_source_preview(
     *,
     sheet_name: str,
     required: list[Any],
+    roles: list[dict] | None = None,
     max_rows: int = 18,
     max_cols: int = 18,
 ) -> dict:
@@ -374,7 +573,8 @@ def _excel_source_preview(
             "header_row": header_row,
             "columns": columns,
             "rows": rows,
-            "fields": matched,
+            "roles": roles or [],
+            "fields": _resolve_role_fields(header_values, roles or []) or matched,
             "missing": list((header_info or {}).get("missing") or []),
         }
     finally:
@@ -1290,17 +1490,13 @@ class MainBridge:
     def _source_schema_settings(self) -> dict:
         weld_cfg = _settings_section(self.root, "weld_control")
         dwg_cfg = _settings_section(self.root, "dwg_list")
-        return {
-            "dwg": {
-                "sheet_name": str(dwg_cfg.get("sheet_name") or "DRAWING LIST"),
-                "serial_column": str(dwg_cfg.get("col_serial") or "NO"),
-            },
-            "weld": {
-                "sheet_name": str(weld_cfg.get("sheet_name") or "焊口編號明細"),
-                "serial_column": str(weld_cfg.get("col_serial") or "流水號"),
-                "weld_no_column": str(weld_cfg.get("col_weld_no") or "焊口編號"),
-            },
-        }
+        dwg = {"sheet_name": str(dwg_cfg.get("sheet_name") or "DRAWING LIST")}
+        for role in _source_role_defs("dwg", dwg_cfg):
+            dwg[role["key"]] = str(dwg_cfg.get(role["setting_key"]) or role.get("default") or "")
+        weld = {"sheet_name": str(weld_cfg.get("sheet_name") or "焊口編號明細")}
+        for role in _source_role_defs("weld", weld_cfg):
+            weld[role["key"]] = str(weld_cfg.get(role["setting_key"]) or role.get("default") or "")
+        return {"dwg": dwg, "weld": weld}
 
     def _source_health(self, settings: dict) -> dict:
         weld_cfg = _settings_section(self.root, "weld_control")
@@ -1315,16 +1511,15 @@ class MainBridge:
                 self.root,
                 settings.get("dwg_list"),
                 sheet_name=str(dwg_cfg.get("sheet_name") or "DRAWING LIST"),
-                required=[[str(dwg_cfg.get("col_serial") or "NO"), "流水號", "管線序號", "ISO流編", "NO", "Serial", "Series"]],
+                required=_source_required_options(_source_role_defs("dwg", dwg_cfg)),
+                roles=_source_role_defs("dwg", dwg_cfg),
             ),
             "weld": _excel_source_health(
                 self.root,
                 settings.get("weld_control_table"),
                 sheet_name=str(weld_cfg.get("sheet_name") or "焊口編號明細"),
-                required=[
-                    [str(weld_cfg.get("col_serial") or "流水號"), "流水號", "ISO流編"],
-                    [str(weld_cfg.get("col_weld_no") or "焊口編號"), "焊口編號", "銲口編號", "焊口碼"],
-                ],
+                required=_source_required_options(_source_role_defs("weld", weld_cfg)),
+                roles=_source_role_defs("weld", weld_cfg),
             ),
             "drawingpdf": _pdf_source_health(
                 self.root,
@@ -1356,17 +1551,22 @@ class MainBridge:
         kind = str(kind or "").strip().lower()
         config = config if isinstance(config, dict) else {}
         if kind == "dwg":
-            updates = {
-                "sheet_name": str(config.get("sheet_name") or "").strip() or "DRAWING LIST",
-                "col_serial": str(config.get("serial_column") or config.get("col_serial") or "").strip() or "NO",
-            }
+            roles = _source_role_defs("dwg")
+            updates = {"sheet_name": str(config.get("sheet_name") or "").strip() or "DRAWING LIST"}
+            for role in roles:
+                updates[role["setting_key"]] = (
+                    str(config.get(role["key"]) or config.get(role["setting_key"]) or "").strip()
+                    or str(role.get("default") or "")
+                )
             self._write_settings_section("dwg_list", updates)
         elif kind == "weld":
-            updates = {
-                "sheet_name": str(config.get("sheet_name") or "").strip() or "焊口編號明細",
-                "col_serial": str(config.get("serial_column") or config.get("col_serial") or "").strip() or "流水號",
-                "col_weld_no": str(config.get("weld_no_column") or config.get("col_weld_no") or "").strip() or "焊口編號",
-            }
+            roles = _source_role_defs("weld")
+            updates = {"sheet_name": str(config.get("sheet_name") or "").strip() or "焊口編號明細"}
+            for role in roles:
+                updates[role["setting_key"]] = (
+                    str(config.get(role["key"]) or config.get(role["setting_key"]) or "").strip()
+                    or str(role.get("default") or "")
+                )
             self._write_settings_section("weld_control", updates)
         else:
             raise ValueError(f"不支援的來源格式設定：{kind}")
@@ -1381,22 +1581,23 @@ class MainBridge:
         schema = self._source_schema_settings()
         if kind == "dwg":
             cfg = schema["dwg"]
+            roles = _source_role_defs("dwg", _settings_section(self.root, "dwg_list"))
             return _excel_source_preview(
                 self.root,
                 settings.get("dwg_list"),
                 sheet_name=cfg["sheet_name"],
-                required=[[cfg["serial_column"], "流水號", "管線序號", "ISO流編", "NO", "Serial", "Series"]],
+                required=_source_required_options(roles),
+                roles=roles,
             )
         if kind == "weld":
             cfg = schema["weld"]
+            roles = _source_role_defs("weld", _settings_section(self.root, "weld_control"))
             return _excel_source_preview(
                 self.root,
                 settings.get("weld_control_table"),
                 sheet_name=cfg["sheet_name"],
-                required=[
-                    [cfg["serial_column"], "流水號", "ISO流編"],
-                    [cfg["weld_no_column"], "焊口編號", "銲口編號", "焊口碼"],
-                ],
+                required=_source_required_options(roles),
+                roles=roles,
             )
         raise ValueError(f"不支援的來源預覽：{kind}")
 

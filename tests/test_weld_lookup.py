@@ -148,6 +148,45 @@ def test_lookup_info_includes_budget_db_metadata(tmp_path):
     }
 
 
+def test_lookup_info_prefers_configured_column_mapping(tmp_path):
+    workbook = tmp_path / "mapped_weld_control.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "來源表"
+    ws.append(["流編", "口碼", "口徑", "管厚", "鋼種", "焊法", "DB值", "內徑值", "預算碼", "種類"])
+    ws.append([149, "2a", "0.75", "40S", "304L", "BW", 0.75, "19.1", "PB-149", "焊口"])
+    ws.append([149, "VALVE", "2", "40S", "304L", "RF", 2, "52.5", "PB-X", "VALVE安裝"])
+    wb.save(workbook)
+    wb.close()
+
+    manager = WeldControlManager({
+        "file_path": str(workbook),
+        "sheet_name": "來源表",
+        "col_serial": "流編",
+        "col_weld_no": "口碼",
+        "col_size": "口徑",
+        "col_thickness": "管厚",
+        "col_material": "鋼種",
+        "col_weld_type": "焊法",
+        "col_db": "DB值",
+        "col_inside_diameter": "內徑值",
+        "col_budget_no": "預算碼",
+        "col_attribute_1": "種類",
+    })
+    lookup = WeldLookup(manager=manager)
+
+    assert lookup.existing_weld_ids("149") == ["2a"]
+    assert lookup.lookup_info("149", "2a") == {
+        "size": "0.75",
+        "sch": "40S",
+        "material": "304L",
+        "weld_type": "BW",
+        "db": "0.75",
+        "budget_no": "PB-149",
+        "inside_diameter": "19.1",
+    }
+
+
 def test_lookup_spec_returns_none_for_missing_or_non_real_rows(tmp_path):
     lookup = _lookup_for_fixture(tmp_path)
 

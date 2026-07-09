@@ -12,6 +12,7 @@ record_manager.py — 紀錄清單管理模組
 import os
 import json
 import shutil
+import re
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
@@ -21,7 +22,7 @@ from config import (
     RECORD_XLSX_PATH,
     RECORD_HEADER, DETAIL_HEADER, MATERIALS_HEADER
 )
-from utils import safe_load_workbook, atomic_save_wb, atomic_write_json, parse_seq_from_report_id
+from utils import safe_load_workbook, atomic_save_wb, atomic_write_json, parse_seq_from_report_id, resolve_col
 from billing_calculator import amount_to_text, parse_amount
 from billing_status import is_billing_locked
 from log_config import get_logger
@@ -908,13 +909,22 @@ def ensure_workbook_scaffold(path: str = None):
 
 
 # ========= DWG LIST 載入（含 JSON 快取） =========
-def _dwg_cache_valid(excel_path: str) -> bool:
+def _dwg_config_signature(config: dict | None = None) -> str:
+    if not isinstance(config, dict):
+        return ""
+    keys = ("sheet_name", "col_serial", "col_line_no", "col_dwg_no")
+    return "|".join(str(config.get(key) or "") for key in keys)
+
+
+def _dwg_cache_valid(excel_path: str, config: dict | None = None) -> bool:
     """檢查 dwg_map.json 快取是否仍有效（比對 Excel mtime）"""
     if not os.path.exists(DWG_MAP_JSON_PATH):
         return False
     try:
         with open(DWG_MAP_JSON_PATH, "r", encoding="utf-8") as f:
             cache = json.load(f)
+        if cache.get("schema_signature", "") != _dwg_config_signature(config):
+            return False
         cached_mtime = cache.get("source_mtime", 0)
         actual_mtime = os.path.getmtime(excel_path)
         return abs(cached_mtime - actual_mtime) < 1.0
@@ -922,11 +932,12 @@ def _dwg_cache_valid(excel_path: str) -> bool:
         return False
 
 
-def _save_dwg_cache(mapping: Dict[str, Tuple[str, str]], excel_path: str):
+def _save_dwg_cache(mapping: Dict[str, Tuple[str, str]], excel_path: str, config: dict | None = None):
     """將 DWG mapping 存為 JSON 快取"""
     data = {
         "source": os.path.basename(excel_path),
         "source_mtime": os.path.getmtime(excel_path),
+        "schema_signature": _dwg_config_signature(config),
         "updated": datetime.now().isoformat(),
         "count": len(mapping),
         "mapping": {k: list(v) for k, v in mapping.items()},
@@ -949,9 +960,11 @@ def load_drawing_map(path: str = None) -> Dict[str, Tuple[str, str]]:
     Returns:
         {series_no: (line_number, dwg_no)}
     """
+    config = None
     if path is None:
         try:
-            from settings_manager import get_drawing_list_path
+            from settings_manager import get_drawing_list_path, get_dwg_list_config
+            config = get_dwg_list_config()
             path = get_drawing_list_path()
         except ImportError:
             from config import DRAWING_LIST_PATH
@@ -966,70 +979,121 @@ def load_drawing_map(path: str = None) -> Dict[str, Tuple[str, str]]:
         return {}
 
     # 快取有效 → 直接用
-    if _dwg_cache_valid(path):
+    if _dwg_cache_valid(path, config):
         logger.info("⚡ DWG MAP 從快取載入")
         return _load_dwg_cache()
 
     # 從 Excel 讀取
     logger.info("📖 從 Excel 載入 DWG LIST...")
-    mapping = _load_drawing_map_from_excel(path)
+    mapping = _load_drawing_map_from_excel(path, config)
 
     # 寫入快取
     try:
-        _save_dwg_cache(mapping, path)
+        _save_dwg_cache(mapping, path, config)
     except Exception as e:
         logger.warning(f"DWG MAP 快取寫入失敗: {e}")
 
     return mapping
 
 
-def _load_drawing_map_from_excel(path: str) -> Dict[str, Tuple[str, str]]:
+def _dwg_sheet_sort_key(sheet_name: str, desired: str, order: int) -> tuple[int, int]:
+    norm = str(sheet_name or "").replace(" ", "").lower()
+    desired_norm = str(desired or "").replace(" ", "").lower()
+    score = 0
+    if sheet_name == desired:
+        score += 1000
+    if desired_norm and norm == desired_norm:
+        score += 900
+    if desired_norm and desired_norm in norm:
+        score += 350
+    if "drawing" in norm or "dwg" in norm:
+        score += 100
+    return (-score, order)
+
+
+def _dwg_aliases(config: dict | None, key: str, fallback: list[str]) -> list[str]:
+    names: list[str] = []
+    if isinstance(config, dict):
+        configured = str(config.get(key) or "").strip()
+        if configured:
+            names.append(configured)
+    for name in fallback:
+        text = str(name or "").strip()
+        if text and text not in names:
+            names.append(text)
+    return names
+
+
+def _dwg_header_token(value: str) -> str:
+    return re.sub(r"[^0-9a-z\u4e00-\u9fff]+", "", str(value or "").lower())
+
+
+def _resolve_dwg_col(headers: list[str], aliases: list[str]) -> int | None:
+    indexed_headers = [(idx, header) for idx, header in enumerate(headers) if str(header or "").strip()]
+    actual_headers = [header for _, header in indexed_headers]
+    for alias in aliases:
+        alias_token = _dwg_header_token(alias)
+        short_alias = len(alias_token) <= 3
+        if short_alias:
+            for idx, header in indexed_headers:
+                if _dwg_header_token(header) == alias_token:
+                    return idx
+            continue
+        resolved = resolve_col(alias, actual_headers)
+        for idx, header in indexed_headers:
+            if header == resolved:
+                return idx
+    return None
+
+
+def _load_drawing_map_from_excel(path: str, config: dict | None = None) -> Dict[str, Tuple[str, str]]:
     """從 Excel 讀取原始 DWG mapping"""
     mapping: Dict[str, Tuple[str, str]] = {}
 
     wb = safe_load_workbook(path, data_only=True)
     try:
-        # 尋找正確的工作表
-        preferred_names = ["DRAWING LIST", "DWG LIST"]
-        ws = None
+        desired_sheet = str((config or {}).get("sheet_name") or "DRAWING LIST")
+        serial_aliases = _dwg_aliases(config, "col_serial", ["Series NO", "NO", "流水號", "管線序號", "ISO流編"])
+        line_aliases = _dwg_aliases(config, "col_line_no", ["LINE   NUMBER", "LINE NUMBER", "LINE NO", "Line No.", "管線編號"])
+        dwg_aliases = _dwg_aliases(config, "col_dwg_no", ["DWG NO", "圖號", "圖面編號", "DRAWING NO"])
+        candidates = [
+            name for _, name in sorted(
+                enumerate(wb.sheetnames),
+                key=lambda item: _dwg_sheet_sort_key(item[1], desired_sheet, item[0]),
+            )
+        ]
 
-        for pref in preferred_names:
-            for name in wb.sheetnames:
-                if str(name).strip().lower() == pref.lower():
-                    ws = wb[name]
+        selected = None
+        for name in candidates:
+            ws = wb[name]
+            max_scan = min(ws.max_row or 1, 12)
+            for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=max_scan, values_only=True), start=1):
+                headers = [str(cell or "").strip() for cell in (row or [])]
+                if not any(headers):
+                    continue
+                idx_series = _resolve_dwg_col(headers, serial_aliases)
+                idx_line = _resolve_dwg_col(headers, line_aliases)
+                idx_dwg = _resolve_dwg_col(headers, dwg_aliases)
+                if idx_series is not None and (idx_line is not None or idx_dwg is not None):
+                    selected = (ws, row_no, idx_series, idx_line, idx_dwg)
                     break
-            if ws is not None:
+            if selected:
                 break
 
-        if ws is None:
-            for name in wb.sheetnames:
-                sh = wb[name]
-                try:
-                    header_probe = [cell.value for cell in sh[1]]
-                except Exception:
-                    header_probe = []
-                if header_probe and (
-                    "Series NO" in header_probe and
-                    (("LINE   NUMBER" in header_probe) or ("LINE NUMBER" in header_probe)) and
-                    ("DWG NO" in header_probe)
-                ):
-                    ws = sh
-                    break
+        if selected is None:
+            logger.warning("⚠️ 找不到可用的 DWG LIST 表頭，LINE/DWG 將留空")
+            return mapping
 
-        if ws is None:
-            logger.warning("⚠️ 找不到名為 'DRAWING LIST' 的工作表，改用 active。")
-            ws = wb.active
-
-        header = [cell.value for cell in ws[1]]
-        idx_series = header.index("Series NO")
-        idx_line = header.index("LINE   NUMBER") if "LINE   NUMBER" in header else header.index("LINE NUMBER")
-        idx_dwg = header.index("DWG NO")
-
-        for row in ws.iter_rows(min_row=2, values_only=True):
+        ws, header_row, idx_series, idx_line, idx_dwg = selected
+        for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+            if idx_series >= len(row):
+                continue
             series = str(row[idx_series]).zfill(4) if row[idx_series] is not None else ""
             if not series:
                 continue
-            mapping[series] = (row[idx_line], row[idx_dwg])
+            line_no = row[idx_line] if idx_line is not None and idx_line < len(row) else ""
+            dwg_no = row[idx_dwg] if idx_dwg is not None and idx_dwg < len(row) else ""
+            mapping[series] = (line_no, dwg_no)
     finally:
         wb.close()
 

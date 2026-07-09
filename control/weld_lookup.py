@@ -47,6 +47,33 @@ def _first_row_text(row: dict[str, Any], column_names: Iterable[str], *, exact_f
     return None
 
 
+def _config_column_names(config: dict[str, Any], key: str, fallback_names: Iterable[str]) -> list[str]:
+    names: list[str] = []
+    configured = _text(config.get(key))
+    if configured is not None:
+        names.append(configured)
+    for name in fallback_names:
+        text = _text(name)
+        if text is not None and text not in names:
+            names.append(text)
+    return names
+
+
+def _configured_row_text(
+    row: dict[str, Any],
+    config: dict[str, Any],
+    key: str,
+    fallback_names: Iterable[str],
+    *,
+    exact_for_short_names: bool = True,
+) -> Optional[str]:
+    return _first_row_text(
+        row,
+        _config_column_names(config, key, fallback_names),
+        exact_for_short_names=exact_for_short_names,
+    )
+
+
 def _exact_normalized_row_value(row: dict[str, Any], column_name: str) -> Any:
     target = column_name.replace(" ", "").replace("\n", "").lower()
     for key in row.keys():
@@ -55,8 +82,22 @@ def _exact_normalized_row_value(row: dict[str, Any], column_name: str) -> Any:
     return None
 
 
-def _is_real_joint(row: dict[str, Any]) -> bool:
-    attr = _text(_exact_normalized_row_value(row, "屬性.1"))
+def _configured_exact_row_text(
+    row: dict[str, Any],
+    config: dict[str, Any],
+    key: str,
+    fallback_names: Iterable[str],
+) -> Optional[str]:
+    for column_name in _config_column_names(config, key, fallback_names):
+        text = _text(_exact_normalized_row_value(row, column_name))
+        if text is not None:
+            return text
+    return None
+
+
+def _is_real_joint(row: dict[str, Any], config: dict[str, Any] | None = None) -> bool:
+    config = config if isinstance(config, dict) else {}
+    attr = _configured_exact_row_text(row, config, "col_attribute_1", ("屬性.1", "屬性1"))
     if attr is not None:
         return attr in REAL_JOINT_ATTRIBUTES
 
@@ -64,13 +105,27 @@ def _is_real_joint(row: dict[str, Any]) -> bool:
     # weld detail sheet marks actual rows through 焊口屬性, or simply consists of
     # weld-number rows with spec columns.  Keep the old strict path when 屬性.1
     # exists, but accept these detail-only variants.
-    prop = _text(_row_value(row, "焊口屬性")) or _text(_row_value(row, "屬性"))
+    prop = _configured_row_text(
+        row,
+        config,
+        "col_attribute_2",
+        ("焊口屬性", "屬性.2", "屬性2", "屬性", "分類"),
+        exact_for_short_names=False,
+    )
     if prop is not None:
         return prop in REAL_JOINT_PROPERTIES or "焊口" in prop
 
     return bool(
-        _text(_row_value(row, "焊口編號"))
-        and any(_text(_row_value(row, name)) for name in ("尺寸", "厚度", "材質", "銲接型式"))
+        _configured_row_text(row, config, "col_weld_no", ("焊口編號", "銲口編號", "焊口碼"))
+        and any(
+            _configured_row_text(row, config, key, names)
+            for key, names in (
+                ("col_size", ("尺寸", "SIZE", "口徑", "管徑")),
+                ("col_thickness", ("厚度", "SCH", "Schedule", "管厚")),
+                ("col_material", ("材質", "MATERIAL", "鋼種")),
+                ("col_weld_type", ("銲接型式", "焊接型式", "焊口型式")),
+            )
+        )
     )
 
 
@@ -80,6 +135,11 @@ class WeldLookup:
     def __init__(self, manager=None, *, serial_format: str = "raw"):
         self.manager = manager if manager is not None else init_weld_manager_from_settings()
         self.serial_format = serial_format or "raw"
+
+    @property
+    def _config(self) -> dict[str, Any]:
+        config = getattr(self.manager, "config", {}) if self.manager is not None else {}
+        return config if isinstance(config, dict) else {}
 
     def lookup_spec(self, series: Any, base: Any) -> Spec | None:
         """Return the existing weld spec for ``(series, base)`` from real joint rows."""
@@ -100,18 +160,21 @@ class WeldLookup:
             return None
 
         for row in self._real_rows_by_series(series):
-            if _text(_row_value(row, "焊口編號")) == weld_id:
-                budget_no = _first_row_text(row, ("預算編號", "Budget No", "BudgetNo", "Budget"))
-                db_value = _first_row_text(
+            config = self._config
+            if _configured_row_text(row, config, "col_weld_no", ("焊口編號", "銲口編號", "焊口碼")) == weld_id:
+                budget_no = _configured_row_text(row, config, "col_budget_no", ("預算編號", "Budget No", "BudgetNo", "Budget"))
+                db_value = _configured_row_text(
                     row,
+                    config,
+                    "col_db",
                     ("DB數", "DB", "D.B.", "DI", "D.I.", "Dia-Inch", "DIA INCH", "管徑吋數"),
                 )
-                inside_diameter = _first_row_text(row, ("I.D", "I.D.", "ID", "內徑"))
+                inside_diameter = _configured_row_text(row, config, "col_inside_diameter", ("I.D", "I.D.", "ID", "內徑"))
                 return {
-                    "size": _text(_row_value(row, "尺寸")),
-                    "sch": _text(_row_value(row, "厚度")),
-                    "material": _text(_row_value(row, "材質")),
-                    "weld_type": _text(_row_value(row, "銲接型式")),
+                    "size": _configured_row_text(row, config, "col_size", ("尺寸", "SIZE", "口徑", "管徑")),
+                    "sch": _configured_row_text(row, config, "col_thickness", ("厚度", "SCH", "Schedule", "管厚")),
+                    "material": _configured_row_text(row, config, "col_material", ("材質", "MATERIAL", "鋼種")),
+                    "weld_type": _configured_row_text(row, config, "col_weld_type", ("銲接型式", "焊接型式", "焊口型式")),
                     "db": db_value,
                     "budget_no": budget_no,
                     "inside_diameter": inside_diameter,
@@ -122,7 +185,7 @@ class WeldLookup:
         """List existing real joint IDs for a serial, preserving table order."""
         ids: list[str] = []
         for row in self._real_rows_by_series(series):
-            weld_id = _text(_row_value(row, "焊口編號"))
+            weld_id = _configured_row_text(row, self._config, "col_weld_no", ("焊口編號", "銲口編號", "焊口碼"))
             if weld_id is not None:
                 ids.append(weld_id)
         return ids
@@ -140,7 +203,7 @@ class WeldLookup:
         if not self._manager_available():
             return []
         rows = self.manager.get_all_welds_by_serial(normalize_series_raw(series))
-        return [row for row in rows if _is_real_joint(row)]
+        return [row for row in rows if _is_real_joint(row, self._config)]
 
     def _manager_available(self) -> bool:
         if self.manager is None:

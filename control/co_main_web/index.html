@@ -539,14 +539,7 @@
           <span>Sheet name</span>
           <input class="set-input" id="schemaSheetName" type="text" placeholder="例：DRAWING LIST">
         </label>
-        <label>
-          <span>流水號欄位</span>
-          <input class="set-input" id="schemaSerialColumn" type="text" placeholder="例：NO / 流水號">
-        </label>
-        <label id="schemaWeldNoRow">
-          <span>焊口編號欄位</span>
-          <input class="set-input" id="schemaWeldNoColumn" type="text" placeholder="例：焊口編號 / 銲口編號">
-        </label>
+        <div class="schema-field-inputs" id="schemaFieldInputs"></div>
       </div>
       </details>
     </div>
@@ -1735,40 +1728,56 @@ function sourceSchemaLabel(kind){
 }
 function fieldActualByExpected(info, expected){
   const fields = (info && Array.isArray(info.fields)) ? info.fields : [];
-  const hit = fields.find(f => String(f.expected||'') === expected);
+  const hit = fields.find(f => String(f.expected||'') === expected || String(f.label||'') === expected || String(f.key||'') === expected);
   return hit ? String(hit.actual || hit.alias || '') : '';
 }
 function detectedSourceSchema(kind){
   const h = (APP_SETTINGS.source_health || {})[kind] || {};
   const fields = Array.isArray(h.fields) ? h.fields : [];
-  if(kind === 'weld'){
-    return {
-      sheet_name: h.sheet || '',
-      serial_column: (fields[0] && String(fields[0].actual || fields[0].alias || '')) || fieldActualByExpected(h, '流水號'),
-      weld_no_column: (fields[1] && String(fields[1].actual || fields[1].alias || '')) || fieldActualByExpected(h, '焊口編號'),
-    };
+  const out = {sheet_name: h.sheet || ''};
+  for(const role of sourceSchemaRoles(kind)){
+    const hit = fields.find(f => String(f.key||'') === role.key);
+    out[role.key] = (hit && String(hit.actual || hit.alias || '')) || fieldActualByExpected(h, role.label) || '';
   }
-  return {
-    sheet_name: h.sheet || '',
-    serial_column: (fields[0] && String(fields[0].actual || fields[0].alias || '')) || fieldActualByExpected(h, 'NO'),
-  };
+  return out;
 }
 function currentSourceSchema(kind){
   return ((APP_SETTINGS.source_schema || {})[kind]) || {};
 }
 function sourceSchemaRoles(kind){
+  const previewRoles = SOURCE_SCHEMA_PREVIEW && SOURCE_SCHEMA_PREVIEW.roles;
+  if(Array.isArray(previewRoles) && previewRoles.length){
+    return previewRoles.map(role=>({
+      key:String(role.key||''),
+      label:String(role.label||role.key||''),
+      note:String(role.note||''),
+      required:!!role.required,
+    })).filter(role=>role.key);
+  }
   if(kind === 'weld'){
     return [
-      {key:'serial_column', label:'流水號', note:'這欄用來把焊口表資料掛到同一張修改單 / ISO 流編。'},
-      {key:'weld_no_column', label:'焊口編號', note:'這欄會進焊口摘要、焊口統計與業主資料包。'},
+      {key:'serial_column', label:'ISO流編', required:true, note:'這欄用來把焊口表資料掛到同一張修改單 / ISO 流編。'},
+      {key:'weld_no_column', label:'焊口編號', required:true, note:'這欄會進焊口摘要、焊口統計與業主資料包。'},
+      {key:'size_column', label:'尺寸', note:'焊口摘要與焊口統計的尺寸欄。'},
+      {key:'material_column', label:'材質', note:'焊口摘要與焊口統計的材質欄。'},
+      {key:'thickness_column', label:'厚度/SCH', note:'焊口摘要與焊口統計的厚度 / SCH 欄。'},
+      {key:'weld_type_column', label:'焊接型式', note:'修改單精靈帶入 BW / SW / FSW 等型式。'},
+      {key:'db_column', label:'DB', note:'業主焊口統計的 DB 數，保留 0.5 / 0.75 等小數。'},
+      {key:'inside_diameter_column', label:'I.D', note:'需要內徑資訊時保留來源欄位。'},
+      {key:'budget_no_column', label:'預算編號', note:'業主焊口統計與摘要的預算編號欄。'},
+      {key:'attribute_1_column', label:'屬性.1', note:'用來過濾實際焊口列，避免把閥件/法蘭安裝列算進去。'},
+      {key:'attribute_2_column', label:'屬性.2', note:'保留第二層屬性/分類，供後續稽核與輸出使用。'},
     ];
   }
   return [
-    {key:'serial_column', label:'流水號', note:'這欄用來從 DWG LIST 找日期、圖號、Line No. 與圖面索引。'},
+    {key:'serial_column', label:'ISO流編', required:true, note:'這欄用來從 DWG LIST 找日期、圖號、Line No. 與圖面索引。'},
+    {key:'dwg_no_column', label:'圖號', note:'業主資料包的圖號 / DWG 欄位。'},
+    {key:'line_no_column', label:'Line No.', note:'業主資料包的 Line No. 欄位。'},
+    {key:'date_column', label:'日期', note:'若來源表有日期，可作為報表索引參考。'},
   ];
 }
 function sourceSchemaInputId(roleKey){
-  return roleKey === 'weld_no_column' ? 'schemaWeldNoColumn' : 'schemaSerialColumn';
+  return `schemaField_${String(roleKey || '').replace(/[^A-Za-z0-9_:-]/g,'_')}`;
 }
 function sourceSchemaRoleValue(roleKey){
   const el = document.getElementById(sourceSchemaInputId(roleKey));
@@ -1781,21 +1790,53 @@ function sourceSchemaSetRole(roleKey, headerText){
   if(el){ el.value = text; }
   renderSourceSchemaPreview(SOURCE_SCHEMA_PREVIEW);
 }
+function sourceSchemaCurrentFormValues(kind){
+  const values = {};
+  for(const role of sourceSchemaRoles(kind)){
+    values[role.key] = sourceSchemaRoleValue(role.key);
+  }
+  return values;
+}
 function renderSourceSchemaRoleHelp(kind){
   const box = document.getElementById('sourceSchemaRoleHelp');
   if(!box){ return; }
   const roles = sourceSchemaRoles(kind);
   box.innerHTML = roles.map(role=>`
     <div class="schema-role-card">
-      <strong>${esc(role.label)}</strong>
+      <strong>${esc(role.label)}${role.required ? ' <small>必填</small>' : ''}</strong>
       <span>${esc(role.note)}</span>
     </div>`).join('');
+}
+function renderSourceSchemaManualInputs(kind, values){
+  const box = document.getElementById('schemaFieldInputs');
+  if(!box){ return; }
+  const schema = currentSourceSchema(kind);
+  const roles = sourceSchemaRoles(kind);
+  box.innerHTML = '';
+  roles.forEach(role=>{
+    const label = document.createElement('label');
+    label.className = 'schema-field-label';
+    const title = document.createElement('span');
+    title.innerHTML = `${esc(role.label)}${role.required ? '<small>必填</small>' : ''}`;
+    const input = document.createElement('input');
+    input.className = 'set-input';
+    input.id = sourceSchemaInputId(role.key);
+    input.type = 'text';
+    input.placeholder = role.required ? '請指定欄位名稱' : '沒有可留空或使用預設';
+    input.value = String((values && values[role.key]) || schema[role.key] || '');
+    input.addEventListener('input', ()=>renderSourceSchemaPreview(SOURCE_SCHEMA_PREVIEW));
+    label.append(title, input);
+    box.appendChild(label);
+  });
 }
 function schemaDetectedText(kind){
   const h = (APP_SETTINGS.source_health || {})[kind] || {};
   if(!h || !h.sheet){ return '尚未偵測到可套用的格式。'; }
   const parts = [`偵測：${h.sheet}`, h.header_row ? `第 ${h.header_row} 列表頭` : '', h.summary || ''].filter(Boolean);
-  const fields = (h.fields || []).map(f=>`${esc(f.expected)} → ${esc(f.actual)}`).join('，');
+  const fields = (h.fields || [])
+    .filter(f=>f.actual || f.required)
+    .map(f=>`${esc(f.label || f.expected)} → ${esc(f.actual || '未找到')}`)
+    .join('，');
   return parts.join(' · ') + (fields ? `<br>欄位：${fields}` : '');
 }
 function renderSourceSchemaPreview(data){
@@ -1880,7 +1921,10 @@ async function loadSourceSchemaPreview(kind){
   try{
     const r = await mainApi.source_excel_preview(kind);
     if(!(r && r.ok)){ throw new Error((r && r.error) || 'preview failed'); }
+    const currentValues = sourceSchemaCurrentFormValues(kind);
     SOURCE_SCHEMA_PREVIEW = r.data || null;
+    renderSourceSchemaRoleHelp(kind);
+    renderSourceSchemaManualInputs(kind, currentValues);
     renderSourceSchemaPreview(SOURCE_SCHEMA_PREVIEW);
   }catch(e){
     SOURCE_SCHEMA_PREVIEW = {error:String(e.message || e || '讀取 Excel 預覽失敗')};
@@ -1896,16 +1940,11 @@ async function openSourceSchemaModal(kind){
   const title = document.getElementById('sourceSchemaTitle');
   const detected = document.getElementById('sourceSchemaDetected');
   const sheet = document.getElementById('schemaSheetName');
-  const serial = document.getElementById('schemaSerialColumn');
-  const weldRow = document.getElementById('schemaWeldNoRow');
-  const weldNo = document.getElementById('schemaWeldNoColumn');
   if(title){ title.textContent = `${sourceSchemaLabel(kind)} 格式設定`; }
   if(detected){ detected.innerHTML = schemaDetectedText(kind); }
   renderSourceSchemaRoleHelp(kind);
   if(sheet){ sheet.value = initial.sheet_name || schema.sheet_name || ''; }
-  if(serial){ serial.value = initial.serial_column || schema.serial_column || ''; }
-  if(weldRow){ weldRow.style.display = kind === 'weld' ? 'flex' : 'none'; }
-  if(weldNo){ weldNo.value = initial.weld_no_column || schema.weld_no_column || ''; }
+  renderSourceSchemaManualInputs(kind, initial);
   if(modal){ modal.classList.add('open'); }
   await loadSourceSchemaPreview(kind);
 }
@@ -1918,11 +1957,11 @@ function applyDetectedSourceSchema(){
   const kind = SOURCE_SCHEMA_KIND;
   const detected = detectedSourceSchema(kind);
   const sheet = document.getElementById('schemaSheetName');
-  const serial = document.getElementById('schemaSerialColumn');
-  const weldNo = document.getElementById('schemaWeldNoColumn');
   if(sheet && detected.sheet_name){ sheet.value = detected.sheet_name; }
-  if(serial && detected.serial_column){ serial.value = detected.serial_column; }
-  if(kind === 'weld' && weldNo && detected.weld_no_column){ weldNo.value = detected.weld_no_column; }
+  for(const role of sourceSchemaRoles(kind)){
+    const el = document.getElementById(sourceSchemaInputId(role.key));
+    if(el && detected[role.key]){ el.value = detected[role.key]; }
+  }
   renderSourceSchemaPreview(SOURCE_SCHEMA_PREVIEW);
 }
 async function saveSourceSchema(){
@@ -1930,9 +1969,10 @@ async function saveSourceSchema(){
   const kind = SOURCE_SCHEMA_KIND;
   const payload = {
     sheet_name: String(document.getElementById('schemaSheetName')?.value || '').trim(),
-    serial_column: String(document.getElementById('schemaSerialColumn')?.value || '').trim(),
-    weld_no_column: String(document.getElementById('schemaWeldNoColumn')?.value || '').trim(),
   };
+  for(const role of sourceSchemaRoles(kind)){
+    payload[role.key] = sourceSchemaRoleValue(role.key);
+  }
   try{
     const r = await mainApi.save_source_schema(kind, payload);
     if(!(r && r.ok)){ throw new Error((r&&r.error)||'save failed'); }

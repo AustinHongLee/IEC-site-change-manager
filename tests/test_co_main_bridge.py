@@ -366,12 +366,22 @@ def test_save_source_schema_updates_settings_json(tmp_path):
         "sheet_name": "焊口",
         "serial_column": "ISO流編",
         "weld_no_column": "焊口碼",
+        "size_column": "口徑",
+        "material_column": "鋼種",
+        "thickness_column": "管厚",
+        "db_column": "DB值",
+        "budget_no_column": "預算碼",
     })
     assert res["ok"] is True
     saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
     assert saved["weld_control"]["sheet_name"] == "焊口"
     assert saved["weld_control"]["col_serial"] == "ISO流編"
     assert saved["weld_control"]["col_weld_no"] == "焊口碼"
+    assert saved["weld_control"]["col_size"] == "口徑"
+    assert saved["weld_control"]["col_material"] == "鋼種"
+    assert saved["weld_control"]["col_thickness"] == "管厚"
+    assert saved["weld_control"]["col_db"] == "DB值"
+    assert saved["weld_control"]["col_budget_no"] == "預算碼"
 
 
 def test_source_excel_preview_maps_workbook_grid_and_detected_fields(tmp_path):
@@ -380,9 +390,9 @@ def test_source_excel_preview_maps_workbook_grid_and_detected_fields(tmp_path):
     ws = wb.active
     ws.title = "新版焊口表"
     ws.append(["說明列"])
-    ws.append(["流水號", "銲口編號", "DB數"])
-    ws.append(["100", "1a", 0.5])
-    ws.append(["100", "2r", 0.75])
+    ws.append(["流水號", "銲口編號", "尺寸", "材質", "厚度", "DB數", "預算編號"])
+    ws.append(["100", "1a", "0.5", "304L", "40S", 0.5, "PB-1"])
+    ws.append(["100", "2r", "0.75", "316", "80S", 0.75, "PB-2"])
     wb.save(weld)
     _write_root_json(tmp_path, "settings.json", {
         "paths": {"weld_control_table": str(weld)},
@@ -398,6 +408,13 @@ def test_source_excel_preview_maps_workbook_grid_and_detected_fields(tmp_path):
     assert data["rows"][1]["is_header"] is True
     assert data["fields"][0]["actual"] == "流水號"
     assert data["fields"][1]["actual"] == "銲口編號"
+    fields = {field["key"]: field for field in data["fields"]}
+    assert fields["size_column"]["actual"] == "尺寸"
+    assert fields["material_column"]["actual"] == "材質"
+    assert fields["thickness_column"]["actual"] == "厚度"
+    assert fields["db_column"]["actual"] == "DB數"
+    assert fields["budget_no_column"]["actual"] == "預算編號"
+    assert any(role["key"] == "budget_no_column" for role in data["roles"])
 
 
 def test_records_reads_change_orders(tmp_path):
