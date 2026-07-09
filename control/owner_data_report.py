@@ -35,6 +35,7 @@ THUMB_WIDTH = 260
 THUMB_HEIGHT = 180
 PREVIEW_ROW_HEIGHT = 145
 _AUTO_WELD_LOOKUP = object()
+_AUTO_DRAWING_LOOKUP = object()
 _DN_TO_INCH = {
     15: "0.5",
     20: "0.75",
@@ -63,6 +64,7 @@ def build_owner_data_report_package(
     *,
     dirname: str = OWNER_DATA_REPORT_DIRNAME,
     weld_lookup: Any = _AUTO_WELD_LOOKUP,
+    drawing_lookup: Any = _AUTO_DRAWING_LOOKUP,
 ) -> dict[str, Any]:
     root = Path(output_root).resolve()
     package_root = root / dirname
@@ -70,11 +72,20 @@ def build_owner_data_report_package(
     package_root.mkdir(parents=True, exist_ok=True)
     if weld_lookup is _AUTO_WELD_LOOKUP:
         weld_lookup = _make_weld_lookup()
+    if drawing_lookup is _AUTO_DRAWING_LOOKUP:
+        drawing_lookup = _make_drawing_lookup()
 
     used_names: set[str] = set()
     entries = []
     for idx, report in enumerate(report_set.get("reports", []) or [], start=1):
-        entry = _copy_report_assets(package_root, report, idx=idx, used_names=used_names, weld_lookup=weld_lookup)
+        entry = _copy_report_assets(
+            package_root,
+            report,
+            idx=idx,
+            used_names=used_names,
+            weld_lookup=weld_lookup,
+            drawing_lookup=drawing_lookup,
+        )
         entries.append(entry)
 
     index_path = package_root / OWNER_DATA_INDEX_FILENAME
@@ -95,6 +106,15 @@ def _make_weld_lookup():
         return WeldLookup()
     except Exception:
         return None
+
+
+def _make_drawing_lookup():
+    try:
+        from record_manager import load_drawing_map
+
+        return load_drawing_map()
+    except Exception:
+        return {}
 
 
 def export_owner_data_index_workbook(
@@ -145,8 +165,10 @@ def _copy_report_assets(
     idx: int,
     used_names: set[str],
     weld_lookup: Any,
+    drawing_lookup: Any,
 ) -> dict[str, Any]:
     info = report.get("report", {}) or {}
+    drawing_info = _lookup_drawing_info(drawing_lookup, info.get("series", ""))
     label = _report_label(info)
     report_dir_name = _unique_name(_safe_filename(label, fallback=f"report_{idx:03d}"), used_names)
     report_dir = package_root / report_dir_name
@@ -166,8 +188,8 @@ def _copy_report_assets(
         "date": info.get("date", ""),
         "date_raw": info.get("date_raw", ""),
         "series": info.get("series", ""),
-        "dwg_no": info.get("dwg_no", ""),
-        "line_number": info.get("line_number", ""),
+        "dwg_no": _first_text(info.get("dwg_no"), drawing_info.get("dwg_no")),
+        "line_number": _first_text(info.get("line_number"), info.get("line_no"), drawing_info.get("line_number")),
         "folder": info.get("folder", ""),
         "folder_label": _display_folder_label(info),
         "folder_path": info.get("folder_path", ""),
@@ -187,6 +209,41 @@ def _copy_report_assets(
         "material_count": report.get("materials", {}).get("count", 0),
         "material_summary": report.get("materials", {}).get("summary", ""),
     }
+
+
+def _series_lookup_keys(series: Any) -> list[str]:
+    raw = str(series or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    keys: list[str] = []
+    for value in (raw, digits, digits.lstrip("0") if digits else "", digits.zfill(3) if digits else "", digits.zfill(4) if digits else ""):
+        text = str(value or "").strip()
+        if text and text not in keys:
+            keys.append(text)
+    return keys
+
+
+def _lookup_drawing_info(drawing_lookup: Any, series: Any) -> dict[str, str]:
+    if not drawing_lookup:
+        return {}
+    if callable(drawing_lookup):
+        try:
+            drawing_lookup = drawing_lookup()
+        except Exception:
+            return {}
+    if not isinstance(drawing_lookup, dict):
+        return {}
+    for key in _series_lookup_keys(series):
+        value = drawing_lookup.get(key)
+        if isinstance(value, (list, tuple)):
+            line_number = value[0] if len(value) > 0 else ""
+            dwg_no = value[1] if len(value) > 1 else ""
+            return {"line_number": str(line_number or ""), "dwg_no": str(dwg_no or "")}
+        if isinstance(value, dict):
+            return {
+                "line_number": _first_text(value.get("line_number"), value.get("line_no"), value.get("LINE NUMBER"), value.get("Line No.")),
+                "dwg_no": _first_text(value.get("dwg_no"), value.get("DWG NO"), value.get("圖號")),
+            }
+    return {}
 
 
 def _owner_weld_summary(welds: dict[str, Any], *, series: Any = "", weld_lookup: Any = None) -> str:

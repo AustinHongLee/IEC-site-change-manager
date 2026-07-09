@@ -224,6 +224,29 @@ def test_owner_data_report_displays_clean_report_labels_for_folder_ids(tmp_path)
         wb.close()
 
 
+def test_owner_data_report_backfills_dwg_and_line_from_drawing_lookup(tmp_path):
+    report_set = _report_set(tmp_path)
+    report_set["reports"][0]["report"]["series"] = "150"
+    report_set["reports"][0]["report"]["dwg_no"] = ""
+    report_set["reports"][0]["report"]["line_number"] = ""
+
+    result = build_owner_data_report_package(
+        tmp_path / "out",
+        report_set,
+        weld_lookup=None,
+        drawing_lookup={"0150": ("AI-00001", "1-S11U-AI-00001-150")},
+    )
+
+    wb = load_workbook(result["index_xlsx"], data_only=False)
+    try:
+        ws = wb["資料索引"]
+        assert ws["D3"].value == "150"
+        assert ws["E3"].value == "1-S11U-AI-00001-150"
+        assert ws["F3"].value == "AI-00001"
+    finally:
+        wb.close()
+
+
 def test_owner_data_report_weld_summary_prefers_lookup_db_value(tmp_path):
     class FakeLookup:
         def lookup_info(self, series, base):
