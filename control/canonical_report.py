@@ -68,6 +68,7 @@ def collect_canonical_report_set(
     return {
         "schema_version": "report_set.v1",
         "project": {
+            "name": _project_name(project_root),
             "root": str(project_root),
             "attachments_root": str(attachments_root),
             "collected_at": datetime.now().isoformat(timespec="seconds"),
@@ -77,6 +78,30 @@ def collect_canonical_report_set(
         "issues": _build_report_set_issues(reports),
         "field_paths": list_field_paths(),
     }
+
+
+def _project_name(project_root: Path) -> str:
+    settings = _safe_read_json(project_root / "settings.json")
+    if isinstance(settings, dict):
+        project = settings.get("project")
+        if isinstance(project, dict):
+            for key in ("name", "project_name", "title", "display_name", "工程名稱", "專案名稱"):
+                value = str(project.get(key) or "").strip()
+                if value:
+                    return value
+    app_settings = _safe_read_json(project_root / "records" / "app_settings.json")
+    if isinstance(app_settings, dict):
+        value = str(app_settings.get("project_name") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _safe_read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception:
+        return None
 
 
 def _collect_report(
@@ -96,7 +121,7 @@ def _collect_report(
         try:
             folder_info = parse_folder(str(folder_path))
         except Exception as exc:
-            parse_error = str(exc)
+            parse_error = "" if change_order else str(exc)
 
     report_id = _text(record, "報告編號")
     series = _text(record, "Series NO") or _text(change_order, "series") or (folder_info.series_no if folder_info else _series_from_folder(folder_name))
@@ -150,7 +175,7 @@ def _collect_report(
             "date_raw": date_str,
             "series": series,
             "dwg_no": _text(record, "DWG NO") or _text(change_order, "dwg_no"),
-            "line_number": _text(record, "LINE NUMBER"),
+            "line_number": _text(record, "LINE NUMBER") or _text(change_order, "line_number") or _text(change_order, "line_no"),
             "change_type": _text(record, "變更類型") or _infer_change_type(tokens),
             "description": description,
             "folder": folder_name,

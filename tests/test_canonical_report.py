@@ -58,6 +58,40 @@ def test_report_set_issues_include_record_locator_fields(tmp_path):
     assert issue["folder"] == "0547_AG"
 
 
+def test_change_order_report_folder_does_not_need_legacy_folder_parse(tmp_path):
+    folder = tmp_path / "attachments" / "20260706" / "CO-008-20260706-01"
+    folder.mkdir(parents=True)
+    (folder / "before_1.jpg").write_bytes(b"fake")
+    (folder / "after_1.jpg").write_bytes(b"fake")
+    (folder / "change_order.json").write_text(
+        """{
+          "id": "CO-008-20260706-01",
+          "date": "20260706",
+          "series": "8",
+          "dwg_no": "1-S11U-AI-00001-008",
+          "line_number": "AI-00001",
+          "reason": "現場既設管線與新設管線干涉。",
+          "welds": [{"code": "24b", "spec": {"size": "1", "material": "304L", "sch": "40S"}}],
+          "materials": [{"component": "鋼管", "size": "1", "schedule": "40S", "material": "304L", "qty": 1, "unit": "米"}]
+        }""",
+        encoding="utf-8",
+    )
+
+    result = collect_canonical_report_set(
+        project_root=tmp_path,
+        attachments_root=tmp_path / "attachments",
+        store={"records": [], "details": [], "materials": []},
+    )
+
+    report = result["reports"][0]
+    assert report["report"]["series"] == "8"
+    assert report["report"]["line_number"] == "AI-00001"
+    assert report["welds"]["count"] == 1
+    assert report["materials"]["count"] == 1
+    assert report["completeness"]["level"] == "complete"
+    assert not result["issues"]
+
+
 def test_collects_records_details_and_materials_into_canonical_shape(tmp_path):
     folder = tmp_path / "attachments" / "20260616" / "001_1r2"
     folder.mkdir(parents=True)

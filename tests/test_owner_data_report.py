@@ -96,7 +96,7 @@ def _report_set(tmp_path: Path) -> dict:
 def test_owner_data_report_package_copies_assets_and_builds_index(tmp_path):
     output = tmp_path / "out"
 
-    result = build_owner_data_report_package(output, _report_set(tmp_path))
+    result = build_owner_data_report_package(output, _report_set(tmp_path), weld_lookup=None)
 
     package = Path(result["package_root"])
     index = Path(result["index_xlsx"])
@@ -112,33 +112,71 @@ def test_owner_data_report_package_copies_assets_and_builds_index(tmp_path):
 
     wb = load_workbook(index, data_only=False)
     try:
-        assert wb.sheetnames == ["封面", "資料索引", "照片明細", "焊口統計", "用料統計"]
-        assert wb["封面"]["A1"].value == "現場修改資料包索引"
-        assert wb["資料索引"]["A3"].value == "R-720"
-        assert wb["資料索引"]["D3"].value == "CA-2007-100-AA1B-NA"
-        assert not wb["資料索引"]["I3"].value
-        assert wb["資料索引"]["I3"].hyperlink is None
+        assert wb.sheetnames == ["資料索引", "焊口統計", "用料統計"]
+        assert [wb["資料索引"].cell(2, col).value for col in range(1, 16)] == [
+            "項次",
+            "工務修改確認單編號",
+            "日期",
+            "ISO流編",
+            "圖號",
+            "Line No.",
+            "新增或修改說明",
+            "新增修改焊口詳細",
+            "材料新增或修改摘要",
+            "修改前相片",
+            "修改後相片",
+            "相關圖說",
+            "Before檔",
+            "After檔",
+            "圖面PDF",
+        ]
+        assert wb["資料索引"]["A3"].value == 1
+        assert wb["資料索引"]["B3"].value == "R-720"
+        assert wb["資料索引"]["D3"].value == "0720"
+        assert wb["資料索引"]["E3"].value == "CA-2007-100-AA1B-NA"
+        assert wb["資料索引"]["G3"].value == "因現場管線干涉，切除原焊口並新增焊口。"
         assert not wb["資料索引"]["J3"].value
         assert wb["資料索引"]["J3"].hyperlink is None
         assert not wb["資料索引"]["K3"].value
         assert wb["資料索引"]["K3"].hyperlink is None
-        assert wb["資料索引"]["F3"].hyperlink.target == "R-720"
-        assert wb["資料索引"]["L3"].hyperlink.target == "R-720/before"
-        assert wb["資料索引"]["M3"].hyperlink.target == "R-720/after"
-        assert wb["資料索引"]["N3"].hyperlink.target.endswith(".pdf")
-        assert wb["資料索引"]["G3"].value == "3r\n3a\n（共2口）"
-        assert wb["資料索引"]["H3"].value == "管材×1"
-        assert wb["資料索引"]["G3"].alignment.vertical == "top"
-        assert wb["資料索引"]["G3"].alignment.wrap_text is True
-        assert wb["資料索引"]["F3"].alignment.horizontal == "center"
-        assert wb["資料索引"]["L3"].alignment.horizontal == "center"
+        assert not wb["資料索引"]["L3"].value
+        assert wb["資料索引"]["L3"].hyperlink is None
+        assert wb["資料索引"]["B3"].hyperlink.target == "R-720"
+        assert wb["資料索引"]["M3"].hyperlink.target == "R-720/before"
+        assert wb["資料索引"]["N3"].hyperlink.target == "R-720/after"
+        assert wb["資料索引"]["O3"].hyperlink.target.endswith(".pdf")
+        assert wb["資料索引"]["H3"].value == '3r（3" / C.S / S-40 / DB 3）\n3a（3" / C.S / S-40 / DB 3）\n（共2口）'
+        assert wb["資料索引"]["I3"].value == "管材×1"
+        assert wb["資料索引"]["H3"].alignment.vertical == "top"
+        assert wb["資料索引"]["H3"].alignment.wrap_text is True
+        assert wb["資料索引"]["A3"].alignment.horizontal == "center"
+        assert wb["資料索引"]["B3"].alignment.horizontal == "center"
         assert wb["資料索引"]["M3"].alignment.horizontal == "center"
         assert wb["資料索引"]["N3"].alignment.horizontal == "center"
-        assert not wb["照片明細"]["D3"].value
-        assert wb["照片明細"]["D3"].hyperlink is None
-        assert not wb["照片明細"]["E3"].value
-        assert wb["照片明細"]["E3"].hyperlink is None
-        assert wb["照片明細"]["F3"].alignment.horizontal == "center"
+        assert wb["資料索引"]["O3"].alignment.horizontal == "center"
+        assert wb["焊口統計"]["E3"].value == '3"'
+        assert wb["焊口統計"]["A1"].value == "HP6精濾區配管工事-工務修改確認單 - 焊口統計"
+        assert [wb["焊口統計"].cell(2, col).value for col in range(1, 12)] == [
+            "工務修改確認單編號",
+            "日期",
+            "ISO流編",
+            "焊口編號",
+            "尺寸",
+            "材質",
+            "厚度",
+            "新增或修改",
+            "新增或修改係數",
+            "DB",
+            "預算編號",
+        ]
+        assert wb["焊口統計"]["A3"].value == "R-720"
+        assert wb["焊口統計"]["C3"].value == "0720"
+        assert wb["焊口統計"]["D3"].value == "3r"
+        assert wb["焊口統計"]["H3"].value == "修改"
+        assert wb["焊口統計"]["I3"].value == 1.5
+        assert wb["焊口統計"]["J3"].value == "3"
+        assert wb["焊口統計"]["H4"].value == "新增"
+        assert wb["焊口統計"]["I4"].value == 1
         assert wb["資料索引"].row_dimensions[3].height >= 118
     finally:
         wb.close()
@@ -149,7 +187,7 @@ def test_owner_data_report_package_copies_assets_and_builds_index(tmp_path):
     moved_wb = load_workbook(moved_index, data_only=False)
     try:
         ws = moved_wb["資料索引"]
-        for coordinate in ("F3", "L3", "M3", "N3"):
+        for coordinate in ("B3", "M3", "N3", "O3"):
             target = ws[coordinate].hyperlink.target
             assert not os.path.isabs(target)
             assert (moved_package / target).exists()
@@ -169,7 +207,7 @@ def test_owner_data_report_displays_clean_report_labels_for_folder_ids(tmp_path)
     report_set["reports"][0]["report"]["series"] = "0107"
     report_set["reports"][0]["report"]["date_raw"] = "20260701"
 
-    result = build_owner_data_report_package(output, report_set)
+    result = build_owner_data_report_package(output, report_set, weld_lookup=None)
 
     package = Path(result["package_root"])
     index = Path(result["index_xlsx"])
@@ -179,8 +217,53 @@ def test_owner_data_report_displays_clean_report_labels_for_folder_ids(tmp_path)
     wb = load_workbook(index, data_only=False)
     try:
         ws = wb["資料索引"]
-        assert ws["A3"].value == "CO-107-20260701-01"
-        assert ws["F3"].value == "CO-107-20260701-01"
-        assert ws["F3"].hyperlink.target == "CO-107-20260701-01"
+        assert ws["B3"].value == "CO-107-20260701-01"
+        assert ws["B3"].hyperlink.target == "CO-107-20260701-01"
+        assert "資料夾" not in [ws.cell(2, col).value for col in range(1, ws.max_column + 1)]
+    finally:
+        wb.close()
+
+
+def test_owner_data_report_weld_summary_prefers_lookup_db_value(tmp_path):
+    class FakeLookup:
+        def lookup_info(self, series, base):
+            assert series == "0720"
+            return {"db": f"B-{base}", "budget_no": f"PB-{base}"}
+
+    output = tmp_path / "out"
+
+    result = build_owner_data_report_package(output, _report_set(tmp_path), weld_lookup=FakeLookup())
+
+    wb = load_workbook(Path(result["index_xlsx"]), data_only=False)
+    try:
+        assert wb["資料索引"]["H3"].value == '3r（3" / C.S / S-40 / DB B-3 / 預算 PB-3）\n3a（3" / C.S / S-40 / DB B-3 / 預算 PB-3）\n（共2口）'
+        assert wb["焊口統計"]["J3"].value == "B-3"
+        assert wb["焊口統計"]["K3"].value == "PB-3"
+    finally:
+        wb.close()
+
+
+def test_owner_data_report_weld_sheet_prefers_lookup_db_over_size_inference(tmp_path):
+    class FakeLookup:
+        def lookup_info(self, series, base):
+            assert series == "0720"
+            return {"size": "0.5", "sch": "S-40", "material": "SUS304", "db": "1", "budget_no": "1.5"}
+
+    output = tmp_path / "out"
+    report_set = _report_set(tmp_path)
+    report_set["reports"][0]["welds"]["rows"] = [
+        {"code": "3r", "size": "0.5", "material": "C.S", "thickness": "S-40", "mark": "r"},
+    ]
+    report_set["reports"][0]["welds"]["count"] = 1
+
+    result = build_owner_data_report_package(output, report_set, weld_lookup=FakeLookup())
+
+    wb = load_workbook(Path(result["index_xlsx"]), data_only=False)
+    try:
+        assert wb["資料索引"]["H3"].value == '3r（0.5" / SUS304 / S-40 / DB 1 / 預算 1.5）\n（共1口）'
+        assert wb["焊口統計"]["E3"].value == '0.5"'
+        assert wb["焊口統計"]["F3"].value == "SUS304"
+        assert wb["焊口統計"]["J3"].value == "1"
+        assert wb["焊口統計"]["K3"].value == "1.5"
     finally:
         wb.close()

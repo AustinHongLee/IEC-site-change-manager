@@ -34,6 +34,27 @@ OWNER_DATA_INDEX_FILENAME = "owner_data_index.xlsx"
 THUMB_WIDTH = 260
 THUMB_HEIGHT = 180
 PREVIEW_ROW_HEIGHT = 145
+_AUTO_WELD_LOOKUP = object()
+_DN_TO_INCH = {
+    15: "0.5",
+    20: "0.75",
+    25: "1",
+    32: "1.25",
+    40: "1.5",
+    50: "2",
+    65: "2.5",
+    80: "3",
+    100: "4",
+    125: "5",
+    150: "6",
+    200: "8",
+    250: "10",
+    300: "12",
+    350: "14",
+    400: "16",
+    450: "18",
+    500: "20",
+}
 
 
 def build_owner_data_report_package(
@@ -41,20 +62,23 @@ def build_owner_data_report_package(
     report_set: dict[str, Any],
     *,
     dirname: str = OWNER_DATA_REPORT_DIRNAME,
+    weld_lookup: Any = _AUTO_WELD_LOOKUP,
 ) -> dict[str, Any]:
     root = Path(output_root).resolve()
     package_root = root / dirname
     _reset_child_dir(root, package_root)
     package_root.mkdir(parents=True, exist_ok=True)
+    if weld_lookup is _AUTO_WELD_LOOKUP:
+        weld_lookup = _make_weld_lookup()
 
     used_names: set[str] = set()
     entries = []
     for idx, report in enumerate(report_set.get("reports", []) or [], start=1):
-        entry = _copy_report_assets(package_root, report, idx=idx, used_names=used_names)
+        entry = _copy_report_assets(package_root, report, idx=idx, used_names=used_names, weld_lookup=weld_lookup)
         entries.append(entry)
 
     index_path = package_root / OWNER_DATA_INDEX_FILENAME
-    export_owner_data_index_workbook(index_path, report_set, entries)
+    export_owner_data_index_workbook(index_path, report_set, entries, weld_lookup=weld_lookup)
     return {
         "ok": True,
         "package_root": str(package_root),
@@ -64,25 +88,45 @@ def build_owner_data_report_package(
     }
 
 
+def _make_weld_lookup():
+    try:
+        from weld_lookup import WeldLookup
+
+        return WeldLookup()
+    except Exception:
+        return None
+
+
 def export_owner_data_index_workbook(
     output_path: str | os.PathLike[str],
     report_set: dict[str, Any],
     entries: list[dict[str, Any]],
+    *,
+    weld_lookup: Any = None,
 ) -> str:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
     with tempfile.TemporaryDirectory(prefix="iec_owner_xlsx_") as tmp:
         media_dir = Path(tmp)
-        _write_cover_sheet(wb.active, report_set, entries)
-        _write_index_sheet(wb.create_sheet("資料索引"), report_set, entries, media_dir=media_dir, base_dir=output.parent)
-        _write_photo_detail_sheet(wb.create_sheet("照片明細"), entries, media_dir=media_dir, base_dir=output.parent)
-        _write_weld_sheet(wb.create_sheet("焊口統計"), report_set)
+        index_sheet = wb.active
+        index_sheet.title = "資料索引"
+        _write_index_sheet(index_sheet, report_set, entries, media_dir=media_dir, base_dir=output.parent)
+        _write_weld_sheet(wb.create_sheet("焊口統計"), report_set, weld_lookup=weld_lookup)
         _write_material_sheet(wb.create_sheet("用料統計"), report_set)
         _apply_tab_colors(wb)
         atomic_save_wb(wb, str(output))
     wb.close()
     return str(output)
+
+
+def _owner_project_name(report_set: dict[str, Any]) -> str:
+    project = report_set.get("project", {}) or {}
+    for key in ("name", "project_name", "title", "display_name", "工程名稱", "專案名稱"):
+        value = str(project.get(key, "") or "").strip()
+        if value:
+            return value
+    return "HP6精濾區配管工事"
 
 
 def _reset_child_dir(parent: Path, child: Path) -> None:
@@ -94,7 +138,14 @@ def _reset_child_dir(parent: Path, child: Path) -> None:
         shutil.rmtree(child)
 
 
-def _copy_report_assets(package_root: Path, report: dict[str, Any], *, idx: int, used_names: set[str]) -> dict[str, Any]:
+def _copy_report_assets(
+    package_root: Path,
+    report: dict[str, Any],
+    *,
+    idx: int,
+    used_names: set[str],
+    weld_lookup: Any,
+) -> dict[str, Any]:
     info = report.get("report", {}) or {}
     label = _report_label(info)
     report_dir_name = _unique_name(_safe_filename(label, fallback=f"report_{idx:03d}"), used_names)
@@ -132,10 +183,206 @@ def _copy_report_assets(package_root: Path, report: dict[str, Any], *, idx: int,
         "change_type": info.get("change_type", ""),
         "status": info.get("status", ""),
         "weld_count": report.get("welds", {}).get("count", 0),
-        "weld_summary": report.get("welds", {}).get("summary", ""),
+        "weld_summary": _owner_weld_summary(report.get("welds", {}) or {}, series=info.get("series", ""), weld_lookup=weld_lookup),
         "material_count": report.get("materials", {}).get("count", 0),
         "material_summary": report.get("materials", {}).get("summary", ""),
     }
+
+
+def _owner_weld_summary(welds: dict[str, Any], *, series: Any = "", weld_lookup: Any = None) -> str:
+    rows = [row for row in (welds.get("rows", []) or []) if isinstance(row, dict)]
+    if not rows:
+        return _summary_to_cell_lines(welds.get("summary", ""))
+    lines = []
+    for row in sorted(rows, key=_owner_weld_sort_key):
+        line = _owner_weld_line(row, series=series, weld_lookup=weld_lookup)
+        if line:
+            lines.append(line)
+    if welds.get("count"):
+        lines.append(f"（共{welds.get('count')}口）")
+    return "\n".join(lines)
+
+
+def _owner_weld_line(row: dict[str, Any], *, series: Any, weld_lookup: Any) -> str:
+    info = _lookup_weld_info(weld_lookup, series, row)
+    code = _weld_code(row)
+    size_raw = _first_text(info.get("size"), row.get("size"))
+    material = _first_text(info.get("material"), row.get("material"))
+    thickness = _first_text(info.get("sch"), row.get("thickness"), row.get("sch"))
+    size_display = _format_weld_size(size_raw)
+    db_display = _format_db_text(
+        _first_text(
+            info.get("db"),
+            row.get("db"),
+            row.get("db_count"),
+            row.get("DB數"),
+            row.get("DB"),
+            row.get("DI"),
+        ),
+        size_raw,
+    )
+    budget_display = _format_budget_text(
+        _first_text(
+            info.get("budget_no"),
+            row.get("budget_no"),
+            row.get("預算編號"),
+        ),
+    )
+    specs = [item for item in (size_display, material, thickness, db_display, budget_display) if item]
+    if code and specs:
+        return f"{code}（{' / '.join(specs)}）"
+    if code:
+        return code
+    return " / ".join(specs)
+
+
+def _lookup_weld_info(weld_lookup: Any, series: Any, row: dict[str, Any]) -> dict[str, Any]:
+    if weld_lookup is None:
+        return {}
+    lookup_info = getattr(weld_lookup, "lookup_info", None)
+    if not callable(lookup_info):
+        return {}
+    base = str(row.get("weld_no") or "").strip()
+    if not base:
+        base = _split_weld_code(_weld_code(row)).get("weld_no", "")
+    if not base:
+        return {}
+    try:
+        info = lookup_info(series, base)
+    except Exception:
+        return {}
+    return info if isinstance(info, dict) else {}
+
+
+def _weld_code(row: dict[str, Any]) -> str:
+    code = str(row.get("code", "") or "").strip()
+    if code:
+        return code
+    return (str(row.get("weld_no", "") or "").strip() + str(row.get("mark", "") or "").strip()).strip()
+
+
+def _weld_change_label(row: dict[str, Any]) -> str:
+    raw = _first_text(
+        row.get("change_label"),
+        row.get("change"),
+        row.get("新增或修改"),
+        row.get("op"),
+        row.get("operation"),
+        row.get("mark"),
+        row.get("origin"),
+    ).lower()
+    if raw in {"新增", "新焊", "新增焊口", "new"}:
+        return "新增"
+    if raw in {"修改", "重焊", "原焊口重接", "裁切", "拆除不重焊", "existing", "r"}:
+        return "修改"
+
+    code_parts = _split_weld_code(_weld_code(row))
+    suffix = code_parts.get("mark", "").lower()
+    if suffix == "r":
+        return "修改"
+    if suffix:
+        return "新增"
+    try:
+        if int(code_parts.get("weld_no", "") or "0") >= 1000:
+            return "新增"
+    except ValueError:
+        pass
+    if row.get("is_cut"):
+        return "修改"
+    return "新增"
+
+
+def _weld_change_factor(label: Any) -> float | int | str:
+    text = str(label or "").strip()
+    if text == "新增":
+        return 1
+    if text == "修改":
+        return 1.5
+    return ""
+
+
+def _split_weld_code(code: Any) -> dict[str, str]:
+    text = str(code or "").strip()
+    match = re.match(r"^(\d+)([A-Za-z]*)", text)
+    if not match:
+        return {"weld_no": text, "mark": ""}
+    return {"weld_no": match.group(1), "mark": match.group(2)}
+
+
+def _owner_weld_sort_key(row: dict[str, Any]) -> tuple[int, int, str, str]:
+    code = _weld_code(row)
+    match = re.match(r"^\s*(\d+)([A-Za-z]?)(.*)$", code)
+    if not match:
+        return (1, 0, code.lower(), "")
+    number = int(match.group(1))
+    mark = match.group(2).lower()
+    tail = match.group(3).lower()
+    mark_order = {"r": 0}
+    if mark and mark not in mark_order:
+        mark_order[mark] = ord(mark) - ord("a") + 1
+    return (0, number, f"{mark_order.get(mark, 99):03d}-{mark}", tail)
+
+
+def _first_text(*values: Any) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _format_weld_size(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    normalized = text.replace("”", '"').replace("″", '"').replace("吋", '"')
+    if re.search(r'("|DN|NPS|mm|MM)', normalized):
+        return normalized
+    if re.fullmatch(r"\d+(?:\.\d+)?", normalized):
+        return f'{_trim_number(normalized)}"'
+    if re.fullmatch(r"[0-9./ -]+", normalized):
+        return f'{normalized}"'
+    return normalized
+
+
+def _format_db_text(value: Any, size_value: Any = "") -> str:
+    explicit = str(value or "").strip()
+    if explicit:
+        if re.search(r"\bD[BI]\b", explicit, flags=re.IGNORECASE):
+            return explicit
+        return f"DB {explicit}"
+    inferred = _infer_db_from_size(size_value)
+    return f"DB {inferred}" if inferred else ""
+
+
+def _format_budget_text(value: Any) -> str:
+    text = str(value or "").strip()
+    return f"預算 {text}" if text else ""
+
+
+def _infer_db_from_size(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    dn_match = re.search(r"DN\s*(\d+)", text, flags=re.IGNORECASE)
+    if dn_match:
+        return _DN_TO_INCH.get(int(dn_match.group(1)), "")
+    quote_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:\"|吋)", text)
+    if quote_match:
+        return _trim_number(quote_match.group(1))
+    numeric_match = re.fullmatch(r"\d+(?:\.\d+)?", text)
+    if numeric_match:
+        return _trim_number(text)
+    return ""
+
+
+def _trim_number(value: Any) -> str:
+    text = str(value or "").strip()
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return str(int(number)) if number.is_integer() else f"{number:g}"
 
 
 def _copy_photo_files(photos: list[dict[str, Any]], target_dir: Path, prefix: str) -> list[dict[str, str]]:
@@ -238,23 +485,25 @@ def _write_index_sheet(
     media_dir: Path,
     base_dir: Path,
 ) -> None:
-    title = "現場修改資料包 - 資料索引"
+    title = f"{_owner_project_name(report_set)}-工務修改確認單"
     headers = [
-        "報告編號", "日期", "流水號", "圖號 / DWG", "Line No.", "資料夾",
-        "焊口摘要", "材料摘要", "Before", "After", "PDF",
-        "Before檔", "After檔", "圖面PDF", "現場說明",
+        "項次", "工務修改確認單編號", "日期", "ISO流編", "圖號", "Line No.",
+        "新增或修改說明", "新增修改焊口詳細", "材料新增或修改摘要",
+        "修改前相片", "修改後相片", "相關圖說",
+        "Before檔", "After檔", "圖面PDF",
     ]
-    widths = [18, 13, 11, 18, 18, 16, 34, 34, 40, 40, 40, 11, 11, 11, 44]
+    widths = [8, 24, 13, 11, 22, 18, 36, 42, 34, 40, 40, 40, 11, 11, 11]
     _prepare_titled_sheet(ws, title, headers, widths)
 
     for row_idx, entry in enumerate(entries, start=3):
         values = [
+            row_idx - 2,
             entry.get("report_id", ""),
             entry.get("date", ""),
             entry.get("series", ""),
             entry.get("dwg_no", ""),
             entry.get("line_number", ""),
-            entry.get("folder_label", "") or entry.get("folder", ""),
+            entry.get("description", ""),
             _summary_to_cell_lines(entry.get("weld_summary", "")),
             _summary_to_cell_lines(entry.get("material_summary", "")),
             "",
@@ -263,21 +512,24 @@ def _write_index_sheet(
             "開啟",
             "開啟",
             "開啟",
-            entry.get("description", ""),
         ]
         _write_values_row(ws, row_idx, values)
         ws.row_dimensions[row_idx].height = PREVIEW_ROW_HEIGHT
-        _link_cell(ws.cell(row=row_idx, column=6), entry.get("report_rel", ""), display=entry.get("folder_label", "") or entry.get("folder", "") or "開啟")
         pdf_rel = _relpath(_first_path(entry.get("pdf_files", [])), base_dir)
-        _link_cell(ws.cell(row=row_idx, column=12), _relpath(entry.get("before_dir", ""), base_dir), display="開啟")
-        _link_cell(ws.cell(row=row_idx, column=13), _relpath(entry.get("after_dir", ""), base_dir), display="開啟")
-        _link_cell(ws.cell(row=row_idx, column=14), pdf_rel, display="開啟")
-        _center_cells(ws, row_idx, (6, 12, 13, 14))
-        _top_cells(ws, row_idx, (7, 8, 15))
+        _link_cell(
+            ws.cell(row=row_idx, column=2),
+            _relpath(entry.get("report_dir", ""), base_dir),
+            display=entry.get("report_id", "") or "開啟",
+        )
+        _link_cell(ws.cell(row=row_idx, column=13), _relpath(entry.get("before_dir", ""), base_dir), display="開啟")
+        _link_cell(ws.cell(row=row_idx, column=14), _relpath(entry.get("after_dir", ""), base_dir), display="開啟")
+        _link_cell(ws.cell(row=row_idx, column=15), pdf_rel, display="開啟")
+        _center_cells(ws, row_idx, (1, 2, 13, 14, 15))
+        _top_cells(ws, row_idx, (7, 8, 9))
         _add_preview(
             ws,
             row_idx,
-            9,
+            10,
             _first_path(entry.get("before_files", [])),
             media_dir,
             f"before_{row_idx}",
@@ -286,7 +538,7 @@ def _write_index_sheet(
         _add_preview(
             ws,
             row_idx,
-            10,
+            11,
             _first_path(entry.get("after_files", [])),
             media_dir,
             f"after_{row_idx}",
@@ -295,7 +547,7 @@ def _write_index_sheet(
         _add_pdf_preview(
             ws,
             row_idx,
-            11,
+            12,
             _first_path(entry.get("pdf_files", [])),
             media_dir,
             f"pdf_{row_idx}",
@@ -361,24 +613,62 @@ def _write_photo_detail_sheet(
     _finish_table(ws, len(headers), max(3, row_idx - 1))
 
 
-def _write_weld_sheet(ws, report_set: dict[str, Any]) -> None:
-    headers = ["報告編號", "日期", "流水號", "焊口碼", "尺寸", "材質", "厚度", "標記"]
-    widths = [18, 13, 11, 14, 12, 16, 14, 10]
-    _prepare_titled_sheet(ws, "現場修改資料包 - 焊口統計", headers, widths)
+def _write_weld_sheet(ws, report_set: dict[str, Any], *, weld_lookup: Any = None) -> None:
+    headers = [
+        "工務修改確認單編號",
+        "日期",
+        "ISO流編",
+        "焊口編號",
+        "尺寸",
+        "材質",
+        "厚度",
+        "新增或修改",
+        "新增或修改係數",
+        "DB",
+        "預算編號",
+    ]
+    widths = [24, 13, 11, 14, 12, 16, 14, 14, 16, 10, 14]
+    title = f"{_owner_project_name(report_set)}-工務修改確認單 - 焊口統計"
+    _prepare_titled_sheet(ws, title, headers, widths)
     row_idx = 3
     for report in report_set.get("reports", []) or []:
         info = report.get("report", {}) or {}
         label = _report_label(info)
+        series = info.get("series", "")
         for weld in report.get("welds", {}).get("rows", []) or []:
+            lookup_info = _lookup_weld_info(weld_lookup, series, weld)
+            size_raw = _first_text(lookup_info.get("size"), weld.get("size"))
+            material = _first_text(lookup_info.get("material"), weld.get("material"))
+            thickness = _first_text(lookup_info.get("sch"), weld.get("thickness"), weld.get("sch"))
+            db_text = _format_db_text(
+                _first_text(
+                    lookup_info.get("db"),
+                    weld.get("db"),
+                    weld.get("db_count"),
+                    weld.get("DB數"),
+                    weld.get("DB"),
+                    weld.get("DI"),
+                ),
+                size_raw,
+            ).replace("DB ", "", 1)
+            budget_no = _first_text(
+                lookup_info.get("budget_no"),
+                weld.get("budget_no"),
+                weld.get("預算編號"),
+            )
+            change_label = _weld_change_label(weld)
             _write_values_row(ws, row_idx, [
                 label,
                 info.get("date", ""),
-                info.get("series", ""),
-                weld.get("code", ""),
-                weld.get("size", ""),
-                weld.get("material", ""),
-                weld.get("thickness", ""),
-                weld.get("mark", ""),
+                series,
+                _weld_code(weld),
+                _format_weld_size(size_raw),
+                material,
+                thickness,
+                change_label,
+                _weld_change_factor(change_label),
+                db_text,
+                budget_no,
             ])
             row_idx += 1
     _finish_table(ws, len(headers), max(3, row_idx - 1))
@@ -387,7 +677,7 @@ def _write_weld_sheet(ws, report_set: dict[str, Any]) -> None:
 def _write_material_sheet(ws, report_set: dict[str, Any]) -> None:
     headers = ["報告編號", "日期", "流水號", "零件", "尺寸", "SCH", "材質", "數量", "單位", "備註"]
     widths = [18, 13, 11, 24, 14, 12, 18, 10, 10, 34]
-    _prepare_titled_sheet(ws, "現場修改資料包 - 用料統計", headers, widths)
+    _prepare_titled_sheet(ws, f"{_owner_project_name(report_set)}-工務修改確認單 - 用料統計", headers, widths)
     row_idx = 3
     for report in report_set.get("reports", []) or []:
         info = report.get("report", {}) or {}
