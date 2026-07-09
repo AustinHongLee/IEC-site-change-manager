@@ -10,16 +10,22 @@ settings_manager.py — 用戶設定管理器
 
 import os
 import json
+import copy
 from typing import Any
 from datetime import datetime
 
-from resources import project_path, resolve_project_dir
+from resources import project_path, resolve_project_dir, resource_path
 
 
 # 設定檔路徑（放在專案資料夾內）
 def _get_settings_path() -> str:
     """取得 settings.json 的路徑"""
     return project_path("settings.json")
+
+
+def _get_template_path() -> str:
+    """取得 repo/封裝內的 settings template 路徑。"""
+    return resource_path("settings.template.json")
 
 
 def _atomic_write_json(path: str, data: dict):
@@ -102,6 +108,23 @@ DEFAULT_SETTINGS = {
 }
 
 
+def _settings_copy(data: dict | None = None) -> dict:
+    return copy.deepcopy(data if isinstance(data, dict) else DEFAULT_SETTINGS)
+
+
+def _load_template_settings() -> dict:
+    template_path = _get_template_path()
+    if os.path.exists(template_path):
+        try:
+            with open(template_path, "r", encoding="utf-8-sig") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                return loaded
+        except Exception as e:
+            print(f"⚠️ 載入設定模板失敗: {e}，使用內建預設值")
+    return _settings_copy()
+
+
 class SettingsManager:
     """設定管理器（單例）"""
     
@@ -131,9 +154,13 @@ class SettingsManager:
                 self._settings = self._merge_defaults(loaded)
             except Exception as e:
                 print(f"⚠️ 載入設定失敗: {e}，使用預設值")
-                self._settings = DEFAULT_SETTINGS.copy()
+                self._settings = self._merge_defaults(_load_template_settings())
         else:
-            self._settings = DEFAULT_SETTINGS.copy()
+            self._settings = self._merge_defaults(_load_template_settings())
+            try:
+                _atomic_write_json(self._settings_path, self._settings)
+            except Exception as e:
+                print(f"⚠️ 初始化設定檔失敗: {e}")
     
     def _merge_defaults(self, loaded: dict) -> dict:
         """合併載入的設定與預設值（確保新設定項不會遺失）"""

@@ -26,3 +26,29 @@ def test_settings_manager_merges_and_saves_soffice_path(monkeypatch, tmp_path):
     finally:
         settings_manager.SettingsManager._instance = None
         settings_manager._settings_manager = None
+
+
+def test_settings_manager_creates_instance_from_template(monkeypatch, tmp_path):
+    settings_path = tmp_path / "settings.json"
+    template_path = tmp_path / "settings.template.json"
+    template_path.write_text(json.dumps({
+        "project": {"name": ""},
+        "paths": {"drawing_list": "template-dwg.xlsx"},
+        "meta": {"version": "1.3"},
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(settings_manager, "_get_settings_path", lambda: str(settings_path))
+    monkeypatch.setattr(settings_manager, "_get_template_path", lambda: str(template_path))
+    settings_manager.SettingsManager._instance = None
+    settings_manager._settings_manager = None
+
+    try:
+        sm = settings_manager.get_settings()
+
+        assert settings_path.exists()
+        assert sm.get_path("drawing_list") == "template-dwg.xlsx"
+        saved = json.loads(settings_path.read_text(encoding="utf-8"))
+        assert saved["paths"]["drawing_list"] == "template-dwg.xlsx"
+        assert saved["paths"]["weld_control_table"] == ""
+    finally:
+        settings_manager.SettingsManager._instance = None
+        settings_manager._settings_manager = None

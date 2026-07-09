@@ -54,6 +54,11 @@ records/weld_snapshot.*.bak.json
 records/sample_generation_summary.json
 
 # 執行期狀態
+settings.json
+records/records.json
+records/weld_snapshot.json
+records/billing.json
+records/billing_batches.json
 records/app_settings.json
 records/project_parts.json
 attachments/*
