@@ -49,6 +49,8 @@ _DATE_FMT = "%Y-%m-%d %H:%M:%S"
 
 # ========= 全域初始化旗標 =========
 _initialized = False
+_excepthook_installed = False
+_previous_excepthook = None
 
 
 def setup_logging(
@@ -114,6 +116,30 @@ def setup_logging(
     logger.info(f"日誌檔案: {log_file}")
     logger.info("=" * 50)
     return logger
+
+
+def install_excepthook(logger: logging.Logger = None, *, chain: bool = True):
+    """Log otherwise unhandled exceptions before Python terminates."""
+    global _excepthook_installed, _previous_excepthook
+    if _excepthook_installed:
+        return sys.excepthook
+
+    log = logger or get_logger("app")
+    previous = sys.excepthook
+
+    def _log_excepthook(exc_type, exc, tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            if chain:
+                previous(exc_type, exc, tb)
+            return
+        log.critical("Unhandled exception", exc_info=(exc_type, exc, tb))
+        if chain:
+            previous(exc_type, exc, tb)
+
+    _previous_excepthook = previous
+    sys.excepthook = _log_excepthook
+    _excepthook_installed = True
+    return _log_excepthook
 
 
 def get_logger(name: str = None) -> logging.Logger:

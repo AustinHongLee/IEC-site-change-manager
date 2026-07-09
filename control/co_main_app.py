@@ -22,6 +22,15 @@ if str(_HERE) not in sys.path:
 _INDEX = _HERE / "co_main_web" / "index.html"
 
 
+def _bootstrap_logging():
+    from log_config import install_excepthook, setup_logging
+
+    logger = setup_logging()
+    install_excepthook(logger)
+    logger.info("新版主介面入口啟動")
+    return logger
+
+
 def _health_check() -> int:
     from app_info import format_app_identity
 
@@ -36,14 +45,15 @@ def _health_check() -> int:
 
 
 def _run_main_window() -> int:
+    logger = _bootstrap_logging()
     try:
         import webview  # pywebview
     except ImportError:
-        print("✗ 需要 pywebview：請先  pip install pywebview")
+        logger.error("需要 pywebview：請先 pip install pywebview")
         return 2
 
     if not _INDEX.exists():
-        print(f"✗ 找不到前端：{_INDEX}")
+        logger.error("找不到前端：%s", _INDEX)
         return 4
 
     from co_main_bridge import MainBridge
@@ -97,10 +107,9 @@ def _run_main_window() -> int:
         webview.start(debug=debug)
         return 0
     except Exception as exc:  # 多半是缺 WebView2 Runtime
-        print(
-            "✗ 視窗啟動失敗：" + str(exc) + "\n"
-            "  Windows 可能缺 WebView2 Runtime。\n"
-            "  解法：到 Microsoft 下載「Evergreen WebView2 Runtime」安裝後再試。"
+        logger.exception(
+            "視窗啟動失敗：%s。Windows 可能缺 WebView2 Runtime，請安裝 Evergreen WebView2 Runtime 後再試。",
+            exc,
         )
         return 3
 
@@ -123,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.health_check:
+        _bootstrap_logging()
         return _health_check()
     if args.wizard:
         return _run_wizard_window()

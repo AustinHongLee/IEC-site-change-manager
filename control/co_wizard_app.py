@@ -22,6 +22,15 @@ if str(_HERE) not in sys.path:
 _INDEX = _HERE / "co_wizard_web" / "index.html"
 
 
+def _bootstrap_logging():
+    from log_config import install_excepthook, setup_logging
+
+    logger = setup_logging()
+    install_excepthook(logger)
+    logger.info("新修改單精靈入口啟動")
+    return logger
+
+
 def _resolve_attachments_root() -> Path:
     """輸出根目錄：優先用專案設定的 ATTACHMENTS_ROOT，否則退到專案下 change_order_records。"""
     try:
@@ -32,14 +41,15 @@ def _resolve_attachments_root() -> Path:
 
 
 def main() -> int:
+    logger = _bootstrap_logging()
     try:
         import webview  # pywebview
     except ImportError:
-        print("✗ 需要 pywebview：請先 `pip install pywebview`")
+        logger.error("需要 pywebview：請先 pip install pywebview")
         return 2
 
     if not _INDEX.exists():
-        print(f"✗ 找不到前端：{_INDEX}")
+        logger.error("找不到前端：%s", _INDEX)
         return 4
 
     from co_bridge import ChangeOrderBridge
@@ -73,11 +83,9 @@ def main() -> int:
         webview.start(debug=debug)
         return 0
     except Exception as exc:  # 多半是缺 WebView2 Runtime
-        print(
-            "✗ 視窗啟動失敗：" + str(exc) + "\n"
-            "  Windows 可能缺 WebView2 Runtime。\n"
-            "  解法：到 Microsoft 下載「Evergreen WebView2 Runtime」安裝後再試，\n"
-            "       或正式打包時把它的 bootstrapper 一起帶上。"
+        logger.exception(
+            "視窗啟動失敗：%s。Windows 可能缺 WebView2 Runtime，請安裝 Evergreen WebView2 Runtime 後再試。",
+            exc,
         )
         return 3
 
