@@ -469,10 +469,29 @@ def test_render_pdf_overlay_transfers_page_rotation_before_overlay(tmp_path):
     assert "R-PDF" in (page.extract_text() or "")
 
 
-def test_render_pdf_overlay_rotated_page_debug_rect_visual_position(tmp_path):
+def _usable_pdftoppm() -> str:
     pdftoppm = shutil.which("pdftoppm")
     if not pdftoppm:
         pytest.skip("pdftoppm is not available")
+    try:
+        probe = subprocess.run(
+            [pdftoppm, "-v"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.skip(f"pdftoppm is not executable: {exc}")
+    if probe.returncode != 0:
+        message = (probe.stderr or probe.stdout or "").strip()
+        pytest.skip(f"pdftoppm is not executable: {message or probe.returncode}")
+    return pdftoppm
+
+
+def test_render_pdf_overlay_rotated_page_debug_rect_visual_position(tmp_path):
+    pdftoppm = _usable_pdftoppm()
 
     base_pdf = tmp_path / "rotated.pdf"
     image = tmp_path / "before.png"
