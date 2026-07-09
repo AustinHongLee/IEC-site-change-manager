@@ -120,7 +120,7 @@ HELP_TEXTS = {
     "auto_preprocess": "【自動預處理圖片】\n自動壓縮過大圖片，原圖保留 .orig 備份。",
     "debug_mode": "【除錯模式】\n顯示更詳細的執行資訊，幫助診斷問題。",
     "image_settings": "【圖片壓縮設定】\n最大邊長（預設 1280）與 JPEG 品質（預設 85）。",
-    "prefab_drawing": "【預製圖路徑】\n指定一個資料夾，內含預製圖 PDF 檔案。\n\n命名慣例：{流水號}.DW-xxxx-xx-xxxx-xx-x.pdf\n例如：243.DW-1302-25-AA1B-NA-3.pdf\n\n處理修改單時，系統會依流水號自動從此資料夾\n複製對應的 PDF 到附件目錄，省去手動搬檔。",
+    "prefab_drawing": "【流水號圖面 PDF】\n指定一個資料夾，內含依流水號命名的圖面 PDF 檔案。\n\n命名慣例：{流水號}.DW-xxxx-xx-xxxx-xx-x.pdf\n例如：243.DW-1302-25-AA1B-NA-3.pdf\n\n新修改單精靈可依流水號自動帶入 PDF；舊流程處理修改單時，也會從此資料夾複製對應 PDF 到附件目錄。",
 }
 
 
@@ -466,12 +466,12 @@ class SettingsPanel(QWidget):
     def _build_runtime_tab(self, parent: QWidget):
         vbox = QVBoxLayout(parent)
 
-        # 預製圖路徑
-        prefab_group = QGroupBox("📐 預製圖路徑")
+        # 流水號圖面 PDF 路徑
+        prefab_group = QGroupBox("📐 流水號圖面 PDF")
         pfg = QVBoxLayout(prefab_group)
         pf_header = QHBoxLayout()
-        pf_header.addWidget(QLabel("指定預製圖 PDF 來源資料夾，處理時自動複製到附件目錄"))
-        ht_pf = HelpTooltip(self, "預製圖路徑", HELP_TEXTS["prefab_drawing"])
+        pf_header.addWidget(QLabel("指定流水號圖面 PDF 來源資料夾，供精靈自動帶入或舊流程複製"))
+        ht_pf = HelpTooltip(self, "流水號圖面 PDF", HELP_TEXTS["prefab_drawing"])
         pf_header.addWidget(ht_pf.widget())
         pf_header.addStretch()
         pfg.addLayout(pf_header)
@@ -798,7 +798,7 @@ class SettingsPanel(QWidget):
             QMessageBox.warning(self, "提示", "檔案不存在")
 
     def _browse_prefab_dir(self):
-        d = QFileDialog.getExistingDirectory(self, "選擇預製圖 PDF 來源資料夾", "")
+        d = QFileDialog.getExistingDirectory(self, "選擇流水號圖面 PDF 來源資料夾", "")
         if d:
             self.prefab_dir_edit.setText(d)
             remember_browse_directory(d)

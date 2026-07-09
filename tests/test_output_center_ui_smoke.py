@@ -66,7 +66,7 @@ def test_main_window_smoke_keeps_output_center_reachable(qapp):
 
         assert any("產出報告" in text for text in tab_texts)
         assert any("紀錄管理" in text for text in tab_texts)
-        assert any("材料價目" in text for text in tab_texts)
+        assert any("材料管理" in text for text in tab_texts)
         assert any("請款追蹤" in text for text in tab_texts)
         assert any("設定" in text for text in tab_texts)
         assert any("健康" in text for text in tab_texts)

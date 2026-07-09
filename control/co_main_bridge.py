@@ -7,7 +7,7 @@
 
 第一刀只做唯讀讀取，先把「橋 → pywebview → 前端」這條鏈打通：
     - ``pricebook()``：讀 records/material_pricebook.json（舊系統真實料表，442 筆），
-      對映成主介面前端 material 價目表的形狀。
+      對映成主介面前端 material 管理表的形狀。
     - ``records()``：讀舊 store records.json（目前空），對映成前端記錄形狀。
 
 不放任何業務邏輯；之後寫入 / 產出 / 中央查價再逐刀加。
@@ -31,6 +31,7 @@ from material_taxonomy import (
     normalize_size,
     taxonomy_options,
 )
+from material_catalog_rules import all_catalog_rows, build_frontend_item, catalog_summary, query_catalog, rows_by_ids
 from support_bom import analyze_support_bom
 
 API_VERSION = "main-0.1"
@@ -81,6 +82,339 @@ def _settings_path_value(root: Path, key: str) -> str:
     if not isinstance(paths, dict):
         return ""
     return str(paths.get(key) or "")
+
+
+def _settings_project_name(root: Path) -> str:
+    data = _read_json(root / "settings.json")
+    if not isinstance(data, dict):
+        return ""
+    project = data.get("project")
+    if not isinstance(project, dict):
+        return ""
+    return str(project.get("name") or project.get("project_name") or project.get("title") or "").strip()
+
+
+def _settings_section(root: Path, section: str) -> dict:
+    data = _read_json(root / "settings.json")
+    if not isinstance(data, dict):
+        return {}
+    value = data.get(section)
+    return value if isinstance(value, dict) else {}
+
+
+def _resolved_setting_path(root: Path, value: Any) -> Path:
+    path = Path(str(value or "").strip())
+    return path if path.is_absolute() else root / path
+
+
+def _norm_header(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip()).replace("銲", "焊").upper()
+
+
+def _norm_sheet_name(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip()).lower()
+
+
+def _sheet_candidate_sort_key(sheet_name: str, desired: str, order: int) -> tuple[int, int]:
+    name_norm = _norm_sheet_name(sheet_name)
+    desired_norm = _norm_sheet_name(desired)
+    score = 0
+    if sheet_name == desired:
+        score += 1000
+    if desired_norm and name_norm == desired_norm:
+        score += 900
+    if desired_norm and name_norm.startswith(desired_norm):
+        score += 500
+    if desired_norm and desired_norm in name_norm:
+        score += 250
+    lower_name = sheet_name.lower()
+    if "new" in lower_name or "新版" in sheet_name or sheet_name.endswith("-NEW"):
+        score += 100
+    if "old" in lower_name or "舊" in sheet_name or sheet_name.endswith("-OLD"):
+        score -= 100
+    return (-score, order)
+
+
+def _excel_sheet_candidates(wb: Any, sheet_name: str) -> list[str]:
+    return [
+        name
+        for _, name in sorted(
+            enumerate(wb.sheetnames),
+            key=lambda item: _sheet_candidate_sort_key(item[1], sheet_name, item[0]),
+        )
+    ]
+
+
+def _source_problem(label: str, message: str) -> dict:
+    return {
+        "state": "err",
+        "label": label,
+        "count": 0,
+        "summary": message,
+        "message": message,
+    }
+
+
+def _required_options(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple, set)):
+        return [str(v) for v in value if str(v or "").strip()]
+    return [str(value)] if str(value or "").strip() else []
+
+
+def _resolve_required_indexes(headers: list[Any], required: list[Any]) -> tuple[list[int], list[str], list[dict]]:
+    header_map = {_norm_header(h): idx for idx, h in enumerate(headers) if str(h or "").strip()}
+    header_text = {idx: str(h or "").strip() for idx, h in enumerate(headers) if str(h or "").strip()}
+    indexes: list[int] = []
+    missing: list[str] = []
+    matched: list[dict] = []
+    for item in required:
+        options = _required_options(item)
+        found = None
+        matched_alias = ""
+        for opt in options:
+            idx = header_map.get(_norm_header(opt))
+            if idx is not None:
+                found = idx
+                matched_alias = opt
+                break
+        if found is None:
+            missing.append(options[0] if options else "")
+        else:
+            indexes.append(found)
+            matched.append({
+                "expected": options[0] if options else "",
+                "alias": matched_alias,
+                "actual": header_text.get(found, ""),
+                "column": found + 1,
+            })
+    return indexes, missing, matched
+
+
+def _find_excel_header(ws: Any, required: list[Any], *, scan_rows: int = 12) -> dict | None:
+    max_row = min(int(ws.max_row or scan_rows), scan_rows)
+    best_missing: list[str] = []
+    for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=max_row, values_only=True), start=1):
+        headers = list(row or [])
+        indexes, missing, matched = _resolve_required_indexes(headers, required)
+        if not missing:
+            return {
+                "row": row_no,
+                "headers": headers,
+                "indexes": indexes,
+                "matched": matched,
+            }
+        if not best_missing or len(missing) < len(best_missing):
+            best_missing = missing
+    return {"missing": best_missing} if best_missing else None
+
+
+def _excel_source_health(root: Path, path_value: Any, *, sheet_name: str, required: list[Any]) -> dict:
+    raw = str(path_value or "").strip()
+    if not raw:
+        return _source_problem("未設定", "尚未設定路徑")
+    path = _resolved_setting_path(root, raw)
+    if not path.is_file():
+        return _source_problem("找不到", "找不到檔案")
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(path, read_only=True, data_only=True)
+        try:
+            sheet_candidates = _excel_sheet_candidates(wb, sheet_name)
+            chosen = None
+            chosen_headers: list[Any] = []
+            chosen_indexes: list[int] = []
+            chosen_header_row = 1
+            chosen_matched: list[dict] = []
+            last_missing: list[str] = []
+            for candidate in sheet_candidates:
+                ws = wb[candidate]
+                header_info = _find_excel_header(ws, required)
+                if header_info and not header_info.get("missing"):
+                    chosen = candidate
+                    chosen_headers = list(header_info.get("headers") or [])
+                    chosen_indexes = list(header_info.get("indexes") or [])
+                    chosen_header_row = int(header_info.get("row") or 1)
+                    chosen_matched = list(header_info.get("matched") or [])
+                    break
+                if header_info and header_info.get("missing"):
+                    last_missing = list(header_info.get("missing") or [])
+            if not chosen:
+                if sheet_name not in wb.sheetnames:
+                    available = "、".join(wb.sheetnames[:4])
+                    return _source_problem("需檢查", f"找不到工作表：{sheet_name}；可用：{available}")
+                return _source_problem("需檢查", "缺少欄位：" + "、".join(last_missing))
+            ws = wb[chosen]
+            count = 0
+            for row in ws.iter_rows(min_row=chosen_header_row + 1, values_only=True):
+                if all(idx < len(row) and str(row[idx] or "").strip() for idx in chosen_indexes):
+                    count += 1
+            field_count = len([h for h in chosen_headers if str(h or "").strip()])
+            matched_text = "、".join(
+                f"{m.get('expected')}→{m.get('actual')}"
+                for m in chosen_matched
+                if m.get("expected") and m.get("actual")
+            )
+            message = f"{chosen} 第 {chosen_header_row} 列 · {field_count} 個欄位"
+            if matched_text:
+                message += f" · {matched_text}"
+            if chosen != sheet_name:
+                message = f"自動辨識 {message}（設定值：{sheet_name}）"
+            return {
+                "state": "ok",
+                "label": "已讀取",
+                "count": count,
+                "summary": f"有效資料 {count} 筆",
+                "message": message,
+                "sheet": chosen,
+                "header_row": chosen_header_row,
+                "fields": chosen_matched,
+            }
+        finally:
+            wb.close()
+    except PermissionError:
+        return _source_problem("被占用", "檔案可能正由 Excel 開啟")
+    except Exception as exc:
+        return _source_problem("讀取失敗", str(exc))
+
+
+def _cell_preview_value(value: Any) -> str:
+    if value is None:
+        return ""
+    try:
+        import datetime
+        if isinstance(value, (datetime.datetime, datetime.date)):
+            return value.strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    text = str(value)
+    return text if len(text) <= 120 else text[:117] + "..."
+
+
+def _excel_source_preview(
+    root: Path,
+    path_value: Any,
+    *,
+    sheet_name: str,
+    required: list[Any],
+    max_rows: int = 18,
+    max_cols: int = 18,
+) -> dict:
+    raw = str(path_value or "").strip()
+    if not raw:
+        raise FileNotFoundError("尚未設定 Excel 來源路徑")
+    path = _resolved_setting_path(root, raw)
+    if not path.is_file():
+        raise FileNotFoundError(f"找不到檔案：{path}")
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+
+    wb = load_workbook(path, read_only=True, data_only=True)
+    try:
+        sheet_candidates = _excel_sheet_candidates(wb, sheet_name)
+        chosen = sheet_candidates[0] if sheet_candidates else wb.sheetnames[0]
+        header_info: dict | None = None
+        for candidate in sheet_candidates:
+            found = _find_excel_header(wb[candidate], required)
+            if found and not found.get("missing"):
+                chosen = candidate
+                header_info = found
+                break
+            if candidate == chosen and found:
+                header_info = found
+        ws = wb[chosen]
+        header_row = int((header_info or {}).get("row") or 1)
+        matched = list((header_info or {}).get("matched") or [])
+        required_indexes = list((header_info or {}).get("indexes") or [])
+        max_index = max(required_indexes, default=-1) + 1
+        col_count = min(max(int(ws.max_column or 1), max_index), max_cols)
+        row_count = min(int(ws.max_row or 1), max(header_row + max_rows, max_rows))
+
+        header_values = []
+        try:
+            header_values = [cell for cell in next(ws.iter_rows(min_row=header_row, max_row=header_row, values_only=True))]
+        except StopIteration:
+            header_values = []
+        columns = []
+        for idx in range(1, col_count + 1):
+            header = header_values[idx - 1] if idx - 1 < len(header_values) else ""
+            columns.append({
+                "index": idx,
+                "letter": get_column_letter(idx),
+                "header": _cell_preview_value(header),
+            })
+
+        rows = []
+        for row_no, row in enumerate(ws.iter_rows(min_row=1, max_row=row_count, max_col=col_count, values_only=True), start=1):
+            rows.append({
+                "number": row_no,
+                "is_header": row_no == header_row,
+                "cells": [_cell_preview_value(v) for v in row],
+            })
+        return {
+            "path": str(path),
+            "sheets": list(wb.sheetnames),
+            "sheet": chosen,
+            "configured_sheet": sheet_name,
+            "header_row": header_row,
+            "columns": columns,
+            "rows": rows,
+            "fields": matched,
+            "missing": list((header_info or {}).get("missing") or []),
+        }
+    finally:
+        wb.close()
+
+
+def _serial_tokens(value: Any) -> set[str]:
+    raw = str(value or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    tokens = {raw.lower()} if raw else set()
+    if digits:
+        tokens.add(digits)
+        tokens.add(digits.lstrip("0") or "0")
+        tokens.add(digits.zfill(3))
+        tokens.add(digits.zfill(4))
+    return {t for t in tokens if t}
+
+
+def _pdf_source_health(root: Path, path_value: Any, serials: set[str]) -> dict:
+    raw = str(path_value or "").strip()
+    if not raw:
+        return _source_problem("未設定", "尚未設定路徑")
+    path = _resolved_setting_path(root, raw)
+    if not path.is_dir():
+        return _source_problem("找不到", "找不到資料夾")
+    try:
+        pdfs = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
+    except Exception as exc:
+        return _source_problem("讀取失敗", str(exc))
+    serial_tokens = set()
+    for serial in serials:
+        serial_tokens.update(_serial_tokens(serial))
+    matched = 0
+    for pdf in pdfs:
+        stem = pdf.stem.lower()
+        if any(re.search(rf"(?<!\d){re.escape(token)}(?!\d)", stem) for token in serial_tokens):
+            matched += 1
+    if serial_tokens and pdfs and matched == 0:
+        return {
+            "state": "warn",
+            "label": "未匹配",
+            "count": 0,
+            "total": len(pdfs),
+            "matched": 0,
+            "summary": f"匹配 0 / {len(pdfs)} 張 PDF",
+            "message": f"目前有 {len(serials)} 個流水號可比對",
+        }
+    return {
+        "state": "ok",
+        "label": "已讀取",
+        "count": matched,
+        "total": len(pdfs),
+        "matched": matched,
+        "summary": f"匹配 {matched} / {len(pdfs)} 張 PDF" if serial_tokens else f"PDF {len(pdfs)} 張",
+        "message": f"目前有 {len(serials)} 個流水號可比對" if serial_tokens else "目前沒有紀錄可比對",
+    }
 
 
 def _photo_label(role: Any) -> str:
@@ -142,6 +476,7 @@ class MainBridge:
         self._open_path_fn = None          # 測試可注入；桌面版預設用系統開啟
         self._pricebook_cache_key = None
         self._pricebook_cache_data = None
+        self._catalog_summary_cache = None
 
     # ---- 對外 API（皆回信封） -------------------------------------------- #
     @_enveloped
@@ -179,29 +514,82 @@ class MainBridge:
         for it in (items or []):
             if not isinstance(it, dict):
                 continue
-            row = enrich_material_item(it, taxonomy)
-            out.append({
-                "id": it.get("id") or "",
-                "part": row.get("零件類型") or "",
-                "size": row.get("尺寸") or "",
-                "sch": row.get("SCH") or "",
-                "mat": row.get("材質") or "",
-                "cat": row.get("類別") or "",
-                "unit": row.get("單位") or "",
-                "src": it.get("來源") or "",
-                "remark": it.get("備註") or "",
-                "type": it.get("Type") or row.get("Type") or "",
-                "level": it.get("支撐級別") or row.get("支撐級別") or "",
-                "spec": it.get("規格") or "",
-                "icon": row.get("icon") or "",
-                "material_family": row.get("material_family") or "",
-                "match_key": row.get("match_key") or "",
-                "project_only": bool(it.get("project_only")),
-                "source_designation": it.get("source_designation") or "",
-            })
+            out.append(self._frontend_material_row(it, taxonomy))
         self._pricebook_cache_key = cache_key
         self._pricebook_cache_data = out
         return out
+
+    def _frontend_material_row(self, it: dict, taxonomy: dict | None = None) -> dict:
+        """Normalize one material row to the frontend shape used by PRICE."""
+        taxonomy = taxonomy or load_taxonomy(str(self.root))
+        row = enrich_material_item(it, taxonomy)
+        return {
+            "id": it.get("id") or "",
+            "part": row.get("零件類型") or "",
+            "size": row.get("尺寸") or "",
+            "sch": row.get("SCH") or "",
+            "mat": row.get("材質") or "",
+            "cat": row.get("類別") or "",
+            "unit": row.get("單位") or "",
+            "src": it.get("來源") or row.get("來源") or "",
+            "remark": it.get("備註") or row.get("備註") or "",
+            "type": it.get("Type") or row.get("Type") or "",
+            "level": it.get("支撐級別") or row.get("支撐級別") or "",
+            "spec": it.get("規格") or row.get("規格") or "",
+            "icon": it.get("icon") or row.get("icon") or "",
+            "material_family": row.get("material_family") or "",
+            "match_key": row.get("match_key") or "",
+            "project_only": bool(it.get("project_only")),
+            "source_designation": it.get("source_designation") or "",
+        }
+
+    def _legacy_material_rows(self) -> list:
+        doc = _read_json(self.records_dir / "material_pricebook.json")
+        items = doc.get("items") if isinstance(doc, dict) else doc
+        return [it for it in (items or []) if isinstance(it, dict)]
+
+    def _material_items_for_ids(self, ids) -> list:
+        wanted = {str(x) for x in (ids or []) if str(x or "").strip()}
+        if not wanted:
+            return []
+        items_by_id: dict[str, dict] = {str(row.get("id")): row for row in rows_by_ids(self.root, wanted)}
+        missing = wanted - set(items_by_id)
+        if missing:
+            taxonomy = load_taxonomy(str(self.root))
+            for row in self._legacy_material_rows() + self._read_custom_project_parts():
+                rid = str(row.get("id") or "")
+                if rid in missing and rid not in items_by_id:
+                    items_by_id[rid] = self._frontend_material_row(row, taxonomy)
+        return [items_by_id[x] for x in sorted(items_by_id)]
+
+    @_enveloped
+    def material_catalog_summary(self) -> dict:
+        """Compact material catalog summary; frontend uses this before loading rows."""
+        if self._catalog_summary_cache is None:
+            self._catalog_summary_cache = catalog_summary(self.root)
+        return self._catalog_summary_cache
+
+    @_enveloped
+    def material_catalog_query(self, filters: dict | None = None, offset: int = 0, limit: int = 200) -> dict:
+        """Query the compact material rules and expand only the requested page."""
+        return query_catalog(self.root, filters or {}, offset=offset, limit=limit)
+
+    @_enveloped
+    def material_catalog_items(self, ids) -> dict:
+        """Resolve material ids from the compact rule catalog, with legacy fallback."""
+        return {"items": self._material_items_for_ids(ids)}
+
+    @_enveloped
+    def build_project_part(self, spec: dict) -> dict:
+        """Build one controlled material spec and register it into project parts."""
+        item = build_frontend_item(self.root, spec or {})
+        mid = str(item.get("id") or "").strip()
+        if not mid:
+            raise ValueError("材料規格未產生料號")
+        cur = self._read_registered()
+        cur.add(mid)
+        self._write_registered(cur)
+        return {"item": item, "registered": sorted(cur)}
 
     @_enveloped
     def material_taxonomy(self) -> dict:
@@ -831,11 +1219,63 @@ class MainBridge:
         except Exception:
             pass
         weld = _settings_path_value(self.root, "weld_control_table")
-        return {
+        prefab = _settings_path_value(self.root, "prefab_drawing_dir")
+        data = {
+            "project_name": saved.get("project_name") or _settings_project_name(self.root),
             "dwg_list": saved.get("dwg_list") or _settings_path_value(self.root, "drawing_list") or dwg,
             "weld_control_table": saved.get("weld_control_table") or weld,
+            "prefab_drawing_dir": saved.get("prefab_drawing_dir") or prefab,
             "output_dir": saved.get("output_dir") or out,
             "pdf_dir": saved.get("pdf_dir") or pdf,
+        }
+        data["source_schema"] = self._source_schema_settings()
+        data["source_health"] = self._source_health(data)
+        return data
+
+    def _source_schema_settings(self) -> dict:
+        weld_cfg = _settings_section(self.root, "weld_control")
+        dwg_cfg = _settings_section(self.root, "dwg_list")
+        return {
+            "dwg": {
+                "sheet_name": str(dwg_cfg.get("sheet_name") or "DRAWING LIST"),
+                "serial_column": str(dwg_cfg.get("col_serial") or "NO"),
+            },
+            "weld": {
+                "sheet_name": str(weld_cfg.get("sheet_name") or "焊口編號明細"),
+                "serial_column": str(weld_cfg.get("col_serial") or "流水號"),
+                "weld_no_column": str(weld_cfg.get("col_weld_no") or "焊口編號"),
+            },
+        }
+
+    def _source_health(self, settings: dict) -> dict:
+        weld_cfg = _settings_section(self.root, "weld_control")
+        dwg_cfg = _settings_section(self.root, "dwg_list")
+        serials = {
+            str(rec.get("series") or "").strip()
+            for rec in self._read_change_orders()
+            if isinstance(rec, dict) and str(rec.get("series") or "").strip()
+        }
+        return {
+            "dwg": _excel_source_health(
+                self.root,
+                settings.get("dwg_list"),
+                sheet_name=str(dwg_cfg.get("sheet_name") or "DRAWING LIST"),
+                required=[[str(dwg_cfg.get("col_serial") or "NO"), "流水號", "管線序號", "ISO流編", "NO", "Serial", "Series"]],
+            ),
+            "weld": _excel_source_health(
+                self.root,
+                settings.get("weld_control_table"),
+                sheet_name=str(weld_cfg.get("sheet_name") or "焊口編號明細"),
+                required=[
+                    [str(weld_cfg.get("col_serial") or "流水號"), "流水號", "ISO流編"],
+                    [str(weld_cfg.get("col_weld_no") or "焊口編號"), "焊口編號", "銲口編號", "焊口碼"],
+                ],
+            ),
+            "drawingpdf": _pdf_source_health(
+                self.root,
+                settings.get("prefab_drawing_dir"),
+                serials,
+            ),
         }
 
     @_enveloped
@@ -848,10 +1288,103 @@ class MainBridge:
         saved[key] = value
         self.records_dir.mkdir(parents=True, exist_ok=True)
         p.write_text(json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8")
-        if key in {"dwg_list", "weld_control_table"}:
+        if key in {"dwg_list", "weld_control_table", "prefab_drawing_dir"}:
             settings_key = "drawing_list" if key == "dwg_list" else key
             self._write_settings_path(settings_key, value)
+        if key == "project_name":
+            self._write_settings_project_name(value)
         return {"saved": True, "key": key, "value": value}
+
+    @_enveloped
+    def save_source_schema(self, kind: str, config: dict) -> dict:
+        """存 DWG LIST / 焊口表的格式設定，供來源健康檢查與查詢流程共用。"""
+        kind = str(kind or "").strip().lower()
+        config = config if isinstance(config, dict) else {}
+        if kind == "dwg":
+            updates = {
+                "sheet_name": str(config.get("sheet_name") or "").strip() or "DRAWING LIST",
+                "col_serial": str(config.get("serial_column") or config.get("col_serial") or "").strip() or "NO",
+            }
+            self._write_settings_section("dwg_list", updates)
+        elif kind == "weld":
+            updates = {
+                "sheet_name": str(config.get("sheet_name") or "").strip() or "焊口編號明細",
+                "col_serial": str(config.get("serial_column") or config.get("col_serial") or "").strip() or "流水號",
+                "col_weld_no": str(config.get("weld_no_column") or config.get("col_weld_no") or "").strip() or "焊口編號",
+            }
+            self._write_settings_section("weld_control", updates)
+        else:
+            raise ValueError(f"不支援的來源格式設定：{kind}")
+        return {"saved": True, "kind": kind, "settings": self._source_schema_settings().get(kind, {})}
+
+    @_enveloped
+    def source_excel_preview(self, kind: str) -> dict:
+        """把來源 Excel 映成前端可視化欄位設定預覽，不要求使用者背欄位常數。"""
+        kind = str(kind or "").strip().lower()
+        settings_res = self.app_settings()
+        settings = settings_res.get("data") if isinstance(settings_res, dict) else {}
+        schema = self._source_schema_settings()
+        if kind == "dwg":
+            cfg = schema["dwg"]
+            return _excel_source_preview(
+                self.root,
+                settings.get("dwg_list"),
+                sheet_name=cfg["sheet_name"],
+                required=[[cfg["serial_column"], "流水號", "管線序號", "ISO流編", "NO", "Serial", "Series"]],
+            )
+        if kind == "weld":
+            cfg = schema["weld"]
+            return _excel_source_preview(
+                self.root,
+                settings.get("weld_control_table"),
+                sheet_name=cfg["sheet_name"],
+                required=[
+                    [cfg["serial_column"], "流水號", "ISO流編"],
+                    [cfg["weld_no_column"], "焊口編號", "銲口編號", "焊口碼"],
+                ],
+            )
+        raise ValueError(f"不支援的來源預覽：{kind}")
+
+    def _write_settings_section(self, section_name: str, updates: dict) -> None:
+        p = self.root / "settings.json"
+        data = _read_json(p)
+        data = data if isinstance(data, dict) else {}
+        section = data.get(section_name)
+        if not isinstance(section, dict):
+            section = {}
+            data[section_name] = section
+        for key, value in updates.items():
+            section[str(key)] = value
+        meta = data.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            data["meta"] = meta
+        try:
+            import datetime
+            meta["last_modified"] = datetime.datetime.now().isoformat()
+        except Exception:
+            pass
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _write_settings_project_name(self, value: Any) -> None:
+        p = self.root / "settings.json"
+        data = _read_json(p)
+        data = data if isinstance(data, dict) else {}
+        project = data.get("project")
+        if not isinstance(project, dict):
+            project = {}
+            data["project"] = project
+        project["name"] = "" if value is None else str(value)
+        meta = data.get("meta")
+        if not isinstance(meta, dict):
+            meta = {}
+            data["meta"] = meta
+        try:
+            import datetime
+            meta["last_modified"] = datetime.datetime.now().isoformat()
+        except Exception:
+            pass
+        p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _write_settings_path(self, key: str, value: Any) -> None:
         p = self.root / "settings.json"
@@ -993,11 +1526,6 @@ class MainBridge:
         custom = data.get("custom") if isinstance(data, dict) else None
         return [x for x in (custom or []) if isinstance(x, dict) and x.get("id")]
 
-    def _valid_material_ids(self) -> set:
-        base = {str(it.get("id")) for it in self._all_materials() if isinstance(it, dict) and it.get("id")}
-        custom = {str(it.get("id")) for it in self._read_custom_project_parts() if isinstance(it, dict) and it.get("id")}
-        return base | custom
-
     def _write_project_parts_doc(self, reg, custom=None) -> None:
         self.records_dir.mkdir(parents=True, exist_ok=True)
         ids = sorted(set(str(x) for x in reg))
@@ -1036,20 +1564,25 @@ class MainBridge:
     def project_parts(self) -> dict:
         """本案已登記的料號清單（前端據此把總庫過濾成本案配件）。"""
         cur = self._read_registered()
-        valid = self._valid_material_ids()
-        registered = cur & valid if valid else cur
+        items = self._material_items_for_ids(cur)
+        registered = {str(row.get("id")) for row in items if row.get("id")}
         dropped = cur - registered
         if dropped:
             self._write_registered(registered)
-        return {"registered": sorted(registered), "dropped": sorted(dropped), "custom": self._read_custom_project_parts()}
+        return {
+            "registered": sorted(registered),
+            "dropped": sorted(dropped),
+            "items": items,
+            "custom": self._read_custom_project_parts(),
+        }
 
     @_enveloped
     def register_parts(self, ids) -> dict:
         """把料號加入本案配件（勾選登記）。"""
         cur = self._read_registered()
-        valid = self._valid_material_ids()
         requested = [str(x) for x in (ids or [])]
-        add = [x for x in requested if not valid or x in valid]
+        valid_requested = {str(row.get("id")) for row in self._material_items_for_ids(requested) if row.get("id")}
+        add = [x for x in requested if x in valid_requested]
         cur.update(add)
         self._write_registered(cur)
         return {"registered": sorted(cur), "added": add, "ignored": [x for x in requested if x not in add]}
@@ -1082,8 +1615,7 @@ class MainBridge:
 
     # ---- 匯出（總庫 / 本案配件 → Excel，交回採購/收料）--------------------- #
     def _all_materials(self) -> list:
-        doc = _read_json(self.records_dir / "material_pricebook.json")
-        return (doc.get("items") if isinstance(doc, dict) else doc) or []
+        return all_catalog_rows(self.root)
 
     def _export_materials(self, items, path, sheet_name, default_stem) -> dict:
         if not path:
@@ -1113,7 +1645,20 @@ class MainBridge:
     def export_project_parts(self, path: str = "") -> dict:
         """匯出本案已登記配件成 Excel（交回採購/收料）。"""
         reg = self._read_registered()
-        items = [it for it in (self._all_materials() + self._read_custom_project_parts()) if str(it.get("id")) in reg]
+        items = []
+        for row in self._material_items_for_ids(reg):
+            items.append({
+                "id": row.get("id") or "",
+                "零件類型": row.get("part") or "",
+                "尺寸": row.get("size") or "",
+                "SCH": row.get("sch") or "",
+                "材質": row.get("mat") or "",
+                "類別": row.get("cat") or "",
+                "單位": row.get("unit") or "",
+                "來源": row.get("src") or "",
+                "規格": row.get("spec") or "",
+                "備註": row.get("remark") or "",
+            })
         return self._export_materials(items, path, "本案配件", "本案配件")
 
 

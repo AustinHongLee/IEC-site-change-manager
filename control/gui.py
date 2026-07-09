@@ -175,13 +175,13 @@ class MainWindow(QMainWindow):
         record_layout.addWidget(self.record_panel)
         self.notebook.addTab(record_tab, "📊 紀錄管理")
 
-        # === 頁籤3：材料價目 ===
+        # === 頁籤3：材料管理 ===
         pricebook_tab = QWidget()
         pricebook_layout = QVBoxLayout(pricebook_tab)
         pricebook_layout.setContentsMargins(8, 8, 8, 8)
         self.pricebook_panel = MaterialPricebookPanel(pricebook_tab)
         pricebook_layout.addWidget(self.pricebook_panel)
-        self.notebook.addTab(pricebook_tab, "📦 材料價目")
+        self.notebook.addTab(pricebook_tab, "📦 材料管理")
 
         # === 頁籤4：請款追蹤 ===
         billing_tab = QWidget()
