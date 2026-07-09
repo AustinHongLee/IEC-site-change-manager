@@ -285,6 +285,37 @@ def test_app_settings_reports_source_health_counts(tmp_path):
     assert health["weld"]["count"] == 2
     assert health["drawingpdf"]["total"] == 2
     assert health["drawingpdf"]["matched"] == 1
+    assert health["drawingpdf"]["partial"] is False
+
+
+def test_pdf_source_health_scans_nested_folder_with_limit(tmp_path, monkeypatch):
+    pdf_dir = tmp_path / "pdfs"
+    nested = pdf_dir / "nested"
+    nested.mkdir(parents=True)
+    _write_pdf(nested / "100-ISO.pdf")
+    _write_pdf(pdf_dir / "101-ISO.pdf")
+    folder = tmp_path / "attachments" / "100_2026-07-01_01"
+    folder.mkdir(parents=True)
+    (folder / "change_order.json").write_text(json.dumps({
+        "id": "100_2026-07-01_01",
+        "date": "2026-07-01",
+        "series": "100",
+        "status": "完整",
+        "welds": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    _write_root_json(tmp_path, "settings.json", {"paths": {"prefab_drawing_dir": str(pdf_dir)}})
+
+    health = MainBridge(tmp_path).app_settings()["data"]["source_health"]["drawingpdf"]
+
+    assert health["matched"] == 1
+    assert health["total"] == 2
+    assert health["scanned_dirs"] == 2
+
+    monkeypatch.setattr(co_main_bridge, "PDF_HEALTH_SCAN_FILE_LIMIT", 1)
+    limited = MainBridge(tmp_path).app_settings()["data"]["source_health"]["drawingpdf"]
+    assert limited["partial"] is True
+    assert limited["label"] == "部分讀取"
+    assert limited["scan_limit"] == 1
 
 
 def test_app_settings_auto_detects_shifted_source_headers_and_aliases(tmp_path):

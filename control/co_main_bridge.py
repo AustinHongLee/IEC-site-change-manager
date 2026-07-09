@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import subprocess
 import sys
 import traceback
@@ -38,6 +39,8 @@ from support_bom import analyze_support_bom
 from utils import atomic_write_json
 
 API_VERSION = "main-0.1"
+PDF_HEALTH_SCAN_FILE_LIMIT = 2000
+PDF_HEALTH_SCAN_DIR_LIMIT = 300
 
 
 def _wizard_launch_command(root: Path) -> tuple[list[str], str]:
@@ -397,10 +400,9 @@ def _pdf_source_health(root: Path, path_value: Any, serials: set[str]) -> dict:
     path = _resolved_setting_path(root, raw)
     if not path.is_dir():
         return _source_problem("找不到", "找不到資料夾")
-    try:
-        pdfs = [p for p in path.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"]
-    except Exception as exc:
-        return _source_problem("讀取失敗", str(exc))
+    pdfs, partial, dirs_scanned, errors = _scan_pdf_files(path)
+    if errors and not pdfs:
+        return _source_problem("讀取失敗", errors[0])
     serial_tokens = set()
     for serial in serials:
         serial_tokens.update(_serial_tokens(serial))
@@ -412,22 +414,69 @@ def _pdf_source_health(root: Path, path_value: Any, serials: set[str]) -> dict:
     if serial_tokens and pdfs and matched == 0:
         return {
             "state": "warn",
-            "label": "未匹配",
+            "label": "部分讀取" if partial else "未匹配",
             "count": 0,
             "total": len(pdfs),
             "matched": 0,
             "summary": f"匹配 0 / {len(pdfs)} 張 PDF",
             "message": f"目前有 {len(serials)} 個流水號可比對",
+            "partial": partial,
+            "scanned_dirs": dirs_scanned,
+            "scan_limit": PDF_HEALTH_SCAN_FILE_LIMIT,
+            "errors": errors[:3],
         }
     return {
-        "state": "ok",
-        "label": "已讀取",
+        "state": "warn" if partial else "ok",
+        "label": "部分讀取" if partial else "已讀取",
         "count": matched,
         "total": len(pdfs),
         "matched": matched,
         "summary": f"匹配 {matched} / {len(pdfs)} 張 PDF" if serial_tokens else f"PDF {len(pdfs)} 張",
         "message": f"目前有 {len(serials)} 個流水號可比對" if serial_tokens else "目前沒有紀錄可比對",
+        "partial": partial,
+        "scanned_dirs": dirs_scanned,
+        "scan_limit": PDF_HEALTH_SCAN_FILE_LIMIT,
+        "errors": errors[:3],
     }
+
+
+def _scan_pdf_files(path: Path) -> tuple[list[Path], bool, int, list[str]]:
+    """Bounded recursive PDF scan for settings health checks."""
+    pdfs: list[Path] = []
+    stack = [path]
+    dirs_scanned = 0
+    partial = False
+    errors: list[str] = []
+    seen: set[str] = set()
+
+    while stack:
+        if len(pdfs) >= PDF_HEALTH_SCAN_FILE_LIMIT or dirs_scanned >= PDF_HEALTH_SCAN_DIR_LIMIT:
+            partial = True
+            break
+        current = stack.pop()
+        key = str(current.absolute())
+        if key in seen:
+            continue
+        seen.add(key)
+        dirs_scanned += 1
+        try:
+            with os.scandir(current) as entries:
+                for entry in entries:
+                    if len(pdfs) >= PDF_HEALTH_SCAN_FILE_LIMIT:
+                        partial = True
+                        break
+                    try:
+                        if entry.is_file(follow_symlinks=False) and entry.name.lower().endswith(".pdf"):
+                            pdfs.append(Path(entry.path))
+                        elif entry.is_dir(follow_symlinks=False):
+                            stack.append(Path(entry.path))
+                    except OSError as exc:
+                        errors.append(f"{entry.path}: {exc}")
+        except OSError as exc:
+            errors.append(f"{current}: {exc}")
+    if stack:
+        partial = True
+    return pdfs, partial, dirs_scanned, errors
 
 
 def _photo_label(role: Any) -> str:
