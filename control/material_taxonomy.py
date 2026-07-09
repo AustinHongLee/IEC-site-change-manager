@@ -23,9 +23,34 @@ _FALLBACK_TAXONOMY: dict[str, Any] = {
         "schedule": {"values": ["SCH10", "SCH40", "SCH80", "XS", "XXS"]},
         "material_family": {
             "values": [
-                {"label": "通用白鐵", "canonical": ["SUS304", "SUS316"], "aliases": ["白鐵", "SUS", "SS"]},
-                {"label": "通用黑鐵", "canonical": ["A36/SS400", "A106 GR.B", "A234 GR.WPB", "A105", "CS"], "aliases": ["黑鐵", "碳鋼", "CS", "AS"]},
-                {"label": "鍍鋅", "canonical": ["GI", "HDG"], "aliases": ["鍍鋅", "GALV", "HDG"]},
+                {
+                    "label": "白鐵系",
+                    "canonical": ["SUS304", "SUS304L", "SUS316", "SUS316L", "SUS321"],
+                    "aliases": ["通用白鐵", "白鐵", "不銹鋼", "不鏽鋼", "STAINLESS", "SUS", "SS"],
+                },
+                {
+                    "label": "黑鐵系",
+                    "canonical": ["A36/SS400", "A106 GR.B", "A234 GR.WPB", "A105", "CS"],
+                    "aliases": ["通用黑鐵", "黑鐵", "碳鋼", "CS", "AS"],
+                },
+                {"label": "鍍鋅系", "canonical": ["GI", "HDG"], "aliases": ["鍍鋅", "GALV", "HDG"]},
+            ]
+        },
+        "material_grade": {
+            "values": [
+                "SUS304",
+                "SUS304L",
+                "SUS316",
+                "SUS316L",
+                "SUS321",
+                "A36/SS400",
+                "A106 GR.B",
+                "A53 GR.B",
+                "A234 GR.WPB",
+                "A105",
+                "CS",
+                "GI",
+                "HDG",
             ]
         },
     },
@@ -219,6 +244,10 @@ def normalize_material(value: Any) -> str:
     up = re.sub(r"\bA53\s*[- ]?\s*B\b", "A53 GR.B", up)
     up = re.sub(r"\bSUS\s+(\d{3}[A-Z]?)\b", r"SUS\1", up)
     up = re.sub(r"\bSS\s+(\d{3}[A-Z]?)\b", r"SS\1", up)
+    compact = re.sub(r"[^A-Z0-9]", "", up)
+    m = re.fullmatch(r"(?:SUS|SS)?(304L?|316L?|321)", compact)
+    if m:
+        return f"SUS{m.group(1)}"
     return " ".join(up.split())
 
 
@@ -301,12 +330,13 @@ def taxonomy_options(taxonomy: dict[str, Any] | None = None) -> dict[str, list[s
     for fam in (((tax.get("axes") or {}).get("material_family") or {}).get("values") or []):
         mats.append(str(fam.get("label") or ""))
         mats.extend(str(x) for x in (fam.get("canonical") or []))
+    mats.extend(_axis_values(tax, "material_grade"))
     return {
         "cat": [x for x in cats if x],
         "part": [x for x in parts if x],
         "size": _axis_values(tax, "nominal_diameter"),
         "sch": _axis_values(tax, "schedule") + _axis_values(tax, "rating"),
-        "mat": [x for x in mats if x],
+        "mat": list(dict.fromkeys(x for x in mats if x)),
     }
 
 

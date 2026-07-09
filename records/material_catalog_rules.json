@@ -1,0 +1,436 @@
+{
+  "schema_version": "material_catalog_rules.v1",
+  "version": "2026.07.rules",
+  "materials": {
+    "pipe": [
+      "SUS304",
+      "SUS304L",
+      "SUS316",
+      "SUS316L",
+      "SUS321",
+      "A106 GR.B",
+      "CS",
+      "GI"
+    ],
+    "fitting": [
+      "SUS304",
+      "SUS304L",
+      "SUS316",
+      "SUS316L",
+      "SUS321",
+      "A234 GR.WPB",
+      "CS",
+      "GI"
+    ],
+    "flange": [
+      "SUS304",
+      "SUS304L",
+      "SUS316",
+      "SUS316L",
+      "SUS321",
+      "A105",
+      "CS",
+      "GI"
+    ],
+    "bolt": [
+      "SUS304",
+      "SUS316",
+      "CS",
+      "HDG"
+    ],
+    "support": [
+      "A36/SS400",
+      "SUS304",
+      "SUS316",
+      "GI"
+    ],
+    "gasket": [
+      "PTFE",
+      "石墨",
+      "金屬纏繞",
+      "橡膠"
+    ]
+  },
+  "rules": [
+    {
+      "mode": "single_schedule",
+      "prefix": "PIPE",
+      "part": "鋼管",
+      "cat": "管材",
+      "icon": "Pipe",
+      "unit": "米",
+      "materials": "pipe"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "EL90",
+      "part": "90°彎頭",
+      "cat": "彎頭",
+      "icon": "Elbow",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "EL45",
+      "part": "45°彎頭",
+      "cat": "彎頭",
+      "icon": "Elbow",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "TEE",
+      "part": "等徑三通",
+      "cat": "三通",
+      "icon": "Tee",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "CROSS",
+      "part": "四通",
+      "cat": "四通",
+      "icon": "Cross",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "CPLG",
+      "part": "接頭",
+      "cat": "接頭",
+      "icon": "Coupling",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "UNION",
+      "part": "由令",
+      "cat": "由令",
+      "icon": "Union",
+      "unit": "組",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "NIP",
+      "part": "短節",
+      "cat": "短節",
+      "icon": "Nipple",
+      "unit": "支",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "CAP",
+      "part": "管帽",
+      "cat": "管帽",
+      "icon": "Cap",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "single_schedule",
+      "prefix": "PLUG",
+      "part": "管塞",
+      "cat": "管塞",
+      "icon": "plug",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "dual_schedule",
+      "prefix": "RTEE",
+      "part": "異徑三通",
+      "cat": "三通",
+      "icon": "Tee",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "dual_schedule",
+      "prefix": "RC",
+      "part": "同心大小頭",
+      "cat": "大小頭",
+      "icon": "Reducer",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "dual_schedule",
+      "prefix": "RE",
+      "part": "偏心大小頭",
+      "cat": "大小頭",
+      "icon": "Reducer",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "dual_schedule",
+      "prefix": "BUSH",
+      "part": "補心",
+      "cat": "補心",
+      "icon": "Bushing",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "olet",
+      "prefix": "WOL",
+      "part": "Weldolet",
+      "cat": "Olet",
+      "icon": "Olet",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "olet",
+      "prefix": "SOL",
+      "part": "Sockolet",
+      "cat": "Olet",
+      "icon": "Olet",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "olet",
+      "prefix": "TOL",
+      "part": "ThreadOlet",
+      "cat": "Olet",
+      "icon": "Olet",
+      "unit": "個",
+      "materials": "fitting"
+    },
+    {
+      "mode": "rating",
+      "prefix": "FLG",
+      "part": "法蘭",
+      "cat": "法蘭",
+      "icon": "Flange",
+      "unit": "片",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "rating",
+      "prefix": "BLF",
+      "part": "盲法蘭",
+      "cat": "法蘭",
+      "icon": "Flange",
+      "unit": "片",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "rating",
+      "prefix": "GSK",
+      "part": "墊片",
+      "cat": "墊片",
+      "icon": "Gasket",
+      "unit": "片",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#"
+      ],
+      "materials": "gasket"
+    },
+    {
+      "mode": "rating",
+      "prefix": "GV",
+      "part": "閘閥",
+      "cat": "閘閥",
+      "icon": "GateValve",
+      "unit": "個",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#",
+        "800#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "rating",
+      "prefix": "BV",
+      "part": "球閥",
+      "cat": "球閥",
+      "icon": "BallValve",
+      "unit": "個",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#",
+        "800#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "rating",
+      "prefix": "GLV",
+      "part": "球心閥",
+      "cat": "球心閥",
+      "icon": "GlobeValve",
+      "unit": "個",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#",
+        "800#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "rating",
+      "prefix": "CV",
+      "part": "止回閥",
+      "cat": "止回閥",
+      "icon": "CheckValve",
+      "unit": "個",
+      "ratings": [
+        "150#",
+        "300#",
+        "600#",
+        "800#"
+      ],
+      "materials": "flange"
+    },
+    {
+      "mode": "bolt",
+      "prefix": "BOLT",
+      "part": "螺栓",
+      "cat": "螺栓",
+      "icon": "BoltNut",
+      "unit": "組",
+      "materials": "bolt"
+    },
+    {
+      "mode": "bolt",
+      "prefix": "STUD",
+      "part": "牙條",
+      "cat": "螺栓",
+      "icon": "BoltNut",
+      "unit": "組",
+      "materials": "bolt"
+    },
+    {
+      "mode": "fastener",
+      "prefix": "NUT",
+      "part": "螺帽",
+      "cat": "螺帽",
+      "icon": "BoltNut",
+      "unit": "個",
+      "materials": "bolt"
+    },
+    {
+      "mode": "fastener",
+      "prefix": "WSH",
+      "part": "華司",
+      "cat": "華司",
+      "icon": "BoltNut",
+      "unit": "片",
+      "materials": "bolt"
+    },
+    {
+      "mode": "u_bolt",
+      "prefix": "UBOLT",
+      "part": "U型螺栓",
+      "cat": "U型螺栓",
+      "icon": "BoltNut",
+      "unit": "組",
+      "materials": "bolt"
+    },
+    {
+      "mode": "support",
+      "prefix": "ANG",
+      "part": "角鋼",
+      "cat": "角鋼",
+      "icon": "SteelSection",
+      "unit": "米",
+      "sizes": [
+        "L40x40x5",
+        "L50x50x6",
+        "L65x65x6",
+        "L75x75x9",
+        "L100x100x10"
+      ],
+      "materials": "support"
+    },
+    {
+      "mode": "support",
+      "prefix": "CH",
+      "part": "槽鋼",
+      "cat": "槽鋼",
+      "icon": "SteelSection",
+      "unit": "米",
+      "sizes": [
+        "C100x50x5",
+        "C150x75x9",
+        "C200x90x8",
+        "C300x100x8.5"
+      ],
+      "materials": "support"
+    },
+    {
+      "mode": "support",
+      "prefix": "PLATE",
+      "part": "鋼板",
+      "cat": "鋼板",
+      "icon": "SteelPlate",
+      "unit": "張",
+      "sizes": [
+        "1219x2438x3t",
+        "1219x2438x6t",
+        "1219x2438x9t",
+        "1219x2438x12t",
+        "1524x3048x16t"
+      ],
+      "materials": "support"
+    },
+    {
+      "mode": "support",
+      "prefix": "BASEPL",
+      "part": "底板",
+      "cat": "底板",
+      "icon": "BasePlate",
+      "unit": "片",
+      "sizes": [
+        "100x100x6t",
+        "150x150x9t",
+        "200x200x12t",
+        "250x250x16t"
+      ],
+      "materials": "support"
+    },
+    {
+      "mode": "support_dn",
+      "prefix": "PCLAMP",
+      "part": "管夾",
+      "cat": "管夾",
+      "icon": "PipeClamp",
+      "unit": "組",
+      "materials": "support"
+    },
+    {
+      "mode": "support_dn",
+      "prefix": "PSHOE",
+      "part": "管鞋",
+      "cat": "管鞋",
+      "icon": "PipeShoe",
+      "unit": "組",
+      "materials": "support"
+    }
+  ]
+}

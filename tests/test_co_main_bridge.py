@@ -4,6 +4,7 @@ import json
 import base64
 
 from PIL import Image
+from openpyxl import Workbook, load_workbook
 from pypdf import PdfWriter
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), os.pardir, "control"))
@@ -29,6 +30,16 @@ def _write_pdf(path):
         writer.write(f)
 
 
+def _write_workbook(path, sheet_name, headers, rows):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    ws.append(headers)
+    for row in rows:
+        ws.append(row)
+    wb.save(path)
+
+
 def test_info_envelope(tmp_path):
     res = MainBridge(tmp_path).info()
     assert set(res) >= {"ok", "data", "error"}
@@ -50,7 +61,7 @@ def test_pricebook_maps_real_columns(tmp_path):
     r0 = rows[0]
     assert r0["part"] == "Pipe (管)" and r0["size"] == "DN50" and r0["sch"] == "SCH40"
     assert r0["mat"] == "白鐵 (STAINLESS STEEL)" and r0["cat"] == "管材" and r0["unit"] == "M"
-    assert r0["icon"] == "Pipe" and r0["material_family"] == "通用白鐵"
+    assert r0["icon"] == "Pipe" and r0["material_family"] == "白鐵系"
     assert r0["src"] == "合約" and r0["remark"] == "ok"
     assert "price" not in r0              # 已去價：橋不再回傳單價
 
@@ -67,6 +78,7 @@ def test_material_taxonomy_api_exposes_axes_and_fasteners(tmp_path):
     data = res["data"]
     sizes = data["axes"]["nominal_diameter"]["values"]
     assert sizes[0] == "DN15" and sizes[-1] == "DN500"
+    assert {"SUS304", "SUS304L", "SUS316", "SUS321"} <= set(data["axes"]["material_grade"]["values"])
     assert {"螺栓", "螺帽", "華司", "U型螺栓"} <= set(data["options"]["cat"])
     assert any(p["code"] == "bolt" and "螺絲" in p["aliases"] for p in data["part_types"])
 
@@ -86,16 +98,91 @@ def test_pricebook_enriches_taxonomy_fields(tmp_path):
 
     assert rows[0]["cat"] == "螺栓"
     assert rows[0]["icon"] == "BoltNut"
-    assert rows[0]["material_family"] == "鍍鋅"
+    assert rows[0]["material_family"] == "鍍鋅系"
     assert rows[1]["part"] == "PIPE"
     assert rows[1]["size"] == "DN50"
     assert rows[1]["sch"] == "SCH40"
     assert rows[1]["mat"] == "A106 GR.B"
     assert rows[1]["cat"] == "管材"
-    assert rows[1]["material_family"] == "通用黑鐵"
+    assert rows[1]["material_family"] == "黑鐵系"
     assert rows[2]["type"] == "Type07"
     assert rows[2]["level"] == "零件"
     assert rows[2]["spec"] == "Type07,Type07 滑板,150x150x3t,A36/SS400"
+
+
+def test_material_catalog_rules_query_and_register_without_full_pricebook(tmp_path):
+    bridge = MainBridge(tmp_path)
+
+    summary = bridge.material_catalog_summary()
+    assert summary["ok"] is True
+    assert summary["data"]["total"] > 0
+    assert summary["data"]["counts"]["Pipe"] > 0
+
+    queried = bridge.material_catalog_query({"icon": "Pipe", "mat": "SUS304L"}, 0, 5)
+    assert queried["ok"] is True
+    assert queried["data"]["items"]
+    first = queried["data"]["items"][0]
+    assert first["part"] == "鋼管"
+    assert first["mat"] == "SUS304L"
+    assert "price" not in first
+
+    reg = bridge.register_parts([first["id"]])
+    assert reg["ok"] is True
+    assert first["id"] in reg["data"]["registered"]
+
+    parts = bridge.project_parts()
+    assert parts["ok"] is True
+    assert first["id"] in parts["data"]["registered"]
+    assert any(row["id"] == first["id"] and row["mat"] == "SUS304L" for row in parts["data"]["items"])
+
+
+def test_material_catalog_query_and_build_dual_dimension_part(tmp_path):
+    bridge = MainBridge(tmp_path)
+
+    queried = bridge.material_catalog_query({
+        "part": "同心大小頭",
+        "size1": "DN50",
+        "size2": "DN25",
+        "sch": "SCH40",
+        "mat": "SUS304",
+    }, 0, 5)
+
+    assert queried["ok"] is True
+    assert queried["data"]["total"] == 1
+    row = queried["data"]["items"][0]
+    assert row["part"] == "同心大小頭"
+    assert row["size1"] == "DN50"
+    assert row["size2"] == "DN25"
+    assert row["size"] == "DN50xDN25"
+
+    built = bridge.build_project_part({
+        "part": "同心大小頭",
+        "size1": "DN50",
+        "size2": "DN25",
+        "sch": "SCH40",
+        "mat": "SUS304",
+    })
+
+    assert built["ok"] is True
+    item = built["data"]["item"]
+    assert item["id"] == row["id"]
+    assert item["size1"] == "DN50" and item["size2"] == "DN25"
+    assert item["id"] in built["data"]["registered"]
+    parts = bridge.project_parts()["data"]["items"]
+    assert any(p["id"] == item["id"] and p["size1"] == "DN50" and p["size2"] == "DN25" for p in parts)
+
+
+def test_material_catalog_build_rejects_invalid_reducer_same_size(tmp_path):
+    res = MainBridge(tmp_path).build_project_part({
+        "part": "同心大小頭",
+        "size1": "DN50",
+        "size2": "DN50",
+        "sch": "SCH40",
+        "mat": "SUS304",
+    })
+
+    assert res["ok"] is False
+    assert "尺寸1不可等於尺寸2" in res["error"]
 
 
 def test_material_normalizers_cover_common_site_aliases():
@@ -108,8 +195,13 @@ def test_material_normalizers_cover_common_site_aliases():
     assert normalize_schedule("150LB") == "150#"
     assert normalize_schedule("CLASS150") == "150#"
     assert normalize_material("A182-F304.") == "A182 F304"
-    assert material_family("A234 GR.WPB") == "通用黑鐵"
-    assert material_family("A36/SS400") == "通用黑鐵"
+    assert normalize_material("304") == "SUS304"
+    assert normalize_material("304L") == "SUS304L"
+    assert normalize_material("316") == "SUS316"
+    assert normalize_material("321") == "SUS321"
+    assert material_family("304L") == "白鐵系"
+    assert material_family("A234 GR.WPB") == "黑鐵系"
+    assert material_family("A36/SS400") == "黑鐵系"
 
 
 def test_records_missing_attachments(tmp_path):
@@ -118,7 +210,11 @@ def test_records_missing_attachments(tmp_path):
 
 def test_weld_table_setting_round_trips_to_settings_json(tmp_path):
     _write_root_json(tmp_path, "settings.json", {
-        "paths": {"weld_control_table": "old.xlsx", "drawing_list": "dwg.xlsx"},
+        "paths": {
+            "weld_control_table": "old.xlsx",
+            "drawing_list": "dwg.xlsx",
+            "prefab_drawing_dir": "old-pdfs",
+        },
         "meta": {"version": "test"},
     })
     b = MainBridge(tmp_path)
@@ -126,6 +222,7 @@ def test_weld_table_setting_round_trips_to_settings_json(tmp_path):
     settings = b.app_settings()
     assert settings["ok"] is True
     assert settings["data"]["weld_control_table"] == "old.xlsx"
+    assert settings["data"]["prefab_drawing_dir"] == "old-pdfs"
 
     res = b.save_setting("weld_control_table", "new-control.xlsx")
     assert res["ok"] is True
@@ -134,6 +231,141 @@ def test_weld_table_setting_round_trips_to_settings_json(tmp_path):
     assert json.loads((tmp_path / "records" / "app_settings.json").read_text(encoding="utf-8"))[
         "weld_control_table"
     ] == "new-control.xlsx"
+
+    res = b.save_setting("prefab_drawing_dir", "drawing-pdfs")
+    assert res["ok"] is True
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert saved["paths"]["prefab_drawing_dir"] == "drawing-pdfs"
+    assert json.loads((tmp_path / "records" / "app_settings.json").read_text(encoding="utf-8"))[
+        "prefab_drawing_dir"
+    ] == "drawing-pdfs"
+
+    res = b.save_setting("project_name", "測試專案")
+    assert res["ok"] is True
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert saved["project"]["name"] == "測試專案"
+    assert json.loads((tmp_path / "records" / "app_settings.json").read_text(encoding="utf-8"))[
+        "project_name"
+    ] == "測試專案"
+    assert b.app_settings()["data"]["project_name"] == "測試專案"
+
+
+def test_app_settings_reports_source_health_counts(tmp_path):
+    dwg = tmp_path / "dwg.xlsx"
+    weld = tmp_path / "weld.xlsx"
+    pdf_dir = tmp_path / "pdfs"
+    pdf_dir.mkdir()
+    _write_workbook(dwg, "DRAWING LIST", ["NO", "DWG NO"], [["100", "A-100"], ["101", "A-101"], ["", "SKIP"]])
+    _write_workbook(weld, "焊口編號明細", ["流水號", "焊口編號", "DB數"], [["100", "1a", 0.5], ["100", "2r", 0.75], ["", "x", 1]])
+    _write_pdf(pdf_dir / "100-ISO.pdf")
+    _write_pdf(pdf_dir / "999-ISO.pdf")
+    folder = tmp_path / "attachments" / "100_2026-07-01_01"
+    folder.mkdir(parents=True)
+    (folder / "change_order.json").write_text(json.dumps({
+        "id": "100_2026-07-01_01",
+        "date": "2026-07-01",
+        "series": "100",
+        "status": "完整",
+        "welds": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    _write_root_json(tmp_path, "settings.json", {
+        "paths": {
+            "drawing_list": str(dwg),
+            "weld_control_table": str(weld),
+            "prefab_drawing_dir": str(pdf_dir),
+        },
+        "dwg_list": {"sheet_name": "DRAWING LIST", "col_serial": "NO"},
+        "weld_control": {"sheet_name": "焊口編號明細", "col_serial": "流水號", "col_weld_no": "焊口編號"},
+    })
+
+    data = MainBridge(tmp_path).app_settings()["data"]
+    health = data["source_health"]
+    assert health["dwg"]["count"] == 2
+    assert health["weld"]["count"] == 2
+    assert health["drawingpdf"]["total"] == 2
+    assert health["drawingpdf"]["matched"] == 1
+
+
+def test_app_settings_auto_detects_shifted_source_headers_and_aliases(tmp_path):
+    dwg = tmp_path / "dwg_new_format.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "DWG NO.ALL"
+    ws.append(["新版圖號清單"])
+    ws.append([])
+    ws.append(["圖號", "管線序號"])
+    ws.append(["A-100", "100"])
+    ws.append(["A-101", "101"])
+    wb.save(dwg)
+    _write_root_json(tmp_path, "settings.json", {
+        "paths": {"drawing_list": str(dwg)},
+        "dwg_list": {"sheet_name": "DRAWING LIST", "col_serial": "NO"},
+    })
+
+    health = MainBridge(tmp_path).app_settings()["data"]["source_health"]["dwg"]
+    assert health["state"] == "ok"
+    assert health["count"] == 2
+    assert health["sheet"] == "DWG NO.ALL"
+    assert health["header_row"] == 3
+    assert health["fields"][0]["actual"] == "管線序號"
+    assert "自動辨識" in health["message"]
+
+
+def test_save_source_schema_updates_settings_json(tmp_path):
+    dwg = tmp_path / "dwg.xlsx"
+    _write_workbook(dwg, "NEW SHEET", ["圖號", "管線序號"], [["A-100", "100"]])
+    _write_root_json(tmp_path, "settings.json", {
+        "paths": {"drawing_list": str(dwg)},
+        "dwg_list": {"sheet_name": "DRAWING LIST", "col_serial": "NO"},
+    })
+    bridge = MainBridge(tmp_path)
+
+    res = bridge.save_source_schema("dwg", {"sheet_name": "NEW SHEET", "serial_column": "管線序號"})
+    assert res["ok"] is True
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert saved["dwg_list"]["sheet_name"] == "NEW SHEET"
+    assert saved["dwg_list"]["col_serial"] == "管線序號"
+    health = bridge.app_settings()["data"]["source_health"]["dwg"]
+    assert health["state"] == "ok"
+    assert health["count"] == 1
+    assert "設定值" not in health["message"]
+
+    res = bridge.save_source_schema("weld", {
+        "sheet_name": "焊口",
+        "serial_column": "ISO流編",
+        "weld_no_column": "焊口碼",
+    })
+    assert res["ok"] is True
+    saved = json.loads((tmp_path / "settings.json").read_text(encoding="utf-8"))
+    assert saved["weld_control"]["sheet_name"] == "焊口"
+    assert saved["weld_control"]["col_serial"] == "ISO流編"
+    assert saved["weld_control"]["col_weld_no"] == "焊口碼"
+
+
+def test_source_excel_preview_maps_workbook_grid_and_detected_fields(tmp_path):
+    weld = tmp_path / "weld_preview.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "新版焊口表"
+    ws.append(["說明列"])
+    ws.append(["流水號", "銲口編號", "DB數"])
+    ws.append(["100", "1a", 0.5])
+    ws.append(["100", "2r", 0.75])
+    wb.save(weld)
+    _write_root_json(tmp_path, "settings.json", {
+        "paths": {"weld_control_table": str(weld)},
+        "weld_control": {"sheet_name": "焊口編號明細", "col_serial": "流水號", "col_weld_no": "焊口編號"},
+    })
+
+    res = MainBridge(tmp_path).source_excel_preview("weld")
+    assert res["ok"] is True
+    data = res["data"]
+    assert data["sheet"] == "新版焊口表"
+    assert data["header_row"] == 2
+    assert data["columns"][0]["letter"] == "A"
+    assert data["rows"][1]["is_header"] is True
+    assert data["fields"][0]["actual"] == "流水號"
+    assert data["fields"][1]["actual"] == "銲口編號"
 
 
 def test_records_reads_change_orders(tmp_path):
@@ -281,6 +513,7 @@ def test_export_output_center_owner_data_package_from_selected_items(tmp_path):
 
 
 def test_export_output_center_owner_data_package_from_root_change_order_folder(tmp_path):
+    _write_root_json(tmp_path, "settings.json", {"project": {"name": "測試工程"}})
     folder = tmp_path / "attachments" / "107_20260701_01"
     folder.mkdir(parents=True)
     Image.new("RGB", (80, 160), (220, 80, 60)).save(folder / "before_1.jpg")
@@ -321,6 +554,7 @@ def test_export_output_center_owner_data_package_from_root_change_order_folder(t
     files = res["data"]["files"]
     report_set = json.loads(open(files["report_set"], encoding="utf-8").read())
     report = report_set["reports"][0]
+    assert report_set["project"]["name"] == "測試工程"
     assert report["report"]["folder"] == "107_20260701_01"
     assert report["report"]["status"] != "missing_folder"
     assert report["welds"]["count"] == 1
@@ -330,6 +564,12 @@ def test_export_output_center_owner_data_package_from_root_change_order_folder(t
     assert report["photos"]["has_after"] is True
     assert report["attachment_pdf"]["exists"] is True
     assert (tmp_path / "staging" / "site_output_center_web" / "owner_data_report" / "CO-107-20260701-01").is_dir()
+    wb = load_workbook(files["owner_data_index_xlsx"], read_only=True)
+    try:
+        assert wb["資料索引"]["A1"].value == "測試工程-工務修改確認單"
+        assert wb["焊口統計"]["A1"].value == "測試工程-工務修改確認單 - 焊口統計"
+    finally:
+        wb.close()
 
 
 def test_save_billing_status_round_trips(tmp_path):

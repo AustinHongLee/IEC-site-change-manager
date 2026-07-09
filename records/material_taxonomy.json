@@ -38,21 +38,25 @@
       "label": "材質族群",
       "values": [
         {
-          "label": "通用白鐵",
-          "canonical": ["SUS304", "SUS304L", "SUS316", "SUS316L", "SS304", "SS316", "A182 F304", "A182 F316"],
-          "aliases": ["白鐵", "不銹鋼", "不鏽鋼", "STAINLESS", "STAINLESS STEEL", "SUS", "SS"]
+          "label": "白鐵系",
+          "canonical": ["SUS304", "SUS304L", "SUS316", "SUS316L", "SUS321", "SS304", "SS304L", "SS316", "SS316L", "SS321", "A182 F304", "A182 F304L", "A182 F316", "A182 F316L", "A182 F321"],
+          "aliases": ["通用白鐵", "白鐵", "不銹鋼", "不鏽鋼", "STAINLESS", "STAINLESS STEEL", "SUS", "SS"]
         },
         {
-          "label": "通用黑鐵",
+          "label": "黑鐵系",
           "canonical": ["A36/SS400", "SS400", "A36", "A106 GR.B", "A53 GR.B", "A234 WPB", "A234 GR.WPB", "A105", "A216 WCB", "CS"],
-          "aliases": ["黑鐵", "碳鋼", "CARBON STEEL", "C.S", "C/S", "CS", "S40C", "AS"]
+          "aliases": ["通用黑鐵", "黑鐵", "碳鋼", "CARBON STEEL", "C.S", "C/S", "CS", "S40C", "AS"]
         },
         {
-          "label": "鍍鋅",
+          "label": "鍍鋅系",
           "canonical": ["GI", "GALV", "HDG", "ZINC PLATED"],
           "aliases": ["鍍鋅", "熱浸鍍鋅", "GALVANIZED", "GALVANISED", "HDG"]
         }
       ]
+    },
+    "material_grade": {
+      "label": "精確材質",
+      "values": ["SUS304", "SUS304L", "SUS316", "SUS316L", "SUS321", "A36/SS400", "SS400", "A36", "A106 GR.B", "A53 GR.B", "A234 GR.WPB", "A105", "A216 WCB", "CS", "GI", "HDG"]
     },
     "bolt_diameter": {
       "label": "牙徑",

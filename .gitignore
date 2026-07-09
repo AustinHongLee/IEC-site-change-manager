@@ -51,6 +51,7 @@ records/material_pricebook.*.bak.json
 records/material_pricebook.backup.json
 records/material_pricebook.303.json
 records/weld_snapshot.*.bak.json
+records/sample_generation_summary.json
 
 # 執行期狀態
 records/app_settings.json
