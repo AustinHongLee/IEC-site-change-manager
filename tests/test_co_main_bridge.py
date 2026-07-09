@@ -493,11 +493,46 @@ def test_save_record_updates_change_order_json(tmp_path):
     saved = json.loads((folder / "change_order.json").read_text(encoding="utf-8"))
     assert saved["welds"][0]["spec"]["size"] == "DN80"
     assert saved["welds"][0]["op"] == "重焊"
+    assert saved["welds"][0]["base"] == "1001"
+    assert saved["welds"][0]["origin"] == "existing"
     assert saved["welds"][0]["spec"]["material"] == "A106 GR.B"
     assert saved["materials"][0]["component_id"] == "0002"
     assert saved["materials"][0]["qty"] == 2
     assert saved["audit"]["history"][-1]["action"] == "saved_from_main"
     assert res["data"]["mats"][0]["unit"] == "個"
+
+
+def test_save_record_recomputes_weld_identity_when_code_is_renamed(tmp_path):
+    folder = tmp_path / "attachments" / "150_20260709_01"
+    folder.mkdir(parents=True)
+    (folder / "change_order.json").write_text(json.dumps({
+        "id": "150_20260709_01",
+        "date": "20260709",
+        "series": "150",
+        "status": "完整",
+        "welds": [{
+            "code": "1001",
+            "base": None,
+            "origin": "new",
+            "op": "新焊",
+            "spec": {"size": "1", "sch": "40S", "material": "304L"},
+        }],
+        "materials": [],
+    }, ensure_ascii=False), encoding="utf-8")
+    rec = MainBridge(tmp_path).records()["data"][0]
+    rec["welds"][0]["code"] = "20A"
+    rec["welds"][0]["mark"] = "新焊"
+
+    res = MainBridge(tmp_path).save_record(rec)
+
+    assert res["ok"] is True
+    saved = json.loads((folder / "change_order.json").read_text(encoding="utf-8"))
+    assert saved["welds"][0]["code"] == "20A"
+    assert saved["welds"][0]["base"] == "20"
+    assert saved["welds"][0]["origin"] == "existing"
+    assert saved["welds"][0]["op"] == "重焊"
+    assert res["data"]["welds"][0]["code"] == "20A"
+    assert res["data"]["welds"][0]["mark"] == "重焊"
 
 
 def test_open_record_folder_and_pdf_use_injected_opener(tmp_path):

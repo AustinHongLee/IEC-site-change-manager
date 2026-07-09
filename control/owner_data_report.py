@@ -299,9 +299,8 @@ def _lookup_weld_info(weld_lookup: Any, series: Any, row: dict[str, Any]) -> dic
     lookup_info = getattr(weld_lookup, "lookup_info", None)
     if not callable(lookup_info):
         return {}
-    base = str(row.get("weld_no") or "").strip()
-    if not base:
-        base = _split_weld_code(_weld_code(row)).get("weld_no", "")
+    code_base = _split_weld_code(_weld_code(row)).get("weld_no", "")
+    base = str(code_base or row.get("weld_no") or "").strip()
     if not base:
         return {}
     try:

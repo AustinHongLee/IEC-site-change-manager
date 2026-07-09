@@ -290,3 +290,33 @@ def test_owner_data_report_weld_sheet_prefers_lookup_db_over_size_inference(tmp_
         assert wb["焊口統計"]["K3"].value == "1.5"
     finally:
         wb.close()
+
+
+def test_owner_data_report_lookup_uses_renamed_weld_code_before_stale_base(tmp_path):
+    class FakeLookup:
+        def lookup_info(self, series, base):
+            assert series == "0720"
+            assert base == "20"
+            return {"size": "1", "sch": "40S", "material": "304L", "db": "1"}
+
+    output = tmp_path / "out"
+    report_set = _report_set(tmp_path)
+    report_set["reports"][0]["welds"]["rows"] = [{
+        "code": "20A",
+        "weld_no": "1001",
+        "size": "1",
+        "material": "304L",
+        "thickness": "40S",
+        "mark": "a",
+    }]
+    report_set["reports"][0]["welds"]["count"] = 1
+
+    result = build_owner_data_report_package(output, report_set, weld_lookup=FakeLookup())
+
+    wb = load_workbook(Path(result["index_xlsx"]), data_only=False)
+    try:
+        assert wb["資料索引"]["H3"].value == '20A（1" / 304L / 40S / DB 1）\n（共1口）'
+        assert wb["焊口統計"]["D3"].value == "20A"
+        assert wb["焊口統計"]["J3"].value == "1"
+    finally:
+        wb.close()

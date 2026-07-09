@@ -715,6 +715,42 @@ def _weld_kind_label(value: Any, origin: Any = None) -> str:
     return raw
 
 
+def _weld_identity_from_code(
+    code: Any,
+    mark: Any = None,
+    origin: Any = None,
+    *,
+    code_changed: bool = True,
+) -> dict[str, Any]:
+    text = str(code or "").strip()
+    try:
+        from weld_codec import parse as parse_weld_code
+
+        parsed = parse_weld_code(text)
+    except Exception:
+        parsed = None
+    if parsed is not None and getattr(parsed, "parsed", False):
+        if getattr(parsed, "is_new", False):
+            fallback_op = _weld_kind_label(mark, origin) or ""
+            if not code_changed and fallback_op == "重焊":
+                return {"base": str(getattr(parsed, "raw", text) or text), "origin": "existing", "op": "重焊"}
+            return {"base": None, "origin": "new", "op": "新焊"}
+        base = getattr(parsed, "base", None)
+        if base:
+            return {"base": str(base), "origin": "existing", "op": "重焊"}
+
+    op = _weld_kind_label(mark, origin) or ""
+    origin_text = str(origin or "").strip()
+    if origin_text not in {"existing", "new"}:
+        origin_text = "new" if op == "新焊" else "existing" if op == "重焊" else origin_text
+    match = re.match(r"^\s*(\d+)", text)
+    return {
+        "base": match.group(1) if match and origin_text == "existing" else None,
+        "origin": origin_text or None,
+        "op": op or None,
+    }
+
+
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp"}
 _IMAGE_MIME = {
     ".jpg": "image/jpeg",
@@ -1251,8 +1287,18 @@ class MainBridge:
                 "origin": "manual",
             }
             spec = dict(old.get("spec") or {})
-            old["code"] = str(row.get("code") or "")
-            old["op"] = _weld_kind_label(row.get("mark"), old.get("origin"))
+            code = str(row.get("code") or "")
+            old_code = str(old.get("code") or "")
+            identity = _weld_identity_from_code(
+                code,
+                row.get("mark"),
+                old.get("origin"),
+                code_changed=code != old_code,
+            )
+            old["code"] = code
+            old["base"] = identity.get("base")
+            old["origin"] = identity.get("origin") or old.get("origin")
+            old["op"] = identity.get("op") or _weld_kind_label(row.get("mark"), old.get("origin"))
             spec["size"] = str(row.get("size") or "")
             spec["material"] = str(row.get("mat") or "")
             spec["sch"] = str(row.get("sch") or "")
