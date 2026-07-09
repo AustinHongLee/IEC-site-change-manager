@@ -1,12 +1,15 @@
 {
+  "project": {
+    "name": "HP6精濾區配管工事"
+  },
   "paths": {
-    "drawing_list": "",
+    "drawing_list": "H:\\共用雲端硬碟\\1長春\\苗栗\\CP-129 HP6精濾區配管工事\\01.工程圖面\\HP6精濾區配管工事-ISO圖號清單-115.07.07.xlsx",
     "attachments_root": "",
     "output_root": "",
     "pdf_output": "",
-    "last_browse_dir": "",
-    "weld_control_table": "",
-    "prefab_drawing_dir": "",
+    "last_browse_dir": "H:/共用雲端硬碟/1長春/苗栗/CP-129 HP6精濾區配管工事/03.銲口管制",
+    "weld_control_table": "H:\\共用雲端硬碟\\1長春\\苗栗\\CP-129 HP6精濾區配管工事\\03.銲口管制\\焊口管制表(新圖焊口已更新)-115.07.09.xlsx",
+    "prefab_drawing_dir": "H:\\共用雲端硬碟\\1長春\\苗栗\\CP-129 HP6精濾區配管工事\\01.工程圖面\\預製圖面掃描\\單張",
     "soffice_path": ""
   },
   "weld_control": {
@@ -83,7 +86,7 @@
     "preprocess_quality": 85
   },
   "meta": {
-    "last_modified": "2026-06-16T00:00:00",
+    "last_modified": "2026-07-09T09:34:51.233450",
     "version": "1.3"
   }
 }
